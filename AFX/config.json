@@ -1,0 +1,37 @@
+{
+  "sample_rate": 22050,
+  "features": {
+    "zcr": {"frame_size": 2048, "hop_length": 512},
+    "variance": {},
+    "kurtosis": {},
+    "autocorr_variance": {},
+    "mobility": {},
+    "complexity": {},
+    "sample_entropy": {},
+    "energy_ratio": {},
+    "short_time_energy": {},
+    "spectral_centroid": {"frame_size": 2048, "hop_length": 512},
+    "spectral_bandwidth": {"frame_size": 2048, "hop_length": 512},
+    "spectral_rolloff": {"frame_size": 2048, "hop_length": 512},
+    "spectral_contrast": {"frame_size": 2048, "hop_length": 512},
+    "spectral_entropy": {"frame_size": 2048, "hop_length": 512},
+    "spectral_flatness": {"frame_size": 2048, "hop_length": 512},
+    "spectral_flux": {"frame_size": 2048, "hop_length": 512},
+    "melspectrogram": {
+        "n_mels": 128,
+        "frame_size": 2048,
+        "hop_length": 512
+    },
+    "mfcc": {"n_mfcc": 13, "frame_size": 2048, "hop_length": 512},
+    "mfcc_delta": {"n_mfcc": 13, "frame_size": 2048, "hop_length": 512},
+    "mfcc_delta_delta": {"n_mfcc": 13, "frame_size": 2048, "hop_length": 512},
+    "chroma_stft": {"frame_size": 2048, "hop_length": 512},
+    "chroma_cqt": {"frame_size": 2048, "hop_length": 512},
+    "cqt": {"hop_length": 512},
+    "pitch": {"frame_size": 2048, "hop_length": 512},
+    "thd": {},
+    "hnr": {"frame_size": 2048, "hop_length": 512}
+  },
+  "aggregation": "mean",
+  "return_metadata": false
+}
