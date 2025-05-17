@@ -1,6 +1,6 @@
-# AFX (Audio Features Extraction)
+# AFX (Audio Feature Extraction)
 
-This is a Python module for extracting features from audio signals. It can be used for audio research in fields such as machine learning, sound classification, speech analysis, and music information retrieval.
+This project can be used for audio research in fields such as machine learning, sound classification, speech analysis, and music information retrieval.
 
 ---
 
@@ -44,7 +44,7 @@ This is a Python module for extracting features from audio signals. It can be us
   - Custom windowing and hop-length settings
 
 - **I/O & Formats**
-  - WAV, MP3, FLAC, OGG support via `librosa` and `soundfile`
+  - WAV, MP3, FLAC, OGG (via `librosa` and `soundfile`)
   - Batch processing via folder-based loaders
 
 ---
@@ -54,14 +54,14 @@ This is a Python module for extracting features from audio signals. It can be us
 ```
 audio-features/
 │
-├── AFX/           # Core package
+├── AFX/                      # Core package
 │   ├── extractors/           # Each group features extractor is a modular class
 │   ├── io/                   # Audio loading and format handling
 │   ├── utils/                # Helpers (e.g. windowing, normalization)
 │   ├── pipelines/            # Predefined feature extraction pipelines
 │   └── __init__.py
 │
-├── notebooks/                # Jupyter notebooks for examples/tutorials
+├── notebooks/                # Jupyter notebooks for examples
 ├── examples/                 # Script examples
 ├── tests/                    # Unit tests
 ├── requirements.txt
@@ -73,23 +73,13 @@ audio-features/
 
 ## Getting Started
 
-### 1. Clone the repository
-
 ```bash
 git clone https://github.com/danilodsp/AFX.git
 cd audio-features
-```
 
-### 2. Create a virtual environment (recommended)
-
-```bash
 python -m venv venv
 source venv/bin/activate  # or venv\Scripts\activate on Windows
-```
 
-### 3. Install dependencies
-
-```bash
 pip install -r requirements.txt
 ```
 
@@ -104,4 +94,4 @@ features = extract_all_features('path/to/audio.wav', sr=22050)
 print(features['mfcc'].shape)  # e.g., (13, T)
 ```
 
-For more, check the [Notebooks](notebooks/) folder for more examples.
+Check the [Notebooks](notebooks/) folder for more examples.
