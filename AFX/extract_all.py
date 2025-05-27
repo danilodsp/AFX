@@ -32,9 +32,11 @@ def extract_all_features(signal: np.ndarray, sr: int, config: Dict[str, Any], re
         sr: Sample rate
         config: Config dict with 'features' and 'aggregation'
         return_metadata: If True, include metadata in results
+        preserve_shape: If True, do not flatten or aggregate features (keep original dimensions)
     Returns:
         Dict of feature names to np.ndarray
     """
+    preserve_shape = config.get('preserve_shape', False)
     features = {}
     metadata = {}
     for feat_name, params in config['features'].items():
@@ -49,11 +51,15 @@ def extract_all_features(signal: np.ndarray, sr: int, config: Dict[str, Any], re
             features[feat_name] = out[feat_name]
         else:
             features[feat_name] = out[feat_name]
-    # Aggregate if specified
-    if 'aggregation' in config:
-        features = aggregate_features(features, method=config['aggregation'])
-    # Normalize shapes
-    features = normalize_features_dict(features, mode='flatten')
+
+    if not preserve_shape:
+        # Aggregate if specified
+        if 'aggregation' in config:
+            features = aggregate_features(features, method=config['aggregation'])
+        # Normalize shapes (flatten)
+        features = normalize_features_dict(features, mode='flatten')
+    # else: keep original shapes
+
     if return_metadata:
         return {'features': features, 'metadata': metadata}
     return features
