@@ -57,6 +57,7 @@ audio-features/
 ├── AFX/                      # Core package
 │   ├── extractors/           # Each group features extractor is a modular class
 │   ├── io/                   # Audio loading and format handling
+│   ├── methods/              # Signal processing algorithms
 │   ├── utils/                # Helpers (e.g. windowing, normalization)
 │   ├── pipelines/            # Predefined feature extraction pipelines
 │   └── __init__.py
@@ -75,10 +76,10 @@ audio-features/
 
 ```bash
 git clone https://github.com/danilodsp/AFX.git
-cd audio-features
+cd AFX
 
 python -m venv venv
-source venv/bin/activate  # or venv\Scripts\activate on Windows
+source venv\Scripts\activate
 
 pip install -r requirements.txt
 ```
