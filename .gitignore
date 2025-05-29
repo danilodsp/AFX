@@ -1,6 +1,6 @@
 # Personal
 .idea
-.github
+.github/*.md
 .gitkeep
 
 # Project inputs
