@@ -34,10 +34,10 @@ def extract_pitch(
 ) -> Dict[str, np.ndarray]:
     """
     Estimate pitch (fundamental frequency) using the YIN algorithm.
-    
+
     Implementation based on "YIN, a fundamental frequency estimator for speech and music"
     by Alain de Cheveigné and Hideki Kawahara.
-    
+
     Args:
         signal: Audio signal (1D np.ndarray)
         sr: Sample rate
@@ -115,10 +115,10 @@ def extract_hnr(
 ) -> Dict[str, np.ndarray]:
     """
     Estimate Harmonics-to-Noise Ratio (HNR) using autocorrelation method.
-    
+
     Uses a custom NumPy-based framing approach to segment the audio signal
     into overlapping frames, then estimates HNR using the autocorrelation method.
-    
+
     Args:
         signal: Audio signal (1D np.ndarray)
         sr: Sample rate

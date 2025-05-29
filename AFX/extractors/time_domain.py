@@ -38,7 +38,7 @@ def extract_zero_crossing_rate(
     """
     # Ensure signal is a numpy array
     signal = np.asarray(signal)
-    
+
     # Check if signal is shorter than frame_size
     if len(signal) < frame_size:
         # If signal is too short, just compute ZCR for the entire signal
@@ -55,10 +55,10 @@ def extract_zero_crossing_rate(
         frames = []
         for i in range(0, max(1, len(signal) - frame_size + 1), hop_length):
             frames.append(signal[i:i + frame_size])
-        
+
         # Initialize the output array
         zcr = np.zeros(len(frames))
-        
+
         # Process each frame
         for i, frame in enumerate(frames):
             # Ensure frame is of expected length
@@ -68,7 +68,7 @@ def extract_zero_crossing_rate(
             # Calculate zero-crossing rate
             zero_crossings = np.sum(np.abs(np.diff(np.signbit(frame).astype(int))))
             zcr[i] = zero_crossings / (frame_size - 1)
-    
+
     result = {'zcr': zcr}
     if return_metadata:
         # Convert frame indices to time (seconds)
