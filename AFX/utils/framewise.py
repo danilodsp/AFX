@@ -27,7 +27,7 @@ def framewise_extractor(feature_func: Callable) -> Callable:
             else:
                 return feature_func(signal, sr, *args, return_metadata=return_metadata, **kwargs)
 
-        # Use our framing function
+        # Use our custom framing function
         frames = frame_signal(signal, frame_length=frame_size, hop_length=hop_length)
 
         results = []
@@ -48,6 +48,6 @@ def framewise_extractor(feature_func: Callable) -> Callable:
             n_frames = frames.shape[1]
             times = np.arange(n_frames) * hop_length / sr
             result['metadata'] = {'times': times}
-
+            
         return result
     return wrapper

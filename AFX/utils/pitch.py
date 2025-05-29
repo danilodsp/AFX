@@ -20,7 +20,7 @@ def yin(y: np.ndarray, frame_length: int, hop_length: int, fmin: float = 50.0,
         fmax: Maximum frequency to detect (Hz)
         sr: Sampling rate (Hz)
         threshold: Threshold for pitch detection (default: 0.1)
-    
+
     Returns:
         np.ndarray: Array of pitch values in Hz, shape (n_frames,)
     """
@@ -78,7 +78,7 @@ def yin(y: np.ndarray, frame_length: int, hop_length: int, fmin: float = 50.0,
                     tau += 1
                     if cmnd[tau] < cmnd[local_min]:
                         local_min = tau
-
+                
                 tau_pitch = local_min
                 found_pitch = True
                 break
@@ -93,13 +93,13 @@ def yin(y: np.ndarray, frame_length: int, hop_length: int, fmin: float = 50.0,
             # Ensure we have valid indices
             prev_tau = max(1, tau_pitch - 1)
             next_tau = min(tau_max - 1, tau_pitch + 1)
-
+            
             # Parabolic interpolation
             if prev_tau > 0 and next_tau < tau_max:
                 a = cmnd[prev_tau-1]
                 b = cmnd[prev_tau]
                 c = cmnd[next_tau]
-
+                
                 # Only use interpolation if we have a clear minimum
                 if 2*b < a + c:  # Check if it's a minimum
                     offset = 0.5 * (a - c) / (a - 2*b + c)
@@ -114,5 +114,5 @@ def yin(y: np.ndarray, frame_length: int, hop_length: int, fmin: float = 50.0,
     # Post-processing: Ensure frequencies are within valid range
     pitches[pitches < fmin] = 0.0
     pitches[pitches > fmax] = 0.0
-
+            
     return pitches

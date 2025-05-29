@@ -8,12 +8,12 @@ from typing import Tuple
 def frame_signal(signal: np.ndarray, frame_length: int, hop_length: int) -> np.ndarray:
     """
     Frame a signal into overlapping frames.
-    
+
     Args:
         signal: Audio signal (1D np.ndarray)
         frame_length: Length of each frame
         hop_length: Number of samples between adjacent frames
-    
+
     Returns:
         Framed signal as a 2D array (frame_length, n_frames)
     """
