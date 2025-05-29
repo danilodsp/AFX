@@ -22,3 +22,9 @@ def test_extract_spectral_rolloff():
     result = frequency_domain.extract_spectral_rolloff(signal, sr=22050)
     assert 'spectral_rolloff' in result
     assert isinstance(result['spectral_rolloff'], np.ndarray)
+
+def test_extract_spectral_flux():
+    signal = np.random.randn(22050)
+    result = frequency_domain.extract_spectral_flux(signal, sr=22050)
+    assert 'spectral_flux' in result
+    assert isinstance(result['spectral_flux'], np.ndarray)
