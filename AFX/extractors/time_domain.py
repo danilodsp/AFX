@@ -36,15 +36,43 @@ def extract_zero_crossing_rate(
         units: float
         times: np.ndarray, shape (n_frames,) if return_metadata is True
     """
-    import librosa
-    zcr = librosa.feature.zero_crossing_rate(
-        signal, frame_length=frame_size, hop_length=hop_length
-    )[0]
+    # Ensure signal is a numpy array
+    signal = np.asarray(signal)
+
+    # Check if signal is shorter than frame_size
+    if len(signal) < frame_size:
+        # If signal is too short, just compute ZCR for the entire signal
+        # and avoid framing
+        if len(signal) <= 1:
+            # Edge case: can't have zero crossings with 1 sample or less
+            zcr = np.array([0.0])
+        else:
+            # Count sign changes and normalize
+            zero_crossings = np.sum(np.abs(np.diff(np.signbit(signal).astype(int))))
+            zcr = np.array([zero_crossings / (len(signal) - 1)])
+    else:
+        # Create frames of the signal
+        frames = []
+        for i in range(0, max(1, len(signal) - frame_size + 1), hop_length):
+            frames.append(signal[i:i + frame_size])
+
+        # Initialize the output array
+        zcr = np.zeros(len(frames))
+
+        # Process each frame
+        for i, frame in enumerate(frames):
+            # Ensure frame is of expected length
+            if len(frame) < frame_size:
+                # Pad the last frame if needed
+                frame = np.pad(frame, (0, frame_size - len(frame)))
+            # Calculate zero-crossing rate
+            zero_crossings = np.sum(np.abs(np.diff(np.signbit(frame).astype(int))))
+            zcr[i] = zero_crossings / (frame_size - 1)
+
     result = {'zcr': zcr}
     if return_metadata:
-        times = librosa.frames_to_time(
-            np.arange(len(zcr)), sr=sr, hop_length=hop_length, n_fft=frame_size
-        )
+        # Convert frame indices to time (seconds)
+        times = np.arange(len(zcr)) * hop_length / float(sr)
         return {'zcr': zcr, 'metadata': {'times': times}}
     return result
 
