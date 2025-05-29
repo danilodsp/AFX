@@ -44,7 +44,7 @@ This project can be used for audio research in fields such as machine learning, 
   - Custom windowing and hop-length settings
 
 - **I/O & Formats**
-  - WAV, MP3, FLAC, OGG (via `librosa` and `soundfile`)
+  - WAV, MP3, FLAC, OGG (via `soundfile`)
   - Batch processing via folder-based loaders
 
 ---

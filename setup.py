@@ -1,13 +1,12 @@
 from setuptools import setup, find_packages
 
 setup(
-    name='audio_features',
-    version='0.1.0',
+    name='AFX',
+    version='0.1.1',
     description='Audio feature extraction for ML/AI',
     author='Danilo Pena',
     packages=find_packages(),
     install_requires=[
-        'librosa>=0.10.0',
         'numpy>=1.23.0',
         'scipy>=1.10.0',
         'matplotlib>=3.7.0',
