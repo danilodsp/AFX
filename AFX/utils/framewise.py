@@ -38,8 +38,15 @@ def framewise_extractor(feature_func: Callable) -> Callable:
         key = list(res.keys())[0]
 
         # Stack results and ensure we have the right shape
-        # The results should be a 1D array with shape (n_frames,)
-        stacked = np.concatenate([r.flatten() for r in results])
+
+        # Determine the shape of a single frame's result
+        first_shape = np.shape(results[0])
+        if len(first_shape) == 0 or first_shape == () or first_shape == (1,):
+            # Scalar per frame: stack as 1D (n_frames,)
+            stacked = np.array(results).reshape(-1)
+        else:
+            # Vector per frame: stack as 2D (n_features, n_frames)
+            stacked = np.stack(results, axis=-1)
         result = {key: stacked}
 
         # Add metadata if requested
