@@ -39,7 +39,7 @@ This project can be used for audio research in fields such as machine learning, 
   - Sample Entropy (alternative implementation)
 
 - **Support for ML/DL Pipelines**
-  - Frame-level and file-level feature aggregation
+  - Frame-level and file-level feature aggregation, with options for flattening, stacking, and normalization (z-score, min-max)
   - Compatible with numpy arrays and torch tensors
   - Custom windowing and hop-length settings
 
@@ -86,13 +86,27 @@ pip install -r requirements.txt
 
 ---
 
+
 ## Example Usage
 
 ```python
 from AFX import extract_all_features
+from AFX.utils.aggregator import aggregate_features
 
+# Extract frame-level features
 features = extract_all_features('path/to/audio.wav', sr=22050)
-print(features['mfcc'].shape)  # e.g., (13, T)
+
+# Aggregate, flatten, and z-score normalize features in one step
+agg_features = aggregate_features(features, method='mean', flatten=True, normalize='zscore')
+
+# Stack all features into a single vector (option 1: via features_to_vector)
+from AFX.utils import features_to_vector
+feature_vector = features_to_vector(agg_features, flatten=False)
+print(feature_vector.shape)
+
+# Stack all features directly using the aggregation pipeline (option 2)
+stacked_vector = aggregate_features(features, method='stack')
+print(stacked_vector.shape)
 ```
 
 Check the [Notebooks](notebooks/) folder for more examples.
