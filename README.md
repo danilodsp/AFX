@@ -96,3 +96,7 @@ print(features['mfcc'].shape)  # e.g., (13, T)
 ```
 
 Check the [Notebooks](notebooks/) folder for more examples.
+
+## Acknowledgment
+
+- Audio samples used in this project for unit testing purposes are derived from the LibriSpeech ([Panayotov et al., 2015](https://www.danielpovey.com/files/2015_icassp_librispeech.pdf)) which is based on public domain ([download link](https://www.openslr.org/12)).
