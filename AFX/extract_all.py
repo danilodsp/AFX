@@ -1,11 +1,11 @@
 """
 Unified API for extracting all audio features as specified in config.
 """
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 import numpy as np
 from .extractors import time_domain, frequency_domain, cepstral_features, harmonic_features
 from .utils.aggregator import aggregate_features
-from .utils.shape_utils import normalize_features_dict
+
 
 FEATURE_MAP = {
     'zcr': time_domain.extract_zero_crossing_rate,
@@ -54,11 +54,15 @@ def extract_all_features(signal: np.ndarray, sr: int, config: Dict[str, Any], re
             features[feat_name] = out[feat_name]
 
     if not preserve_shape:
-        # Aggregate if specified
+        # Aggregate, flatten, and normalize if specified
+        agg_kwargs = {}
         if 'aggregation' in config:
-            features = aggregate_features(features, method=config['aggregation'])
-        # Normalize shapes (flatten)
-        features = normalize_features_dict(features, mode='flatten')
+            agg_kwargs['method'] = config['aggregation']
+        if config.get('flatten', True):
+            agg_kwargs['flatten'] = True
+        if 'normalize' in config:
+            agg_kwargs['normalize'] = config['normalize']
+        features = aggregate_features(features, **agg_kwargs)
     # else: keep original shapes
 
     if return_metadata:
