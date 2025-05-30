@@ -22,6 +22,7 @@ FEATURE_MAP = {
     'pitch': harmonic_features.extract_pitch,
     'thd': harmonic_features.extract_thd,
     'hnr': harmonic_features.extract_hnr,
+    'gfcc': cepstral_features.extract_gfcc,
 }
 
 def extract_all_features(signal: np.ndarray, sr: int, config: Dict[str, Any], return_metadata: bool = False) -> Dict[str, np.ndarray]:

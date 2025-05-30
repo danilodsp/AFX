@@ -5,15 +5,14 @@ import numpy as np
 from typing import Dict
 from AFX.utils.framewise import framewise_extractor
 from AFX.methods.cqt import cqt_approximation
-from AFX.methods.stft import stft, power_spectrogram
+from AFX.methods.stft import stft, power_spectrogram, magnitude_spectrogram
 from AFX.methods.mel import mel_filterbank, apply_mel_filterbank, log_mel_spectrogram
 from AFX.methods.dct import extract_mfcc_coefficients
 from AFX.methods.delta import compute_delta
-from AFX.methods.chroma import extract_chroma_from_cqt
-from AFX.methods.stft import stft, magnitude_spectrogram
-from AFX.methods.chroma import chroma_from_stft
-from AFX.methods.stft import stft, power_spectrogram
-from AFX.methods.mel import mel_filterbank, apply_mel_filterbank
+from AFX.methods.chroma import extract_chroma_from_cqt, chroma_from_stft
+
+
+from AFX.methods.gammatone import gammatone_filterbank, apply_gammatone_filterbank
 
 __all__ = [
     'extract_mfcc',
@@ -23,6 +22,7 @@ __all__ = [
     'extract_chroma_stft',
     'extract_cqt',
     'extract_melspectrogram',
+    'extract_gfcc',
 ]
 
 @framewise_extractor
@@ -297,7 +297,81 @@ def extract_mfcc_delta_delta(
 
     return result
 
+@framewise_extractor
+def extract_gfcc(
+    signal: np.ndarray,
+    sr: int,
+    n_gfcc: int = 13,
+    frame_size: int = 2048,
+    hop_length: int = 512,
+    n_gammatone: int = 64,
+    fmin: float = 50.0,
+    fmax: float = None,
+    return_metadata: bool = False,
+    **kwargs
+) -> Dict[str, np.ndarray]:
+    """
+    Compute Gammatone Frequency Cepstral Coefficients (GFCC) from an audio signal.
 
+    The GFCC computation pipeline:
+    1. Apply Short-Time Fourier Transform (STFT) with Hann window
+    2. Compute power spectrogram from STFT magnitude
+    3. Map power spectrum through gammatone filterbank
+    4. Take logarithm of gammatone energies (with clamping to avoid log(0))
+    5. Apply Discrete Cosine Transform type-II to decorrelate features
+
+    Args:
+        signal: Audio signal (1D np.ndarray)
+        sr: Sample rate in Hz
+        n_gfcc: Number of GFCC coefficients to extract (default: 13)
+        frame_size: Frame size for STFT (n_fft) (default: 2048)
+        hop_length: Hop length between frames in samples (default: 512)
+        n_gammatone: Number of gammatone filterbank bands (default: 64)
+        fmin: Minimum frequency for gammatone filterbank in Hz (default: 50.0)
+        fmax: Maximum frequency for gammatone filterbank in Hz (default: sr/2)
+        return_metadata: If True, include frame times in metadata
+
+    Returns:
+        Dict with 'gfcc' key and np.ndarray of shape (n_gfcc, n_frames)
+
+    Metadata:
+        shape: (n_gfcc, n_frames)
+        units: Dimensionless (cepstral coefficients)
+        times: np.ndarray, shape (n_frames,) if return_metadata is True
+
+    Notes:
+        - Uses Hann windowing and center padding for STFT
+        - Gammatone filterbank is ERB-spaced
+        - DCT-II with orthogonal normalization extracts cepstral coefficients
+        - Frame times are computed as frame_index * hop_length / sr
+    """
+    if fmax is None:
+        fmax = sr / 2.0
+
+    # 1. Compute STFT with Hann window and center padding
+    stft_matrix = stft(signal, frame_size=frame_size, hop_length=hop_length, window='hann', center=True)
+
+    # 2. Compute power spectrogram
+    power_spec = power_spectrogram(stft_matrix)
+
+    # 3. Create and apply gammatone filterbank
+    filterbank = gammatone_filterbank(n_gammatone, frame_size, sr, fmin, fmax)
+    gammatone_spec = apply_gammatone_filterbank(power_spec, filterbank)
+
+    # 4. Convert to log scale
+    log_gammatone = np.log(np.maximum(gammatone_spec, 1e-10))
+
+    # 5. Extract GFCC coefficients using DCT-II
+    from AFX.methods.dct import extract_mfcc_coefficients
+    gfcc = extract_mfcc_coefficients(log_gammatone, n_gfcc, norm='ortho')
+
+    result = {'gfcc': gfcc}
+    if return_metadata:
+        n_frames = gfcc.shape[1]
+        frame_offset = frame_size // 2
+        times = (np.arange(n_frames) * hop_length + frame_offset) / sr
+        return {'gfcc': gfcc, 'metadata': {'times': times}}
+    return result
 
 @framewise_extractor
 def extract_chroma_cqt(

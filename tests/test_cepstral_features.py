@@ -155,6 +155,65 @@ def test_extract_mfcc_delta_orders():
     # Shapes should match
     assert result1['mfcc_delta'].shape == result2['mfcc_delta'].shape
 
+def test_extract_gfcc_basic():
+    """Test GFCC extraction: shape, dtype, and no NaNs/Infs."""
+    np.random.seed(42)
+    signal = np.random.randn(22050)
+    sr = 22050
+    n_gfcc = 13
+    result = cepstral_features.extract_gfcc(signal, sr=sr, n_gfcc=n_gfcc)
+    gfcc = result['gfcc']
+    assert isinstance(gfcc, np.ndarray)
+    assert gfcc.shape[0] == n_gfcc
+    assert gfcc.shape[1] > 0
+    assert np.issubdtype(gfcc.dtype, np.floating)
+    assert not np.isnan(gfcc).any(), "GFCC contains NaNs"
+    assert not np.isinf(gfcc).any(), "GFCC contains Infs"
+
+def test_extract_gfcc_metadata():
+    """Test GFCC extraction with metadata (frame times)."""
+    np.random.seed(42)
+    signal = np.random.randn(22050)
+    sr = 22050
+    n_gfcc = 13
+    result = cepstral_features.extract_gfcc(signal, sr=sr, n_gfcc=n_gfcc, return_metadata=True)
+    gfcc = result['gfcc']
+    times = result['metadata']['times']
+    assert times.shape[0] == gfcc.shape[1]
+    assert np.all(times[1:] > times[:-1]), "Frame times should be increasing"
+
+def test_extract_gfcc_parameter_variation():
+    """Test GFCC with different n_gfcc and n_gammatone values."""
+    np.random.seed(0)
+    signal = np.random.randn(16000)
+    sr = 16000
+    for n_gfcc, n_gammatone in [(5, 8), (20, 32), (40, 64)]:
+        result = cepstral_features.extract_gfcc(signal, sr=sr, n_gfcc=n_gfcc, n_gammatone=n_gammatone)
+        gfcc = result['gfcc']
+        assert gfcc.shape[0] == n_gfcc
+        assert gfcc.shape[1] > 0
+
+def test_extract_gfcc_short_signal():
+    """Test GFCC extraction on a very short signal (shorter than frame size)."""
+    np.random.seed(1)
+    signal = np.random.randn(100)
+    sr = 8000
+    result = cepstral_features.extract_gfcc(signal, sr=sr, n_gfcc=8)
+    gfcc = result['gfcc']
+    assert gfcc.shape[0] == 8
+    assert gfcc.shape[1] > 0
+
+def test_extract_gfcc_silence():
+    """Test GFCC extraction on a silent signal (all zeros)."""
+    signal = np.zeros(2048)
+    sr = 16000
+    result = cepstral_features.extract_gfcc(signal, sr=sr, n_gfcc=10)
+    gfcc = result['gfcc']
+    assert gfcc.shape[0] == 10
+    assert gfcc.shape[1] > 0
+    # All values should be finite (no NaN/Inf)
+    assert np.all(np.isfinite(gfcc))
+
 def test_extract_chroma_cqt():
     signal = np.random.randn(22050)
     result = cepstral_features.extract_chroma_cqt(signal, sr=22050)

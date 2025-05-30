@@ -30,7 +30,8 @@
     "cqt": {"hop_length": 512},
     "pitch": {"frame_size": 2048, "hop_length": 512},
     "thd": {},
-    "hnr": {"frame_size": 2048, "hop_length": 512}
+    "hnr": {"frame_size": 2048, "hop_length": 512},
+    "gfcc": {"n_gfcc": 13}
   },
   "aggregation": "mean",
   "return_metadata": false
