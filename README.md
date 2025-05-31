@@ -91,26 +91,48 @@ pip install -r requirements.txt
 
 ```python
 from AFX import extract_all_features
+from AFX.utils.config_loader import load_config
 from AFX.utils.aggregator import aggregate_features
+from AFX.io.io import load_audio
 
-# Extract frame-level features
-features = extract_all_features('path/to/audio.wav', sr=22050)
+config = load_config('AFX/config.json')
+signal, sr = load_audio('path/to/audio.wav', sr=config['sample_rate'])
 
-# Aggregate, flatten, and z-score normalize features in one step
+# 1. extract individual features (original, per-frame shape)
+features = extract_all_features(signal, sr=sr, config=config)
+# features is a dict of per-frame feature arrays
+
+# 2. aggregate, flatten, and z-score normalize features
 agg_features = aggregate_features(features, method='mean', flatten=True, normalize='zscore')
+# agg_features is a 1D dicts (all features in dict flattened, concatenated and normalized)
 
-# Stack all features into a single vector (option 1: via features_to_vector)
-from AFX.utils import features_to_vector
-feature_vector = features_to_vector(agg_features, flatten=False)
-print(feature_vector.shape)
+# 3. aggregate features (stacked)
+agg_stacked = aggregate_features(features, method='stack')
+# agg_stacked is a 1D numpy array (all features stacked, no normalization)
+```
 
-# Stack all features directly using the aggregation pipeline (option 2)
-stacked_vector = aggregate_features(features, method='stack')
-print(stacked_vector.shape)
+Another way of implementing them:
+
+```python
+# per-frame features (original shape)
+config['preserve_shape'] = True
+features = extract_all_features(signal, sr, config)
+
+# aggregated, flattened, and normalized features
+config['preserve_shape'] = False
+config['aggregation'] = 'mean'
+config['flatten'] = True
+config['normalize'] = 'zscore'
+agg_features = extract_all_features(signal, sr, config)
+
+# aggregated, stacked (not flattened) features
+config['preserve_shape'] = False
+config['aggregation'] = 'stack'
+agg_stacked = extract_all_features(signal, sr, config)
 ```
 
 Check the [Notebooks](notebooks/) folder for more examples.
 
 ## Acknowledgment
 
-- Audio samples used in this project for unit testing purposes are derived from the LibriSpeech ([Panayotov et al., 2015](https://www.danielpovey.com/files/2015_icassp_librispeech.pdf)) which is based on public domain ([download link](https://www.openslr.org/12)).
+- Audio samples used in this project for test purposes are derived from the LibriSpeech ([Panayotov et al., 2015](https://www.danielpovey.com/files/2015_icassp_librispeech.pdf)) which is based on public domain ([download link](https://www.openslr.org/12)).

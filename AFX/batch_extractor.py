@@ -3,13 +3,22 @@ Batch extractor for processing folders of audio files.
 """
 import os
 import numpy as np
+import pandas as pd
 import json
 from typing import Dict, Any, List
+
 from AFX.io.io import load_audio
 from AFX.utils.config_loader import load_config
 from AFX.extract_all import extract_all_features
 
-def extract_features_from_folder(folder_path: str, config_path: str, output_path: str, file_exts: List[str] = ['.wav', '.mp3', '.flac'], save_format: str = 'npy') -> None:
+
+def extract_features_from_folder(
+    folder_path: str,
+    config_path: str,
+    output_path: str,
+    file_exts: List[str] = ['.wav', '.mp3', '.flac'],
+    save_format: str = 'npy'
+) -> None:
     """
     Extract features from all audio files in a folder (recursively).
     Args:
@@ -38,7 +47,6 @@ def extract_features_from_folder(folder_path: str, config_path: str, output_path
         with open(output_path, 'w') as f:
             json.dump(results, f, indent=2)
     elif save_format == 'csv':
-        import pandas as pd
         df = pd.DataFrame.from_dict(results, orient='index')
         df.to_csv(output_path)
     else:
