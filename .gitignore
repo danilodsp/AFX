@@ -2,10 +2,11 @@
 .idea
 .github/*.md
 .gitkeep
+.vscode/
 
 # Project inputs
 *.wav
-*.json
+*.csv
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
