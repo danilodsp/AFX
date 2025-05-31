@@ -4,7 +4,11 @@ Feature normalization utilities (z-score, min-max, etc.).
 from typing import Dict, Optional
 import numpy as np
 
-def zscore_normalize(features: Dict[str, np.ndarray], mean: Optional[Dict[str, float]] = None, std: Optional[Dict[str, float]] = None) -> Dict[str, np.ndarray]:
+def zscore_normalize(
+    features: Dict[str, np.ndarray],
+    mean: Optional[Dict[str, float]] = None,
+    std: Optional[Dict[str, float]] = None
+    ) -> Dict[str, np.ndarray]:
     """
     Apply z-score normalization to each feature (per feature key).
     If mean/std are not provided, compute from the data.
@@ -25,7 +29,11 @@ def zscore_normalize(features: Dict[str, np.ndarray], mean: Optional[Dict[str, f
             normed[k] = (v - m) / s
     return normed
 
-def minmax_normalize(features: Dict[str, np.ndarray], min_: Optional[Dict[str, float]] = None, max_: Optional[Dict[str, float]] = None) -> Dict[str, np.ndarray]:
+def minmax_normalize(
+    features: Dict[str, np.ndarray],
+    min_: Optional[Dict[str, float]] = None,
+    max_: Optional[Dict[str, float]] = None
+    ) -> Dict[str, np.ndarray]:
     """
     Apply min-max normalization to each feature (per feature key).
     If min/max are not provided, compute from the data.

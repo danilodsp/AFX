@@ -1,5 +1,5 @@
 """
-Feature selection and dimensionality reduction utilities for audio_features.
+Feature selection and dimensionality reduction utilities for AFX.
 """
 import numpy as np
 from typing import Dict, Any, Optional, List, Tuple
@@ -7,7 +7,11 @@ from sklearn.decomposition import PCA
 from sklearn.feature_selection import mutual_info_classif
 
 
-def pca_reducer(features: Dict[str, np.ndarray], n_components: int = 2, feature_keys: Optional[List[str]] = None) -> Tuple[np.ndarray, PCA]:
+def pca_reducer(
+    features: Dict[str, np.ndarray],
+    n_components: int = 2,
+    feature_keys: Optional[List[str]] = None
+    ) -> Tuple[np.ndarray, PCA]:
     """
     Reduce dimensionality of selected features using PCA.
     Args:
@@ -24,8 +28,11 @@ def pca_reducer(features: Dict[str, np.ndarray], n_components: int = 2, feature_
     X_reduced = pca.fit_transform(X)
     return X_reduced, pca
 
-
-def mutual_info_selector(X: np.ndarray, y: np.ndarray, k: int = 10) -> List[int]:
+def mutual_info_selector(
+    X: np.ndarray,
+    y: np.ndarray,
+    k: int = 10
+    ) -> List[int]:
     """
     Select top-k features based on mutual information with target.
     Args:
@@ -39,8 +46,10 @@ def mutual_info_selector(X: np.ndarray, y: np.ndarray, k: int = 10) -> List[int]
     selected = np.argsort(mi)[-k:][::-1]
     return selected.tolist()
 
-
-def correlation_selector(X: np.ndarray, threshold: float = 0.95) -> List[int]:
+def correlation_selector(
+    X: np.ndarray,
+    threshold: float = 0.95
+    ) -> List[int]:
     """
     Select features by removing those highly correlated with others.
     Args:

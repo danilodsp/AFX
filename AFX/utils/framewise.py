@@ -55,6 +55,6 @@ def framewise_extractor(feature_func: Callable) -> Callable:
             n_frames = frames.shape[1]
             times = np.arange(n_frames) * hop_length / sr
             result['metadata'] = {'times': times}
-            
+
         return result
     return wrapper

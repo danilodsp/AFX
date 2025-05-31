@@ -5,7 +5,11 @@ import numpy as np
 from typing import Tuple
 
 
-def frame_signal(signal: np.ndarray, frame_length: int, hop_length: int) -> np.ndarray:
+def frame_signal(
+    signal: np.ndarray,
+    frame_length: int,
+    hop_length: int
+    ) -> np.ndarray:
     """
     Frame a signal into overlapping frames.
 

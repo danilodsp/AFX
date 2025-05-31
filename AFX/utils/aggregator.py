@@ -4,6 +4,9 @@ Feature aggregation utilities (mean, std, pooling strategies).
 from typing import Dict, Callable
 import numpy as np
 
+from AFX.utils import stack_feature_vectors, zscore_normalize, minmax_normalize
+
+
 def mean_pooling(features: Dict[str, np.ndarray]) -> Dict[str, np.ndarray]:
     """
     Aggregate features by computing the mean along the last axis.
@@ -47,6 +50,7 @@ def aggregate_features(
     Returns:
         Dict of aggregated (and optionally flattened/normalized) features, or a stacked numpy array if method='stack'.
     """
+    # Pooling features
     if method == 'mean':
         agg = mean_pooling(features)
     elif method == 'std':
@@ -54,8 +58,6 @@ def aggregate_features(
     elif method == 'summary':
         agg = statistical_summary(features)
     elif method == 'stack':
-        from AFX.utils import stack_feature_vectors
-        # For single sample, wrap in list
         return stack_feature_vectors([features], flatten=True)[0]
     else:
         raise ValueError(f'Unknown aggregation method: {method}')
@@ -67,10 +69,8 @@ def aggregate_features(
     # Normalize if requested
     if normalize is not None:
         if normalize == 'zscore':
-            from .normalization import zscore_normalize
             agg = zscore_normalize(agg)
         elif normalize == 'minmax':
-            from .normalization import minmax_normalize
             agg = minmax_normalize(agg)
         else:
             raise ValueError(f'Unknown normalization method: {normalize}')

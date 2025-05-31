@@ -1,5 +1,5 @@
 """
-Configuration loader for audio_features (JSON schema).
+Configuration loader for AFX (JSON schema).
 """
 from typing import Dict, Any
 import json

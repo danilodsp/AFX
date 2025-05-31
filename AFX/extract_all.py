@@ -25,7 +25,12 @@ FEATURE_MAP = {
     'gfcc': cepstral_features.extract_gfcc,
 }
 
-def extract_all_features(signal: np.ndarray, sr: int, config: Dict[str, Any], return_metadata: bool = False) -> Dict[str, np.ndarray]:
+def extract_all_features(
+    signal: np.ndarray,
+    sr: int,
+    config: Dict[str, Any],
+    return_metadata: bool = False
+) -> Dict[str, np.ndarray]:
     """
     Extract all features specified in the config from the audio signal.
     Args:

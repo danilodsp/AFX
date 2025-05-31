@@ -12,7 +12,7 @@ if __name__ == '__main__':
         print('Usage: python example_extract_and_plot.py <audio_file>')
         sys.exit(1)
     audio_path = sys.argv[1]
-    config = load_config('audio_features/config.json')
+    config = load_config('AFX/config.json')
     signal, sr = load_audio(audio_path, sr=config['sample_rate'])
     features = extract_all_features(signal, sr, config)
     if 'mfcc' in features:
