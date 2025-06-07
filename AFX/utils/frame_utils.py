@@ -22,7 +22,8 @@ def frame_signal(
         Framed signal as a 2D array (frame_length, n_frames)
     """
     # Calculate number of frames
-    n_frames = 1 + (len(signal) - frame_length) // hop_length
+    # Ensure at least one frame even if the signal is shorter than frame_length
+    n_frames = max(1, 1 + (len(signal) - frame_length) // hop_length)
 
     # Pad the signal if necessary to get the exact number of frames
     pad_len = (n_frames - 1) * hop_length + frame_length - len(signal)

@@ -3,8 +3,9 @@ Test the spectral flatness implementation against librosa.
 """
 import numpy as np
 import pytest
-import librosa
 from AFX.extractors import frequency_domain
+
+import librosa
 
 
 def test_extract_spectral_flatness_against_librosa():

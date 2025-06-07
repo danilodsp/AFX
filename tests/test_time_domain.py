@@ -3,13 +3,18 @@ from AFX.extractors.time_domain import (
     extract_short_time_energy,
     extract_energy_ratio,
     extract_sample_entropy,
-    extract_mobility
+    extract_mobility,
+    extract_rms_energy
 )
 """
 Unit tests for time_domain feature extractors.
 """
 import numpy as np
+import pytest
 from AFX.extractors import time_domain
+
+import librosa
+
 
 def test_extract_zero_crossing_rate():
     signal = np.array([0, 1, -1, 1, -1, 0], dtype=np.float32)
@@ -64,6 +69,12 @@ def test_extract_mobility():
     result = extract_mobility(signal, sr=22050)
     assert 'mobility' in result
     assert result['mobility'].shape == (1,)
+
+def test_extract_rms_energy():
+    signal = np.random.randn(100)
+    result = extract_rms_energy(signal, sr=22050)
+    assert 'rms_energy' in result
+    assert result['rms_energy'].shape == (1,)
 
 def test_extract_zero_crossing_rate_compare_with_librosa():
     """Test that our implementation closely matches librosa's implementation."""

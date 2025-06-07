@@ -93,7 +93,8 @@ def extract_chroma_from_cqt(
     hop_length: int = 512,
     n_bins: int = 84,
     bins_per_octave: int = 12,
-    fmin: float = 32.70319566257483
+    fmin: float = 32.70319566257483,
+    center: bool = False,
 ) -> np.ndarray:
     """
     Extract chroma features from a CQT approximation.
@@ -112,6 +113,8 @@ def extract_chroma_from_cqt(
         n_bins: Number of frequency bins in the CQT (default: 84 = 7 octaves * 12)
         bins_per_octave: Number of bins per octave (default: 12)
         fmin: Minimum frequency in Hz (default: 32.70319566257483 = C1)
+        center: If True, pad the signal when computing the STFT so that
+            frames are centered (mirrors ``librosa`` behaviour).
 
     Returns:
         Chroma features of shape (12, n_frames)
@@ -126,7 +129,14 @@ def extract_chroma_from_cqt(
 
     # Compute STFT with appropriate frame size for good frequency resolution
     frame_size = 4096  # Use larger frame size for better frequency resolution at low frequencies
-    magnitude_spec = np.abs(stft(signal, frame_size=frame_size, hop_length=hop_length))
+    magnitude_spec = np.abs(
+        stft(
+            signal,
+            frame_size=frame_size,
+            hop_length=hop_length,
+            center=center,
+        )
+    )
     n_freq, n_frames = magnitude_spec.shape
 
     # Compute frequency for each STFT bin

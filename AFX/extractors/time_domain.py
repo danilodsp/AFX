@@ -11,6 +11,7 @@ __all__ = [
     'extract_variance',
     'extract_entropy',
     'extract_crest_factor',
+    'extract_rms_energy',
 ]
 
 def extract_zero_crossing_rate(
@@ -188,6 +189,17 @@ def extract_short_time_energy(
     """
     ste = np.sum(signal ** 2)
     return {'short_time_energy': np.array([ste])}
+
+
+@framewise_extractor
+def extract_rms_energy(
+    signal: np.ndarray,
+    sr: Optional[int] = None,
+    **kwargs,
+) -> Dict[str, np.ndarray]:
+    """Compute the RMS energy of the audio signal."""
+    rms = np.sqrt(np.mean(signal ** 2))
+    return {'rms_energy': np.array([rms])}
 
 
 @framewise_extractor

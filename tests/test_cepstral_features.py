@@ -3,8 +3,10 @@ Unit tests for cepstral_features extractors.
 """
 import numpy as np
 import pytest
-import librosa
 from AFX.extractors import cepstral_features
+
+import librosa
+
 
 def test_extract_mfcc():
     signal = np.random.randn(22050)
@@ -40,7 +42,11 @@ def test_extract_mfcc_librosa_compatibility():
 
     # Our implementation
     result_ours = cepstral_features.extract_mfcc(
-        signal, sr=sr, n_mfcc=n_mfcc, return_metadata=True
+        signal,
+        sr=sr,
+        n_mfcc=n_mfcc,
+        center=True,
+        return_metadata=True,
     )
     mfcc_ours = result_ours['mfcc']
     times_ours = result_ours['metadata']['times']
@@ -96,7 +102,12 @@ def test_extract_mfcc_delta_librosa_compatibility():
 
     # Our implementation (order=1)
     result_ours = cepstral_features.extract_mfcc_delta(
-        signal, sr=sr, n_mfcc=n_mfcc, order=1, return_metadata=True
+        signal,
+        sr=sr,
+        n_mfcc=n_mfcc,
+        order=1,
+        center=True,
+        return_metadata=True,
     )
     delta_ours = result_ours['mfcc_delta']
     times_ours = result_ours['metadata']['times']
@@ -345,7 +356,11 @@ def test_extract_mfcc_delta_delta_librosa_compatibility():
 
     # Our implementation
     result_ours = cepstral_features.extract_mfcc_delta_delta(
-        signal, sr=sr, n_mfcc=n_mfcc, return_metadata=True
+        signal,
+        sr=sr,
+        n_mfcc=n_mfcc,
+        center=True,
+        return_metadata=True,
     )
     delta_delta_ours = result_ours['mfcc_delta_delta']
     times_ours = result_ours['metadata']['times']

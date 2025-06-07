@@ -35,6 +35,7 @@ def extract_mfcc(
     n_mels: int = 128,
     fmin: float = 0.0,
     fmax: float = None,
+    center: bool = False,
     return_metadata: bool = False,
     **kwargs
 ) -> Dict[str, np.ndarray]:
@@ -57,6 +58,10 @@ def extract_mfcc(
         n_mels: Number of mel filterbank bands (default: 128)
         fmin: Minimum frequency for mel filterbank in Hz (default: 0.0)
         fmax: Maximum frequency for mel filterbank in Hz (default: sr/2)
+        center: If True, pad the signal so that frames are centered
+            (matching ``librosa`` behavior). When ``preserve_shape`` is used,
+            setting ``center=False`` yields the standard ``(n_features, n_frames)``
+            shape with no extra padding frames.
         return_metadata: If True, include frame times in metadata
 
     Returns:
@@ -68,7 +73,7 @@ def extract_mfcc(
         times: np.ndarray, shape (n_frames,) if return_metadata is True
 
     Notes:
-        - Uses Hann windowing and center padding for STFT
+        - Uses Hann windowing and optional center padding for STFT
         - Mel filterbank uses Slaney normalization 
         - DCT-II with orthogonal normalization extracts cepstral coefficients
         - Frame times are computed as frame_index * hop_length / sr
@@ -77,9 +82,14 @@ def extract_mfcc(
     if fmax is None:
         fmax = sr / 2.0
 
-    # 1. Compute STFT with Hann window and center padding
-    stft_matrix = stft(signal, frame_size=frame_size, hop_length=hop_length, 
-                       window='hann', center=True)
+    # 1. Compute STFT with Hann window
+    stft_matrix = stft(
+        signal,
+        frame_size=frame_size,
+        hop_length=hop_length,
+        window='hann',
+        center=center,
+    )
 
     # 2. Compute power spectrogram
     power_spec = power_spectrogram(stft_matrix)
@@ -98,7 +108,7 @@ def extract_mfcc(
     if return_metadata:
         # Calculate frame times manually using hop_length / sr
         n_frames = mfcc.shape[1]
-        frame_offset = frame_size // 2  # Center padding offset
+        frame_offset = frame_size // 2 if center else 0
         times = (np.arange(n_frames) * hop_length + frame_offset) / sr
         return {'mfcc': mfcc, 'metadata': {'times': times}}
     return result
@@ -111,6 +121,7 @@ def extract_mfcc_delta(
     frame_size: int = 2048,
     hop_length: int = 512,
     order: int = 1,
+    center: bool = False,
     return_metadata: bool = False,
     **kwargs
 ) -> Dict[str, np.ndarray]:
@@ -134,6 +145,8 @@ def extract_mfcc_delta(
         frame_size: Frame size for STFT (default: 2048)
         hop_length: Hop length between frames in samples (default: 512)
         order: Delta order (1=delta, 2=delta-delta) (default: 1)
+        center: If True, pad the signal so that frames are centered
+            before computing the STFT.
         return_metadata: If True, include frame times in metadata
         **kwargs: Additional arguments passed to internal MFCC computation
 
@@ -160,8 +173,13 @@ def extract_mfcc_delta(
     fmax = kwargs.get('fmax', sr / 2.0)
 
     # 1. Compute STFT with Hann window and center padding
-    stft_matrix = stft(signal, frame_size=frame_size, hop_length=hop_length, 
-                       window='hann', center=True)
+    stft_matrix = stft(
+        signal,
+        frame_size=frame_size,
+        hop_length=hop_length,
+        window='hann',
+        center=center,
+    )
 
     # 2. Compute power spectrogram
     power_spec = power_spectrogram(stft_matrix)
@@ -194,7 +212,7 @@ def extract_mfcc_delta(
     if return_metadata:
         # Calculate frame times manually using hop_length / sr
         n_frames = delta.shape[1]
-        frame_offset = frame_size // 2  # Center padding offset
+        frame_offset = frame_size // 2 if center else 0
         times = (np.arange(n_frames) * hop_length + frame_offset) / sr
         return {'mfcc_delta': delta, 'metadata': {'times': times}}
 
@@ -208,6 +226,7 @@ def extract_mfcc_delta_delta(
     n_mfcc: int = 13,
     frame_size: int = 2048,
     hop_length: int = 512,
+    center: bool = False,
     return_metadata: bool = False,
     **kwargs
 ) -> Dict[str, np.ndarray]:
@@ -229,6 +248,8 @@ def extract_mfcc_delta_delta(
         n_mfcc: Number of MFCC coefficients (default: 13)
         frame_size: Frame size for STFT (default: 2048)
         hop_length: Hop length between frames in samples (default: 512)
+        center: If True, pad the signal so that frames are centered
+            before computing the STFT.
         return_metadata: If True, include frame times in metadata
         **kwargs: Additional arguments passed to internal MFCC computation
 
@@ -255,9 +276,14 @@ def extract_mfcc_delta_delta(
     fmin = kwargs.get('fmin', 0.0)
     fmax = kwargs.get('fmax', sr / 2.0)
 
-    # 1. Compute STFT with Hann window and center padding
-    stft_matrix = stft(signal, frame_size=frame_size, hop_length=hop_length, 
-                       window='hann', center=True)
+    # 1. Compute STFT with Hann window
+    stft_matrix = stft(
+        signal,
+        frame_size=frame_size,
+        hop_length=hop_length,
+        window='hann',
+        center=center,
+    )
 
     # 2. Compute power spectrogram
     power_spec = power_spectrogram(stft_matrix)
@@ -291,7 +317,7 @@ def extract_mfcc_delta_delta(
         # Calculate frame times manually using hop_length / sr
         # Account for center padding offset
         n_frames = delta_delta.shape[1]
-        frame_offset = frame_size // 2  # Center padding offset
+        frame_offset = frame_size // 2 if center else 0
         times = (np.arange(n_frames) * hop_length + frame_offset) / sr
         return {'mfcc_delta_delta': delta_delta, 'metadata': {'times': times}}
 
@@ -307,6 +333,7 @@ def extract_gfcc(
     n_gammatone: int = 64,
     fmin: float = 50.0,
     fmax: float = None,
+    center: bool = False,
     return_metadata: bool = False,
     **kwargs
 ) -> Dict[str, np.ndarray]:
@@ -329,6 +356,8 @@ def extract_gfcc(
         n_gammatone: Number of gammatone filterbank bands (default: 64)
         fmin: Minimum frequency for gammatone filterbank in Hz (default: 50.0)
         fmax: Maximum frequency for gammatone filterbank in Hz (default: sr/2)
+        center: If True, pad the signal so that frames are centered
+            before computing the STFT.
         return_metadata: If True, include frame times in metadata
 
     Returns:
@@ -340,7 +369,7 @@ def extract_gfcc(
         times: np.ndarray, shape (n_frames,) if return_metadata is True
 
     Notes:
-        - Uses Hann windowing and center padding for STFT
+        - Uses Hann windowing and optional center padding for STFT
         - Gammatone filterbank is ERB-spaced
         - DCT-II with orthogonal normalization extracts cepstral coefficients
         - Frame times are computed as frame_index * hop_length / sr
@@ -348,8 +377,14 @@ def extract_gfcc(
     if fmax is None:
         fmax = sr / 2.0
 
-    # 1. Compute STFT with Hann window and center padding
-    stft_matrix = stft(signal, frame_size=frame_size, hop_length=hop_length, window='hann', center=True)
+    # 1. Compute STFT with Hann window
+    stft_matrix = stft(
+        signal,
+        frame_size=frame_size,
+        hop_length=hop_length,
+        window='hann',
+        center=center,
+    )
 
     # 2. Compute power spectrogram
     power_spec = power_spectrogram(stft_matrix)
@@ -368,7 +403,7 @@ def extract_gfcc(
     result = {'gfcc': gfcc}
     if return_metadata:
         n_frames = gfcc.shape[1]
-        frame_offset = frame_size // 2
+        frame_offset = frame_size // 2 if center else 0
         times = (np.arange(n_frames) * hop_length + frame_offset) / sr
         return {'gfcc': gfcc, 'metadata': {'times': times}}
     return result
@@ -379,6 +414,7 @@ def extract_chroma_cqt(
     sr: int,
     frame_size: int = 2048,
     hop_length: int = 512,
+    center: bool = False,
     return_metadata: bool = False,
     **kwargs
 ) -> Dict[str, np.ndarray]:
@@ -403,6 +439,8 @@ def extract_chroma_cqt(
         sr: Sample rate in Hz
         frame_size: Frame size for STFT used in CQT approximation (default: 2048)
         hop_length: Hop length between frames in samples (default: 512)
+        center: If True, pad the signal so that frames are centered in the STFT
+            used for the CQT approximation.
         return_metadata: If True, include frame times in metadata
         **kwargs: Additional parameters (n_bins, bins_per_octave, fmin)
 
@@ -426,16 +464,23 @@ def extract_chroma_cqt(
 
     # Compute chroma features using internal CQT approximation
     chroma = extract_chroma_from_cqt(
-        signal, sr=sr, hop_length=hop_length,
-        n_bins=n_bins, bins_per_octave=bins_per_octave, fmin=fmin
+        signal,
+        sr=sr,
+        hop_length=hop_length,
+        n_bins=n_bins,
+        bins_per_octave=bins_per_octave,
+        fmin=fmin,
+        center=center,
     )
 
     result = {'chroma_cqt': chroma}
 
     if return_metadata:
-        # Calculate frame times manually: frame_index * hop_length / sr
+        # Calculate frame times manually. The internal STFT uses a frame size of
+        # 4096 samples for the CQT approximation.
         n_frames = chroma.shape[1]
-        times = np.arange(n_frames) * hop_length / sr
+        frame_offset = 4096 // 2 if center else 0
+        times = (np.arange(n_frames) * hop_length + frame_offset) / sr
         return {'chroma_cqt': chroma, 'metadata': {'times': times}}
 
     return result

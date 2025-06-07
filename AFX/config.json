@@ -10,6 +10,7 @@
     "sample_entropy": {},
     "energy_ratio": {},
     "short_time_energy": {},
+    "rms_energy": {},
     "spectral_centroid": {"frame_size": 2048, "hop_length": 512},
     "spectral_bandwidth": {"frame_size": 2048, "hop_length": 512},
     "spectral_rolloff": {"frame_size": 2048, "hop_length": 512},
@@ -17,6 +18,8 @@
     "spectral_entropy": {"frame_size": 2048, "hop_length": 512},
     "spectral_flatness": {"frame_size": 2048, "hop_length": 512},
     "spectral_flux": {"frame_size": 2048, "hop_length": 512},
+    "spectral_skewness": {"frame_size": 2048, "hop_length": 512},
+    "spectral_slope": {"frame_size": 2048, "hop_length": 512},
     "melspectrogram": {
         "n_mels": 128,
         "frame_size": 2048,

@@ -3,8 +3,9 @@ Compare frequency domain extractors against librosa implementations.
 """
 import numpy as np
 import pytest
-import librosa
 from AFX.extractors import frequency_domain
+
+import librosa
 
 
 def test_extract_spectral_centroid_against_librosa():
@@ -61,7 +62,6 @@ def test_extract_spectral_centroid_against_librosa():
     expected_times = expected_times[start_idx:]
     assert np.allclose(times[start_idx:min_length], expected_times)
 
-
 def test_extract_spectral_bandwidth_against_librosa():
     """Test that our NumPy implementation closely matches librosa's implementation."""
     # Create test signal: sine wave at 440Hz
@@ -116,7 +116,6 @@ def test_extract_spectral_bandwidth_against_librosa():
     expected_times = expected_times[start_idx:]
     assert np.allclose(times[start_idx:min_length], expected_times)
 
-
 def test_extract_spectral_contrast_against_librosa():
     """Test that our NumPy implementation captures spectral contrast patterns similar to librosa."""
     # Create test signal with harmonic content
@@ -162,7 +161,6 @@ def test_extract_spectral_contrast_against_librosa():
     times = result_with_meta['metadata']['times']
     expected_times = np.arange(len(times)) * hop_length / sr
     assert np.allclose(times, expected_times)
-
 
 def test_extract_spectral_flux_against_librosa():
     """Test that our NumPy implementation closely matches librosa's implementation."""

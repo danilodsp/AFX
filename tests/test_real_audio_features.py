@@ -3,14 +3,17 @@ Unit test for 2D audio features (mel spectrogram, MFCC) using a real .wav file a
 """
 import numpy as np
 import pytest
-import librosa
 import soundfile as sf
 from AFX.methods.stft import stft, power_spectrogram
 from AFX.methods.mel import mel_filterbank, apply_mel_filterbank, log_mel_spectrogram
 from AFX.methods.dct import extract_mfcc_coefficients
 
+import librosa
+import os
+
 TEST_WAV = "tests/data/116-288045-0000.wav"
 
+@pytest.mark.skipif(not os.path.exists(TEST_WAV), reason="test audio file not available")
 @pytest.mark.parametrize("sr,n_mels,n_mfcc,frame_size,hop_length", [
     (16000, 40, 13, 1024, 512),
     (22050, 40, 13, 2048, 512),
