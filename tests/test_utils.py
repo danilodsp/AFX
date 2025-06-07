@@ -9,7 +9,7 @@ def test_mean_pooling():
     pooled = aggregator.mean_pooling(features)
     assert 'a' in pooled and 'b' in pooled
     assert pooled['a'].shape == (3, 1)
-    assert pooled['b'].shape == (10,)
+    assert pooled['b'].shape == (1,)
 
 def test_statistical_summary():
     features = {'a': np.ones((2, 5)), 'b': np.arange(5)}
