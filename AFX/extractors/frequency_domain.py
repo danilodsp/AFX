@@ -10,6 +10,8 @@ __all__ = [
     'extract_spectral_entropy',
     'extract_spectral_flatness',
     'extract_spectral_flux',
+    'extract_spectral_skewness',
+    'extract_spectral_slope',
 ]
 
 
@@ -612,3 +614,72 @@ def extract_spectral_flux(
         result['metadata'] = {'times': times}
 
     return result
+
+
+@framewise_extractor
+def extract_spectral_skewness(
+    signal: np.ndarray,
+    sr: int,
+    frame_size: int = 2048,
+    hop_length: int = 512,
+    return_metadata: bool = False,
+    **kwargs,
+) -> Dict[str, np.ndarray]:
+    """Compute the spectral skewness of an audio signal."""
+    window = np.hanning(frame_size)
+    windowed_signal = signal[:frame_size] * window
+
+    fft = np.fft.rfft(windowed_signal, n=frame_size)
+    magnitude = np.abs(fft)
+    freqs = np.fft.rfftfreq(frame_size, d=1.0 / sr)
+
+    mag_sum = np.sum(magnitude)
+    if mag_sum > 0:
+        centroid = np.sum(freqs * magnitude) / mag_sum
+        bandwidth = np.sqrt(
+            np.sum(((freqs - centroid) ** 2) * magnitude) / mag_sum
+        )
+        if bandwidth > 0:
+            skewness = (
+                np.sum(((freqs - centroid) / bandwidth) ** 3 * magnitude)
+                / mag_sum
+            )
+        else:
+            skewness = 0.0
+    else:
+        skewness = 0.0
+
+    return {'spectral_skewness': np.array([skewness])}
+
+
+@framewise_extractor
+def extract_spectral_slope(
+    signal: np.ndarray,
+    sr: int,
+    frame_size: int = 2048,
+    hop_length: int = 512,
+    return_metadata: bool = False,
+    **kwargs,
+) -> Dict[str, np.ndarray]:
+    """Compute the spectral slope of an audio signal."""
+    window = np.hanning(frame_size)
+    windowed_signal = signal[:frame_size] * window
+
+    fft = np.fft.rfft(windowed_signal, n=frame_size)
+    magnitude = np.abs(fft)
+    freqs = np.fft.rfftfreq(frame_size, d=1.0 / sr)
+
+    eps = 1e-10
+    mag_db = 20 * np.log10(magnitude + eps)
+
+    x = freqs
+    y = mag_db
+    x_mean = np.mean(x)
+    y_mean = np.mean(y)
+    denom = np.sum((x - x_mean) ** 2)
+    if denom > 0:
+        slope = np.sum((x - x_mean) * (y - y_mean)) / denom
+    else:
+        slope = 0.0
+
+    return {'spectral_slope': np.array([slope])}
