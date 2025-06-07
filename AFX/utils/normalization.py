@@ -21,6 +21,10 @@ def zscore_normalize(
     """
     normed = {}
     for k, v in features.items():
+        if v.size == 1:
+            # Skip normalization for scalars
+            normed[k] = v
+            continue
         m = mean[k] if mean and k in mean else np.mean(v)
         s = std[k] if std and k in std else np.std(v)
         if s == 0:
@@ -46,6 +50,10 @@ def minmax_normalize(
     """
     normed = {}
     for k, v in features.items():
+        if v.size == 1:
+            # Skip normalization for scalars
+            normed[k] = v
+            continue
         minv = min_[k] if min_ and k in min_ else np.min(v)
         maxv = max_[k] if max_ and k in max_ else np.max(v)
         if maxv == minv:
