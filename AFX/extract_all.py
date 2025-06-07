@@ -12,9 +12,12 @@ FEATURE_MAP = {
     'variance': time_domain.extract_variance,
     'entropy': time_domain.extract_entropy,
     'crest_factor': time_domain.extract_crest_factor,
+    'rms_energy': time_domain.extract_rms_energy,
     'spectral_centroid': frequency_domain.extract_spectral_centroid,
     'spectral_bandwidth': frequency_domain.extract_spectral_bandwidth,
     'spectral_rolloff': frequency_domain.extract_spectral_rolloff,
+    'spectral_skewness': frequency_domain.extract_spectral_skewness,
+    'spectral_slope': frequency_domain.extract_spectral_slope,
     'mfcc': cepstral_features.extract_mfcc,
     'mfcc_delta': cepstral_features.extract_mfcc_delta,
     'chroma_cqt': cepstral_features.extract_chroma_cqt,
@@ -36,9 +39,9 @@ def extract_all_features(
     Args:
         signal: Audio signal (1D np.ndarray)
         sr: Sample rate
-        config: Config dict with 'features' and 'aggregation'
+        config: Config dict with 'features' and 'aggregation'. Shape
+            preservation is controlled via ``config['preserve_shape']``.
         return_metadata: If True, include metadata in results
-        preserve_shape: If True, do not flatten or aggregate features (keep original dimensions)
     Returns:
         Dict of feature names to np.ndarray
     """
@@ -61,12 +64,10 @@ def extract_all_features(
     if not preserve_shape:
         # Aggregate, flatten, and normalize if specified
         agg_kwargs = {}
-        if 'aggregation' in config:
-            agg_kwargs['method'] = config['aggregation']
-        if config.get('flatten', True):
-            agg_kwargs['flatten'] = True
-        if 'normalize' in config:
-            agg_kwargs['normalize'] = config['normalize']
+        # Always pass aggregation, flatten, and normalize, with sensible defaults
+        agg_kwargs['method'] = config.get('aggregation', 'mean')
+        agg_kwargs['flatten'] = config.get('flatten', True)
+        agg_kwargs['normalize'] = config.get('normalize', None)
         features = aggregate_features(features, **agg_kwargs)
     # else: keep original shapes
 
