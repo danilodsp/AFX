@@ -30,8 +30,14 @@ def stft(
         pad_width = frame_size // 2
         signal = np.pad(signal, (pad_width, pad_width), mode='reflect')
 
+    # Pad the signal if it's shorter than one frame
+    if len(signal) < frame_size:
+        signal = np.pad(signal, (0, frame_size - len(signal)), mode='reflect')
+
     # Calculate number of frames
     n_frames = 1 + (len(signal) - frame_size) // hop_length
+    if n_frames <= 0:
+        n_frames = 1
 
     # Create window
     if window == 'hann':
