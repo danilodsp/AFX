@@ -45,7 +45,12 @@ def framewise_extractor(feature_func: Callable) -> Callable:
             # Scalar per frame: stack as 1D (n_frames,)
             stacked = np.array(results).reshape(-1)
         else:
-            # Vector per frame: stack as 2D (n_features, n_frames)
+            # Vector per frame. If the per-frame result has a singleton
+            # trailing dimension (e.g. (n_features, 1)), squeeze it so that
+            # stacking produces (n_features, n_frames) rather than
+            # (n_features, 1, n_frames).
+            if first_shape[-1] == 1:
+                results = [np.squeeze(r, axis=-1) for r in results]
             stacked = np.stack(results, axis=-1)
         result = {key: stacked}
 
