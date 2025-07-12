@@ -113,7 +113,6 @@ def extract_mfcc(
         return {'mfcc': mfcc, 'metadata': {'times': times}}
     return result
 
-@framewise_extractor
 def extract_mfcc_delta(
     signal: np.ndarray,
     sr: int,
@@ -219,7 +218,6 @@ def extract_mfcc_delta(
     return result
 
 
-@framewise_extractor
 def extract_mfcc_delta_delta(
     signal: np.ndarray,
     sr: int,
