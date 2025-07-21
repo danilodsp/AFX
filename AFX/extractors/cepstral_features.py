@@ -4,6 +4,10 @@ Cepstral feature extractors for audio signals (MFCC, delta, etc.).
 import numpy as np
 from typing import Dict
 from AFX.utils.framewise import framewise_extractor
+from AFX.utils.cache import (
+    get_cached_mel_filterbank, cache_mel_filterbank, 
+    clear_feature_cache, get_cache_stats
+)
 from AFX.methods.cqt import cqt_approximation
 from AFX.methods.stft import stft, power_spectrogram, magnitude_spectrogram
 from AFX.methods.mel import mel_filterbank, apply_mel_filterbank, log_mel_spectrogram
@@ -23,9 +27,10 @@ __all__ = [
     'extract_cqt',
     'extract_melspectrogram',
     'extract_gfcc',
+    'clear_feature_cache',
+    'get_cache_stats',
 ]
 
-@framewise_extractor
 def extract_mfcc(
     signal: np.ndarray,
     sr: int,
@@ -94,8 +99,14 @@ def extract_mfcc(
     # 2. Compute power spectrogram
     power_spec = power_spectrogram(stft_matrix)
 
-    # 3. Create and apply mel filterbank
-    filterbank = mel_filterbank(n_mels, frame_size, sr, fmin, fmax, norm='slaney')
+    # 3. Create and apply mel filterbank (with caching)
+    cached_filterbank = get_cached_mel_filterbank(n_mels, frame_size, sr, fmin, fmax, 'slaney')
+    if cached_filterbank is not None:
+        filterbank = cached_filterbank
+    else:
+        filterbank = mel_filterbank(n_mels, frame_size, sr, fmin, fmax, norm='slaney')
+        cache_mel_filterbank(filterbank, n_mels, frame_size, sr, fmin, fmax, 'slaney')
+    
     mel_spec = apply_mel_filterbank(power_spec, filterbank)
 
     # 4. Convert to log scale
@@ -321,7 +332,6 @@ def extract_mfcc_delta_delta(
 
     return result
 
-@framewise_extractor
 def extract_gfcc(
     signal: np.ndarray,
     sr: int,
@@ -406,7 +416,6 @@ def extract_gfcc(
         return {'gfcc': gfcc, 'metadata': {'times': times}}
     return result
 
-@framewise_extractor
 def extract_chroma_cqt(
     signal: np.ndarray,
     sr: int,
@@ -559,7 +568,6 @@ def extract_chroma_stft(
         return {'chroma_stft': chroma, 'metadata': {'times': times}}
     return result
 
-@framewise_extractor
 def extract_cqt(
     signal: np.ndarray,
     sr: int,
@@ -686,9 +694,14 @@ def extract_melspectrogram(
     # 2. Compute power spectrogram (squared magnitude)
     power_spec = power_spectrogram(stft_matrix)
 
-    # 3. Create mel filterbank with Slaney normalization
-    filterbank = mel_filterbank(n_mels, frame_size, sr, fmin=fmin, fmax=fmax, 
-                               norm='slaney', htk=False)
+    # 3. Create mel filterbank with Slaney normalization (with caching)
+    cached_filterbank = get_cached_mel_filterbank(n_mels, frame_size, sr, fmin, fmax, 'slaney')
+    if cached_filterbank is not None:
+        filterbank = cached_filterbank
+    else:
+        filterbank = mel_filterbank(n_mels, frame_size, sr, fmin=fmin, fmax=fmax, 
+                                   norm='slaney', htk=False)
+        cache_mel_filterbank(filterbank, n_mels, frame_size, sr, fmin, fmax, 'slaney')
 
     # 4. Apply mel filterbank to power spectrogram
     mel_spec = apply_mel_filterbank(power_spec, filterbank)
