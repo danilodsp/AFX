@@ -91,21 +91,20 @@ def test_hnr_consistency():
     # Noisy tone should have higher HNR than very noisy tone
     assert np.median(noisy_hnr) > np.median(very_noisy_hnr)
 
-    # Test a direct call to the function to validate the return metadata format
-    # Create a shorter signal for direct function testing
-    short_tone = pure_tone[:frame_size]
+    # Test metadata return through the decorated function
+    short_tone = pure_tone[:frame_size * 2]  # Two frames worth of signal
 
-    # Directly call the function to bypass the decorator
-    direct_result = harmonic_features.extract_hnr.__wrapped__(
-        short_tone, sr=sr, frame_size=frame_size, 
+    meta_result = harmonic_features.extract_hnr(
+        short_tone, sr=sr, frame_size=frame_size,
         hop_length=hop_length, return_metadata=True
     )
 
-    # Verify metadata structure and content for direct function call
-    assert 'metadata' in direct_result
-    assert 'times' in direct_result['metadata']
+    # Verify metadata structure and content
+    assert 'metadata' in meta_result
+    assert 'times' in meta_result['metadata']
 
     # Check that times are calculated correctly
-    times = direct_result['metadata']['times']
-    expected_time = np.array([0.0])  # Only one frame for short_tone
-    assert np.allclose(times, expected_time)
+    times = meta_result['metadata']['times']
+    n_frames = len(meta_result['hnr'])
+    expected_times = np.arange(n_frames) * hop_length / sr
+    assert np.allclose(times, expected_times)

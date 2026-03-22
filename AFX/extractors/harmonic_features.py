@@ -21,7 +21,6 @@ __all__ = [
     'extract_hnr',
 ]
 
-@framewise_extractor
 def extract_pitch(
     signal: np.ndarray,
     sr: int,
@@ -37,6 +36,9 @@ def extract_pitch(
 
     Implementation based on "YIN, a fundamental frequency estimator for speech and music"
     by Alain de Cheveigné and Hideki Kawahara.
+
+    Note: This function manages its own framing via the YIN algorithm
+    and is NOT decorated with @framewise_extractor.
 
     Args:
         signal: Audio signal (1D np.ndarray)
@@ -116,8 +118,10 @@ def extract_hnr(
     """
     Estimate Harmonics-to-Noise Ratio (HNR) using autocorrelation method.
 
-    Uses a custom NumPy-based framing approach to segment the audio signal
-    into overlapping frames, then estimates HNR using the autocorrelation method.
+    Uses the @framewise_extractor decorator for frame-wise processing.
+    Each call receives a single frame (or the whole signal if no
+    frame_size/hop_length are provided) and computes HNR via
+    autocorrelation.
 
     Args:
         signal: Audio signal (1D np.ndarray)
@@ -132,28 +136,14 @@ def extract_hnr(
         units: dB
         times: np.ndarray, shape (n_frames,) if return_metadata is True
     """
-    n_samples = len(signal)
-    n_frames = max(1, 1 + (n_samples - frame_size) // hop_length)
-    hnr = []
-    for i in range(n_frames):
-        start = i * hop_length
-        end = min(start + frame_size, n_samples)
-        frame = signal[start:end]
-        frame = _pad_frame(frame, frame_size)
-        try:
-            autocorr = np.correlate(frame, frame, mode='full')
-            autocorr = autocorr[len(autocorr)//2:]
-            if autocorr[0] == 0:
-                hnr.append(np.nan)
-                continue
-            max_autocorr = np.max(autocorr[1:])
-            hnr_val = 10 * np.log10((max_autocorr + _EPS) / (autocorr[0] - max_autocorr + _EPS))
-            hnr.append(hnr_val)
-        except Exception:
-            hnr.append(np.nan)
-    hnr = np.array(hnr)
-    result = {'hnr': hnr}
-    if return_metadata:
-        times = np.arange(n_frames) * hop_length / sr
-        return {'hnr': hnr, 'metadata': {'times': times}}
-    return result
+    autocorr = np.correlate(signal, signal, mode='full')
+    autocorr = autocorr[len(autocorr) // 2:]
+
+    if autocorr[0] == 0:
+        return {'hnr': np.array([np.nan])}
+
+    max_autocorr = np.max(autocorr[1:])
+    denom = max(autocorr[0] - max_autocorr, _EPS)
+    hnr_val = 10 * np.log10((max_autocorr + _EPS) / denom)
+
+    return {'hnr': np.array([hnr_val])}

@@ -350,7 +350,6 @@ def extract_spectral_entropy(
     sr: int,
     frame_size: int = 2048,
     hop_length: int = 512,
-    n_bins: int = 128,
     return_metadata: bool = False,
     **kwargs
 ) -> Dict[str, np.ndarray]:
@@ -364,9 +363,8 @@ def extract_spectral_entropy(
     Args:
         signal: Audio signal (1D np.ndarray)
         sr: Sample rate
-        frame_size: Frame size for STFT
+        frame_size: Frame size for FFT (also controls frequency resolution)
         hop_length: Hop length between frames
-        n_bins: Number of frequency bins
         return_metadata: If True, include frame times in metadata
     Returns:
         Dict with 'spectral_entropy' key and np.ndarray of values
@@ -376,65 +374,31 @@ def extract_spectral_entropy(
         times: np.ndarray, shape (n_frames,) if return_metadata is True
 
     Mathematical formulation:
-        1. Compute the power spectrum P(f) from STFT
-        2. Normalize P(f) to a probability distribution: p(f) = P(f) / sum(P(f))
+        1. Compute the magnitude spectrum |X(f)| from FFT
+        2. Normalize |X(f)| to a probability distribution: p(f) = |X(f)| / sum(|X(f)|)
         3. Calculate entropy: H = -sum(p(f) * log2(p(f)))
 
     Implementation:
-        1. Apply windowing to the signal using a Hann window
-        2. Compute the STFT and magnitude spectrum
-        3. Normalize the power spectrum to a probability distribution
-        4. Calculate the spectral entropy for each frame
+        Uses the @framewise_extractor decorator for frame-wise processing.
+        Each call receives a single frame (or the whole signal if no
+        frame_size/hop_length are provided). A Hann window is applied
+        before computing the FFT.
     """
-    # Apply windowing (hann window)
-    window = np.hanning(frame_size)
+    window = np.hanning(len(signal))
+    windowed_signal = signal * window
 
-    # Compute STFT - use rfft for real-valued signals
-    n_frames = 1 + (len(signal) - frame_size) // hop_length
+    fft = np.fft.rfft(windowed_signal, n=frame_size)
+    magnitude = np.abs(fft)
 
-    # Initialize output array
-    entropy = np.zeros(n_frames)
-
-    # Small constant to avoid log(0)
     eps = 1e-10
+    magnitude_sum = np.sum(magnitude)
+    if magnitude_sum > eps:
+        ps = magnitude / magnitude_sum
+        entropy = -np.sum(ps * np.log2(ps + eps))
+    else:
+        entropy = 0.0
 
-    # Process each frame
-    for i in range(n_frames):
-        start = i * hop_length
-        end = start + frame_size
-
-        # Apply windowing to the frame
-        if end <= len(signal):
-            frame = signal[start:end] * window
-        else:
-            # Pad the last frame if needed
-            padding = end - len(signal)
-            frame = np.pad(signal[start:], (0, padding)) * window
-
-        # Compute FFT
-        fft = np.fft.rfft(frame, n=frame_size)
-
-        # Compute the magnitude spectrum
-        magnitude = np.abs(fft)
-
-        # Normalize the power spectrum to get a probability distribution
-        power_sum = np.sum(magnitude)
-        if power_sum > eps:
-            # Normalize to probability distribution
-            ps = magnitude / power_sum
-            # Calculate entropy
-            entropy[i] = -np.sum(ps * np.log2(ps + eps))
-        else:
-            entropy[i] = 0.0
-
-    result = {'spectral_entropy': entropy}
-
-    if return_metadata:
-        # Calculate frame times based on the hop length and sample rate
-        times = np.arange(n_frames) * hop_length / sr
-        return {'spectral_entropy': entropy, 'metadata': {'times': times}}
-
-    return result
+    return {'spectral_entropy': np.array([entropy])}
 
 @framewise_extractor
 def extract_spectral_flatness(
@@ -456,7 +420,7 @@ def extract_spectral_flatness(
     Args:
         signal: Audio signal (1D np.ndarray)
         sr: Sample rate
-        frame_size: Frame size for STFT
+        frame_size: Frame size for FFT (also controls frequency resolution)
         hop_length: Hop length between frames
         return_metadata: If True, include frame times in metadata
     Returns:
@@ -467,63 +431,29 @@ def extract_spectral_flatness(
         times: np.ndarray, shape (n_frames,) if return_metadata is True
 
     Implementation:
-        1. Apply windowing to the signal using a Hann window
-        2. Compute the STFT and magnitude spectrum
-        3. Calculate the ratio of geometric mean to arithmetic mean of the spectrum for each frame
+        Uses the @framewise_extractor decorator for frame-wise processing.
+        Each call receives a single frame (or the whole signal if no
+        frame_size/hop_length are provided). A Hann window is applied
+        before computing the FFT and power spectrum.
     """
-    window = np.hanning(frame_size)
+    window = np.hanning(len(signal))
+    windowed_signal = signal * window
 
-    # Compute the FFT - use rfft for real-valued signals
-    n_frames = 1 + (len(signal) - frame_size) // hop_length
+    fft = np.fft.rfft(windowed_signal, n=frame_size)
+    power_spectrum = np.abs(fft) ** 2
 
-    # Initialize output array
-    flatness = np.zeros(n_frames)
-
-    # Small constant to avoid log(0) and division by zero
     eps = 1e-10
+    power_spectrum = np.maximum(power_spectrum, eps)
 
-    # Process each frame
-    for i in range(n_frames):
-        start = i * hop_length
-        end = start + frame_size
+    geometric_mean = np.exp(np.mean(np.log(power_spectrum)))
+    arithmetic_mean = np.mean(power_spectrum)
 
-        # Apply windowing to the frame
-        if end <= len(signal):
-            frame = signal[start:end] * window
-        else:
-            # Pad the last frame if needed
-            padding = end - len(signal)
-            frame = np.pad(signal[start:], (0, padding)) * window
+    if arithmetic_mean > eps:
+        flatness = geometric_mean / arithmetic_mean
+    else:
+        flatness = 0.0
 
-        # Compute FFT
-        fft = np.fft.rfft(frame, n=frame_size)
-
-        # Compute the power spectrum (squared magnitude)
-        power_spectrum = np.abs(fft) ** 2
-
-        # Ensure spectrum is positive for log calculation
-        power_spectrum = np.maximum(power_spectrum, eps)
-
-        # Compute geometric mean: exp(mean(log(spectrum)))
-        geometric_mean = np.exp(np.mean(np.log(power_spectrum)))
-
-        # Compute arithmetic mean: mean(spectrum)
-        arithmetic_mean = np.mean(power_spectrum)
-
-        # Compute flatness as the ratio of geometric to arithmetic mean
-        if arithmetic_mean > eps:
-            flatness[i] = geometric_mean / arithmetic_mean
-        else:
-            flatness[i] = 0.0
-
-    result = {'spectral_flatness': flatness}
-
-    if return_metadata:
-        # Calculate frame times based on the hop length and sample rate
-        times = np.arange(n_frames) * hop_length / sr
-        return {'spectral_flatness': flatness, 'metadata': {'times': times}}
-
-    return result
+    return {'spectral_flatness': np.array([flatness])}
 
 def extract_spectral_flux(
     signal: np.ndarray,
@@ -626,8 +556,8 @@ def extract_spectral_skewness(
     **kwargs,
 ) -> Dict[str, np.ndarray]:
     """Compute the spectral skewness of an audio signal."""
-    window = np.hanning(frame_size)
-    windowed_signal = signal[:frame_size] * window
+    window = np.hanning(len(signal))
+    windowed_signal = signal * window
 
     fft = np.fft.rfft(windowed_signal, n=frame_size)
     magnitude = np.abs(fft)
@@ -662,8 +592,8 @@ def extract_spectral_slope(
     **kwargs,
 ) -> Dict[str, np.ndarray]:
     """Compute the spectral slope of an audio signal."""
-    window = np.hanning(frame_size)
-    windowed_signal = signal[:frame_size] * window
+    window = np.hanning(len(signal))
+    windowed_signal = signal * window
 
     fft = np.fft.rfft(windowed_signal, n=frame_size)
     magnitude = np.abs(fft)

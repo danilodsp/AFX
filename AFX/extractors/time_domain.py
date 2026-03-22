@@ -118,8 +118,9 @@ def extract_entropy(
         shape: (1,) or (1, n_frames) if framewise
         units: float
     """
-    hist, _ = np.histogram(signal, bins=num_bins, density=True)
-    hist = hist[hist > 0]
+    hist, _ = np.histogram(signal, bins=num_bins, density=False)
+    hist = hist[hist > 0].astype(float)
+    hist = hist / hist.sum()
     entropy = -np.sum(hist * np.log2(hist))
     return {'entropy': np.array([entropy])}
 

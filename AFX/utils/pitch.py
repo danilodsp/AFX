@@ -90,20 +90,15 @@ def yin(y: np.ndarray, frame_length: int, hop_length: int, fmin: float = 50.0,
 
         # Step 4: Refine the pitch estimation with parabolic interpolation
         if tau_pitch > 0 and tau_pitch < tau_max:
-            # Ensure we have valid indices
-            prev_tau = max(1, tau_pitch - 1)
-            next_tau = min(tau_max - 1, tau_pitch + 1)
-            
-            # Parabolic interpolation
-            if prev_tau > 0 and next_tau < tau_max:
-                a = cmnd[prev_tau-1]
-                b = cmnd[prev_tau]
-                c = cmnd[next_tau]
-                
-                # Only use interpolation if we have a clear minimum
-                if 2*b < a + c:  # Check if it's a minimum
-                    offset = 0.5 * (a - c) / (a - 2*b + c)
-                    tau_pitch = prev_tau + offset
+            # Parabolic interpolation using the three points around the minimum
+            a = cmnd[tau_pitch - 1]
+            b = cmnd[tau_pitch]
+            c = cmnd[tau_pitch + 1]
+
+            # Only use interpolation if we have a clear minimum
+            if 2 * b < a + c:  # Check if it's a minimum
+                offset = 0.5 * (a - c) / (a - 2 * b + c)
+                tau_pitch = tau_pitch + offset
 
         # Convert tau to frequency (Hz)
         if found_pitch or (tau_pitch < len(cmnd) and cmnd[int(tau_pitch)] < 0.5):  # 0.5 is a bit more generous than threshold
