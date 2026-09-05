@@ -3,6 +3,7 @@ Time-domain feature extractors for audio signals.
 """
 from typing import Dict, Optional
 import numpy as np
+from scipy.fft import next_fast_len
 from AFX.utils.framewise import framewise_extractor
 from scipy.stats import kurtosis
 
@@ -12,7 +13,35 @@ __all__ = [
     'extract_entropy',
     'extract_crest_factor',
     'extract_rms_energy',
+    'extract_kurtosis',
+    'extract_short_time_energy',
+    'extract_energy_ratio',
+    'extract_sample_entropy',
+    'extract_mobility',
+    'extract_complexity',
+    'extract_autocorrelation_variance',
+    'extract_autocorr_snr',
+    'extract_autocorr_zero_crossings',
+    'extract_autocorr_peak_width',
+    'extract_autocorr_decay_rate',
+    'extract_autocorr_coeffs_deviation',
+    'extract_max_peak_autocorr_envelope',
 ]
+
+
+def _autocorr(signal: np.ndarray, max_lag: int) -> np.ndarray:
+    """
+    Linear autocorrelation for lags 0..max_lag-1 via FFT (O(N log N)),
+    equivalent to np.correlate(signal, signal, 'full')[mid:mid+max_lag].
+    """
+    signal = np.asarray(signal, dtype=np.float64)
+    n = len(signal)
+    if n == 0:
+        return np.zeros(0)
+    nfft = next_fast_len(2 * n)
+    f = np.fft.rfft(signal, nfft)
+    acf = np.fft.irfft(f * np.conj(f), nfft)
+    return acf[:min(max_lag, n)]
 
 def extract_zero_crossing_rate(
     signal: np.ndarray,
@@ -72,6 +101,8 @@ def extract_zero_crossing_rate(
 
     result = {'zcr': zcr}
     if return_metadata:
+        if sr is None:
+            raise ValueError('sr is required when return_metadata=True')
         # Convert frame indices to time (seconds)
         times = np.arange(len(zcr)) * hop_length / float(sr)
         return {'zcr': zcr, 'metadata': {'times': times}}
@@ -118,9 +149,12 @@ def extract_entropy(
         shape: (1,) or (1, n_frames) if framewise
         units: float
     """
-    hist, _ = np.histogram(signal, bins=num_bins, density=True)
-    hist = hist[hist > 0]
-    entropy = -np.sum(hist * np.log2(hist))
+    hist, _ = np.histogram(signal, bins=num_bins)
+    total = hist.sum()
+    if total == 0:
+        return {'entropy': np.array([0.0])}
+    p = hist[hist > 0] / total
+    entropy = -np.sum(p * np.log2(p))
     return {'entropy': np.array([entropy])}
 
 
@@ -234,32 +268,62 @@ def extract_sample_entropy(
     sr: Optional[int] = None,
     m: int = 2,
     r: float = 0.2,
+    max_samples: int = 20000,
     **kwargs
 ) -> Dict[str, np.ndarray]:
     """
     Compute the sample entropy of the audio signal.
+
+    Template matching is done with a KD-tree under the Chebyshev metric
+    (identical counts to the brute-force pairwise comparison, far faster).
+    The worst case is still quadratic, so this feature is intended for
+    frame-wise use (pass ``frame_size``/``hop_length``), and signals longer
+    than ``max_samples`` are rejected to prevent accidental multi-hour runs
+    on whole files.
+
     Args:
         signal: Audio signal (1D np.ndarray)
         sr: Sample rate (optional)
         m: Embedding dimension
         r: Tolerance (as a fraction of std)
+        max_samples: Maximum allowed signal/frame length
     Returns:
         Dict with 'sample_entropy' key and np.ndarray scalar
     Metadata:
         shape: (1,) or (1, n_frames) if framewise
         units: float
     """
-    def _phi(m):
-        N = len(signal)
-        x = np.array([signal[i:i + m] for i in range(N - m + 1)])
-        C = np.sum(
-            np.max(np.abs(x[:, None] - x[None, :]), axis=2) <= r * np.std(signal), axis=0
-        ) - 1
-        return np.sum(C) / ((N - m + 1) * (N - m))
-    try:
-        se = -np.log(_phi(m + 1) / (_phi(m) + 1e-10))
-    except Exception:
+    signal = np.asarray(signal, dtype=np.float64)
+    N = len(signal)
+    if N > max_samples:
+        raise ValueError(
+            f'sample_entropy is O(N^2); got {N} samples (max {max_samples}). '
+            'Use frame_size/hop_length to compute it frame-wise, or raise '
+            'max_samples explicitly.'
+        )
+    if N < m + 2:
+        return {'sample_entropy': np.array([np.nan])}
+
+    tol = r * np.std(signal)
+
+    def _phi(mm):
+        from scipy.spatial import cKDTree
+        n = N - mm + 1
+        if n < 2:
+            return 0.0
+        x = np.lib.stride_tricks.sliding_window_view(signal, mm)
+        tree = cKDTree(x)
+        # Ordered pairs (i, j) with Chebyshev distance <= tol, incl. i == j
+        pairs = tree.count_neighbors(tree, tol, p=np.inf)
+        count = pairs - n  # exclude self-matches
+        return count / (n * (n - 1))
+
+    phi_m = _phi(m)
+    phi_m1 = _phi(m + 1)
+    if phi_m <= 0 or phi_m1 <= 0:
         se = np.nan
+    else:
+        se = -np.log(phi_m1 / phi_m)
     return {'sample_entropy': np.array([se])}
 
 
@@ -281,9 +345,7 @@ def extract_autocorrelation_variance(
         shape: (1,) or (1, n_frames) if framewise
         units: float
     """
-    ac = np.correlate(signal, signal, mode='full')
-    mid = len(ac) // 2
-    acf = ac[mid:mid+max_lag]
+    acf = _autocorr(signal, max_lag)
     var = np.var(acf)
     return {'autocorr_variance': np.array([var])}
 
@@ -353,9 +415,7 @@ def extract_autocorr_snr(
         shape: (1,) or (1, n_frames) if framewise
         units: float
     """
-    ac = np.correlate(signal, signal, mode='full')
-    mid = len(ac) // 2
-    acf = ac[mid:mid+max_lag]
+    acf = _autocorr(signal, max_lag)
     snr = np.max(acf) / (np.mean(acf) + 1e-10)
     return {'autocorr_snr': np.array([snr])}
 
@@ -377,9 +437,7 @@ def extract_autocorr_zero_crossings(
         shape: (1,) or (1, n_frames) if framewise
         units: int
     """
-    ac = np.correlate(signal, signal, mode='full')
-    mid = len(ac) // 2
-    acf = ac[mid:mid+max_lag]
+    acf = _autocorr(signal, max_lag)
     zc = np.sum(np.diff(np.sign(acf)) != 0)
     return {'autocorr_zero_crossings': np.array([zc])}
 
@@ -401,12 +459,11 @@ def extract_autocorr_peak_width(
         shape: (1,) or (1, n_frames) if framewise
         units: int
     """
-    ac = np.correlate(signal, signal, mode='full')
-    mid = len(ac) // 2
-    acf = ac[mid:mid+max_lag]
+    acf = _autocorr(signal, max_lag)
     peak = np.max(acf)
     above_half = np.where(acf >= 0.5 * peak)[0]
-    width = above_half[-1] - above_half[0] + 1 if len(above_half) > 1 else 0
+    # A single bin above half-peak has width 1 (not 0)
+    width = above_half[-1] - above_half[0] + 1 if len(above_half) > 0 else 0
     return {'autocorr_peak_width': np.array([width])}
 
 @framewise_extractor
@@ -427,16 +484,16 @@ def extract_autocorr_decay_rate(
         shape: (1,) or (1, n_frames) if framewise
         units: float
     """
-    ac = np.correlate(signal, signal, mode='full')
-    mid = len(ac) // 2
-    acf = ac[mid:mid+max_lag]
+    acf = _autocorr(signal, max_lag)
+    if len(acf) < 3:
+        return {'autocorr_decay_rate': np.array([np.nan])}
     try:
         decay = -np.polyfit(
             np.arange(1, len(acf)),
             np.log(np.abs(acf[1:]) + 1e-10),
             1
         )[0]
-    except Exception:
+    except np.linalg.LinAlgError:
         decay = np.nan
     return {'autocorr_decay_rate': np.array([decay])}
 
@@ -458,9 +515,7 @@ def extract_autocorr_coeffs_deviation(
         shape: (1,) or (1, n_frames) if framewise
         units: float
     """
-    ac = np.correlate(signal, signal, mode='full')
-    mid = len(ac) // 2
-    acf = ac[mid:mid+max_lag]
+    acf = _autocorr(signal, max_lag)
     std = np.std(acf)
     return {'autocorr_coeffs_deviation': np.array([std])}
 
@@ -482,9 +537,7 @@ def extract_max_peak_autocorr_envelope(
         shape: (1,) or (1, n_frames) if framewise
         units: float
     """
-    ac = np.correlate(signal, signal, mode='full')
-    mid = len(ac) // 2
-    acf = ac[mid:mid+max_lag]
+    acf = _autocorr(signal, max_lag)
     if len(acf) > 1:
         peak = np.max(acf[1:])
     else:

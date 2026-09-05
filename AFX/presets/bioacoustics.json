@@ -1,0 +1,18 @@
+{
+  "name": "bioacoustics",
+  "title": "Bioacoustics",
+  "description": "Broadband set for animal sound and environmental audio classification (species ID, call detection). Higher sample rate to preserve high-frequency calls; mel/MFCC timbre plus spectral shape and flatness for tonal-vs-noisy discrimination.",
+  "sample_rate": 32000,
+  "features": {
+    "melspectrogram": {"n_mels": 64, "frame_size": 1024, "hop_length": 512},
+    "mfcc": {"n_mfcc": 20, "frame_size": 1024, "hop_length": 512},
+    "spectral_centroid": {"frame_size": 1024, "hop_length": 512},
+    "spectral_bandwidth": {"frame_size": 1024, "hop_length": 512},
+    "spectral_rolloff": {"frame_size": 1024, "hop_length": 512},
+    "spectral_flatness": {"frame_size": 1024, "hop_length": 512},
+    "spectral_contrast": {"frame_size": 1024, "hop_length": 512},
+    "spectral_entropy": {"frame_size": 1024, "hop_length": 512},
+    "zcr": {"frame_size": 1024, "hop_length": 512}
+  },
+  "aggregation": "summary"
+}

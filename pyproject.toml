@@ -1,0 +1,68 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "AFX"
+version = "0.2.0"
+description = "Audio feature extraction for ML/AI"
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [
+    { name = "Danilo Pena" },
+]
+requires-python = ">=3.9"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Multimedia :: Sound/Audio :: Analysis",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "numpy>=1.23",
+    "scipy>=1.10",
+    "soundfile>=0.12",
+    "pandas>=1.5",
+    "matplotlib>=3.7",
+    "scikit-learn>=1.2",
+]
+
+[project.optional-dependencies]
+notebooks = [
+    "seaborn>=0.12",
+    "librosa>=0.10",
+    "jupyter",
+]
+torch = [
+    "torch>=2.0",
+]
+parquet = [
+    "pyarrow>=10",
+]
+test = [
+    "pytest>=7",
+    "librosa>=0.10",
+    "pyarrow>=10",
+]
+
+[project.scripts]
+afx = "AFX.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/danilodsp/AFX"
+Repository = "https://github.com/danilodsp/AFX"
+Issues = "https://github.com/danilodsp/AFX/issues"
+
+[tool.setuptools.packages.find]
+include = ["AFX*"]
+
+[tool.setuptools.package-data]
+AFX = ["config.json", "presets/*.json"]

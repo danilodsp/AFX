@@ -16,7 +16,7 @@ def hz_to_mel(hz: np.ndarray, htk: bool = False) -> np.ndarray:
     Returns:
         Frequency in mel scale
     """
-    hz = np.asarray(hz)
+    hz = np.asarray(hz, dtype=np.float64)
 
     if htk:
         # HTK formula: mel = 2595 * log10(1 + hz / 700)
@@ -32,7 +32,7 @@ def hz_to_mel(hz: np.ndarray, htk: bool = False) -> np.ndarray:
         min_log_mel = (min_log_hz - f_min) / f_sp  # 15.0
 
         # Log scale parameters
-        logstep = 0.068752  # Exact value matching librosa
+        logstep = np.log(6.4) / 27.0  # Exact value matching librosa
 
         # Apply piecewise conversion
         mel = np.zeros_like(hz)
@@ -59,7 +59,7 @@ def mel_to_hz(mel: np.ndarray, htk: bool = False) -> np.ndarray:
     Returns:
         Frequency in Hz
     """
-    mel = np.asarray(mel)
+    mel = np.asarray(mel, dtype=np.float64)
 
     if htk:
         # HTK formula: hz = 700 * (10^(mel/2595) - 1)
@@ -74,7 +74,7 @@ def mel_to_hz(mel: np.ndarray, htk: bool = False) -> np.ndarray:
         min_log_mel = (min_log_hz - f_min) / f_sp  # 15.0
 
         # Log scale parameters
-        logstep = 0.068752  # Exact value matching librosa
+        logstep = np.log(6.4) / 27.0  # Exact value matching librosa
 
         # Apply piecewise conversion
         hz = np.zeros_like(mel)
@@ -108,7 +108,10 @@ def mel_frequencies(
         htk: Use HTK formula if True, otherwise use Slaney formula (librosa default)
 
     Returns:
-        Array of mel frequencies in Hz
+        Array of n_mels + 2 frequencies in Hz: the filter edge frequencies
+        (left edge, n_mels centers, right edge) needed to build triangular
+        filters. Note this differs from librosa.mel_frequencies, which
+        returns exactly n_mels values.
     """
     if fmax is None:
         fmax = sr / 2.0
@@ -154,30 +157,19 @@ def mel_filterbank(
     # Get mel frequencies
     mel_freqs = mel_frequencies(n_mels, fmin, fmax, sr, htk=htk)
 
-    # Convert to FFT bin indices
-    n_freq = n_fft // 2 + 1
-    fftfreqs = np.fft.fftfreq(n_fft, 1.0 / sr)[:n_freq]
+    # Frequencies of the rfft bins (0 .. sr/2 inclusive). Note: fftfreq would
+    # give a negative frequency at the Nyquist index, truncating the top filter.
+    fftfreqs = np.fft.rfftfreq(n_fft, 1.0 / sr)
+    n_freq = len(fftfreqs)
 
-    # Initialize filterbank
-    filterbank = np.zeros((n_mels, n_freq))
-
-    # Create triangular filters
-    for i in range(n_mels):
-        # Get the three mel frequencies for this filter
-        left = mel_freqs[i]
-        center = mel_freqs[i + 1]
-        right = mel_freqs[i + 2]
-
-        # Create triangular filter
-        for j, freq in enumerate(fftfreqs):
-            if left <= freq <= center:
-                # Rising edge
-                if center != left:
-                    filterbank[i, j] = (freq - left) / (center - left)
-            elif center < freq <= right:
-                # Falling edge
-                if right != center:
-                    filterbank[i, j] = (right - freq) / (right - center)
+    # Vectorized triangular filter construction (librosa's ramp formulation):
+    # rising edge (f - left)/(center - left), falling edge (right - f)/(right - center)
+    fdiff = np.diff(mel_freqs)
+    ramps = mel_freqs[:, np.newaxis] - fftfreqs[np.newaxis, :]
+    lower = -ramps[:-2] / np.maximum(fdiff[:-1][:, np.newaxis], 1e-12)
+    upper = ramps[2:] / np.maximum(fdiff[1:][:, np.newaxis], 1e-12)
+    filterbank = np.maximum(0.0, np.minimum(lower, upper))
+    assert filterbank.shape == (n_mels, n_freq)
 
     # Apply normalization
     if norm == 'slaney':

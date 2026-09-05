@@ -21,8 +21,11 @@ def zscore_normalize(
     """
     normed = {}
     for k, v in features.items():
-        if v.size == 1:
-            # Skip normalization for scalars
+        has_stats = mean is not None and std is not None and k in mean and k in std
+        if v.size == 1 and not has_stats:
+            # Skip normalization for scalars when stats must be computed
+            # from the data itself (a scalar's own std is 0). With
+            # precomputed dataset-level stats, scalars are normalized too.
             normed[k] = v
             continue
         m = mean[k] if mean and k in mean else np.mean(v)
@@ -50,8 +53,11 @@ def minmax_normalize(
     """
     normed = {}
     for k, v in features.items():
-        if v.size == 1:
-            # Skip normalization for scalars
+        has_stats = min_ is not None and max_ is not None and k in min_ and k in max_
+        if v.size == 1 and not has_stats:
+            # Skip normalization for scalars when stats must be computed
+            # from the data itself. With precomputed dataset-level stats,
+            # scalars are normalized too.
             normed[k] = v
             continue
         minv = min_[k] if min_ and k in min_ else np.min(v)

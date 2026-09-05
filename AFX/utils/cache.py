@@ -9,8 +9,8 @@ _feature_cache: Dict[str, Any] = {}
 
 
 def _cache_key_mel_filterbank(n_mels: int, frame_size: int, sr: int, fmin: float, fmax: float, norm: str) -> str:
-    """Generate cache key for mel filterbank."""
-    return f"mel_filterbank_{n_mels}_{frame_size}_{sr}_{fmin}_{fmax}_{norm}"
+    """Generate cache key for mel filterbank (floats normalized so 50 == 50.0)."""
+    return f"mel_filterbank_{n_mels}_{frame_size}_{sr}_{float(fmin)}_{float(fmax)}_{norm}"
 
 
 def _cache_key_window(window_name: str, frame_size: int) -> str:
@@ -25,8 +25,10 @@ def get_cached_mel_filterbank(n_mels: int, frame_size: int, sr: int, fmin: float
 
 
 def cache_mel_filterbank(filterbank: np.ndarray, n_mels: int, frame_size: int, sr: int, fmin: float, fmax: float, norm: str = 'slaney') -> None:
-    """Cache mel filterbank for reuse."""
+    """Cache mel filterbank for reuse. The stored array is made read-only so
+    callers can't corrupt the cache by mutating it in place."""
     key = _cache_key_mel_filterbank(n_mels, frame_size, sr, fmin, fmax, norm)
+    filterbank.flags.writeable = False
     _feature_cache[key] = filterbank
 
 
@@ -37,8 +39,9 @@ def get_cached_window(window_name: str, frame_size: int) -> Optional[np.ndarray]
 
 
 def cache_window(window: np.ndarray, window_name: str, frame_size: int) -> None:
-    """Cache window function for reuse."""
+    """Cache window function for reuse (stored read-only)."""
     key = _cache_key_window(window_name, frame_size)
+    window.flags.writeable = False
     _feature_cache[key] = window
 
 

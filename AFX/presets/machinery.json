@@ -1,0 +1,21 @@
+{
+  "name": "machinery",
+  "title": "Machinery & Condition Monitoring",
+  "description": "Vibration/acoustic condition-monitoring set for fault detection on rotating machinery (bearings, pumps, fans, valves). Emphasizes impulsiveness (crest factor, kurtosis), signal complexity (Hjorth mobility/complexity) and spectral shape shifts that flag anomalies.",
+  "sample_rate": 16000,
+  "features": {
+    "rms_energy": {"frame_size": 1024, "hop_length": 512},
+    "crest_factor": {"frame_size": 1024, "hop_length": 512},
+    "kurtosis": {"frame_size": 1024, "hop_length": 512},
+    "mobility": {"frame_size": 1024, "hop_length": 512},
+    "complexity": {"frame_size": 1024, "hop_length": 512},
+    "spectral_centroid": {"frame_size": 1024, "hop_length": 512},
+    "spectral_bandwidth": {"frame_size": 1024, "hop_length": 512},
+    "spectral_flatness": {"frame_size": 1024, "hop_length": 512},
+    "spectral_entropy": {"frame_size": 1024, "hop_length": 512},
+    "spectral_flux": {"frame_size": 1024, "hop_length": 512},
+    "mfcc": {"n_mfcc": 13, "frame_size": 1024, "hop_length": 512},
+    "hnr": {"frame_size": 1024, "hop_length": 512}
+  },
+  "aggregation": "advanced_summary"
+}

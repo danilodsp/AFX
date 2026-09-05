@@ -1,5 +1,11 @@
 """
-Unit test for 2D audio features (mel spectrogram, MFCC) using a real .wav file and comparison with Librosa.
+Unit test for 2D audio features (mel spectrogram, MFCC) on realistic audio,
+compared against Librosa.
+
+The signal is synthesized deterministically (speech-like: gliding harmonics
+plus band noise) so no audio fixture needs to be committed to the repo. If a
+real LibriSpeech sample is present at tests/data/116-288045-0000.wav it is
+used instead.
 """
 import numpy as np
 import pytest
@@ -13,21 +19,39 @@ import os
 
 TEST_WAV = "tests/data/116-288045-0000.wav"
 
-@pytest.mark.skipif(not os.path.exists(TEST_WAV), reason="test audio file not available")
+
+def _speech_like_signal(sr: int, duration: float = 2.0) -> np.ndarray:
+    """Deterministic speech-like test signal: gliding harmonic stack + noise."""
+    rng = np.random.RandomState(1234)
+    t = np.linspace(0, duration, int(sr * duration), endpoint=False)
+    # Gliding fundamental 110 -> 220 Hz with 5 harmonics of decaying amplitude
+    f0 = 110.0 * (2.0 ** (t / duration))
+    phase = 2 * np.pi * np.cumsum(f0) / sr
+    y = np.zeros_like(t)
+    for h in range(1, 6):
+        y += (1.0 / h) * np.sin(h * phase)
+    # Amplitude modulation (syllable-ish envelope) + noise floor
+    y *= 0.5 * (1.0 + np.sin(2 * np.pi * 3.0 * t))
+    y += 0.05 * rng.randn(len(t))
+    return (y / np.max(np.abs(y))).astype(np.float64)
+
+
 @pytest.mark.parametrize("sr,n_mels,n_mfcc,frame_size,hop_length", [
     (16000, 40, 13, 1024, 512),
     (22050, 40, 13, 2048, 512),
 ])
 def test_mel_and_mfcc_against_librosa(sr, n_mels, n_mfcc, frame_size, hop_length):
     """
-    Compare AFX mel spectrogram and MFCC with Librosa on a real audio file.
+    Compare AFX mel spectrogram and MFCC with Librosa on realistic audio.
     """
-    # Load audio
-    y, file_sr = sf.read(TEST_WAV)
-    if y.ndim > 1:
-        y = y.mean(axis=1)  # Convert to mono if needed
-    if file_sr != sr:
-        y = librosa.resample(y, orig_sr=file_sr, target_sr=sr)
+    if os.path.exists(TEST_WAV):
+        y, file_sr = sf.read(TEST_WAV)
+        if y.ndim > 1:
+            y = y.mean(axis=1)  # Convert to mono if needed
+        if file_sr != sr:
+            y = librosa.resample(y, orig_sr=file_sr, target_sr=sr)
+    else:
+        y = _speech_like_signal(sr)
 
     # --- Librosa reference ---
     mel_librosa = librosa.feature.melspectrogram(y=y, sr=sr, n_fft=frame_size, hop_length=hop_length, n_mels=n_mels, power=2.0)

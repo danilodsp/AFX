@@ -146,7 +146,9 @@ def aggregate_features(
     flatten: bool = True,
     normalize: str = None,
     window_size: int = None,
-    hop_length: int = None
+    hop_length: int = None,
+    norm_stats: Dict[str, Dict[str, float]] = None,
+    sliding_agg: str = 'mean'
 ) -> Union[Dict[str, np.ndarray], np.ndarray]:
     """
     Aggregate features using the specified method, then optionally flatten and normalize each feature.
@@ -157,8 +159,20 @@ def aggregate_features(
         normalize: Normalization method ('zscore', 'minmax', or None)
         window_size: Window size for sliding window aggregation (required if method='sliding_window')
         hop_length: Hop length for sliding window aggregation (required if method='sliding_window')
+        norm_stats: Optional precomputed dataset-level statistics per feature
+            key. For 'zscore': {'mean': {feat: m, ...}, 'std': {feat: s, ...}};
+            for 'minmax': {'min': {...}, 'max': {...}}.
+        sliding_agg: Inner aggregation for method='sliding_window'
+            ('mean', 'std', 'max', 'min').
     Returns:
         Dict of aggregated (and optionally flattened/normalized) features, or a stacked numpy array if method='stack'.
+
+    Note on normalization:
+        Without ``norm_stats``, normalization is computed *within this call*
+        (i.e., per file, across the values of each feature). That rescales
+        every file by its own statistics and is NOT comparable across files.
+        For ML pipelines, compute mean/std (or min/max) per feature across
+        the whole dataset and pass them via ``norm_stats``.
     """
     # Pooling features
     if method == 'mean':
@@ -176,7 +190,7 @@ def aggregate_features(
     elif method == 'sliding_window':
         if window_size is None or hop_length is None:
             raise ValueError("window_size and hop_length must be specified for sliding_window method")
-        agg = sliding_window_aggregation(features, window_size, hop_length, 'mean')
+        agg = sliding_window_aggregation(features, window_size, hop_length, sliding_agg)
     elif method == 'stack':
         return stack_feature_vectors([features], flatten=True)[0]
     else:
@@ -188,10 +202,19 @@ def aggregate_features(
 
     # Normalize if requested
     if normalize is not None:
+        norm_stats = norm_stats or {}
         if normalize == 'zscore':
-            agg = zscore_normalize(agg)
+            agg = zscore_normalize(
+                agg,
+                mean=norm_stats.get('mean'),
+                std=norm_stats.get('std'),
+            )
         elif normalize == 'minmax':
-            agg = minmax_normalize(agg)
+            agg = minmax_normalize(
+                agg,
+                min_=norm_stats.get('min'),
+                max_=norm_stats.get('max'),
+            )
         else:
             raise ValueError(f'Unknown normalization method: {normalize}')
     return agg

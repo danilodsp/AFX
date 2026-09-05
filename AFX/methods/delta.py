@@ -61,6 +61,8 @@ def compute_delta(
     """
     if features.ndim != 2:
         raise ValueError("Features must be 2D (n_features, n_frames)")
+    if order not in (1, 2):
+        raise ValueError(f"order must be 1 or 2, got {order}")
 
     n_features, n_frames = features.shape
 
@@ -70,35 +72,18 @@ def compute_delta(
         if width % 2 == 0:
             width -= 1
 
-    if width < 3:
-        # Return zeros if not enough frames
-        return np.zeros_like(features)
-
-    # Get delta kernel
     kernel = delta_kernel(width)
 
-    # Apply delta computation to each feature dimension
-    delta_features = np.zeros_like(features)
-
-    # Half width for padding
-    N = (width - 1) // 2
-
-    for i in range(n_features):
-        signal = features[i]
-
-        # Simple edge padding approach
-        padded = np.pad(signal, N, mode='edge')
-
-        # Apply convolution
-        for t in range(n_frames):
-            delta_features[i, t] = np.sum(kernel * padded[t:t+width])
-
-        # For second order, apply delta again
-        if order == 2:
-            first_order = delta_features[i].copy()
-            padded_first = np.pad(first_order, N, mode='edge')
-            
-            for t in range(n_frames):
-                delta_features[i, t] = np.sum(kernel * padded_first[t:t+width])
+    # The loop formulation computes a correlation:
+    #     delta[t] = sum_n kernel[n] * x[t + n]
+    # convolve1d computes a convolution, so flip the kernel.
+    # mode='nearest' replicates edge values, matching np.pad(mode='edge').
+    delta_features = convolve1d(
+        features.astype(np.float64), kernel[::-1], axis=1, mode='nearest'
+    )
+    if order == 2:
+        delta_features = convolve1d(
+            delta_features, kernel[::-1], axis=1, mode='nearest'
+        )
 
     return delta_features

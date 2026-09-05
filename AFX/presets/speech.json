@@ -1,0 +1,20 @@
+{
+  "name": "speech",
+  "title": "Speech & Paralinguistics",
+  "description": "Compact eGeMAPS-style acoustic set for speech and paralinguistic tasks (emotion, speaker traits, voice quality). Emphasizes MFCCs with dynamics, prosody (pitch, energy) and voice-quality measures (HNR, spectral contrast).",
+  "sample_rate": 16000,
+  "features": {
+    "mfcc": {"n_mfcc": 20, "frame_size": 400, "hop_length": 160},
+    "mfcc_delta": {"n_mfcc": 20, "frame_size": 400, "hop_length": 160},
+    "mfcc_delta_delta": {"n_mfcc": 20, "frame_size": 400, "hop_length": 160},
+    "pitch": {"frame_size": 400, "hop_length": 160},
+    "hnr": {"frame_size": 400, "hop_length": 160},
+    "rms_energy": {},
+    "zcr": {"frame_size": 400, "hop_length": 160},
+    "spectral_centroid": {"frame_size": 400, "hop_length": 160},
+    "spectral_bandwidth": {"frame_size": 400, "hop_length": 160},
+    "spectral_flux": {"frame_size": 400, "hop_length": 160},
+    "spectral_contrast": {"frame_size": 400, "hop_length": 160}
+  },
+  "aggregation": "summary"
+}

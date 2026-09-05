@@ -33,3 +33,56 @@ def test_load_audio(tmp_path):
     assert isinstance(signal, np.ndarray)
     assert sample_rate == sr
     assert signal.shape[0] == sr
+
+def test_load_audio_stereo_downmix(tmp_path):
+    import soundfile as sf
+    sr = 8000
+    n = sr // 2
+    left = 0.5 * np.ones(n)
+    right = -0.5 * np.ones(n)
+    stereo = np.column_stack([left, right])
+    wav_path = tmp_path / "stereo.wav"
+    sf.write(wav_path, stereo, sr)
+    signal, sample_rate = io.load_audio(str(wav_path), sr=sr)
+    assert signal.ndim == 1
+    assert signal.shape[0] == n
+    assert sample_rate == sr
+    # Mean of +0.5 and -0.5 channels is ~0
+    assert np.allclose(signal, 0.0, atol=1e-4)
+    assert signal.dtype == np.float32
+
+def test_load_audio_resample(tmp_path):
+    import soundfile as sf
+    native_sr = 8000
+    target_sr = 22050
+    t = np.linspace(0, 1, native_sr, endpoint=False)
+    x = 0.5 * np.sin(2 * np.pi * 440 * t)
+    wav_path = tmp_path / "native.wav"
+    sf.write(wav_path, x, native_sr)
+    signal, sample_rate = io.load_audio(str(wav_path), sr=target_sr)
+    assert sample_rate == target_sr
+    expected_len = int(len(x) * target_sr / native_sr)
+    assert abs(signal.shape[0] - expected_len) <= 1
+    assert signal.dtype == np.float32
+
+def test_load_audio_sr_none_keeps_native(tmp_path):
+    import soundfile as sf
+    native_sr = 8000
+    x = 0.1 * np.random.RandomState(0).randn(native_sr)
+    wav_path = tmp_path / "native.wav"
+    sf.write(wav_path, x, native_sr)
+    signal, sample_rate = io.load_audio(str(wav_path), sr=None)
+    assert sample_rate == native_sr
+    assert signal.shape[0] == native_sr
+
+def test_load_audio_empty_file_raises(tmp_path):
+    import soundfile as sf
+    wav_path = tmp_path / "empty.wav"
+    sf.write(wav_path, np.zeros((0,)), 8000)
+    with pytest.raises(ValueError, match='empty'):
+        io.load_audio(str(wav_path))
+
+def test_load_audio_missing_file_raises(tmp_path):
+    missing = tmp_path / "does_not_exist.wav"
+    with pytest.raises((FileNotFoundError, RuntimeError)):
+        io.load_audio(str(missing))

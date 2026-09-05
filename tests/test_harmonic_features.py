@@ -33,7 +33,8 @@ def test_pitch_detection_accuracy():
     t = np.linspace(0, duration, int(sr * duration), endpoint=False)
     signal = np.sin(2 * np.pi * frequency * t)
 
-    # Add a small amount of noise to make it slightly realistic
+    # Add a small amount of noise to make it slightly realistic (seeded)
+    np.random.seed(42)
     signal = signal + 0.01 * np.random.randn(len(signal))
 
     # Test our implementation
@@ -63,7 +64,8 @@ def test_hnr_consistency():
     # Pure sine wave (high HNR)
     pure_tone = np.sin(2 * np.pi * frequency * t)
 
-    # Sine wave with noise (lower HNR)
+    # Sine wave with noise (lower HNR); seeded for determinism
+    np.random.seed(42)
     noisy_tone = pure_tone + 0.5 * np.random.randn(len(pure_tone))
 
     # Very noisy signal (very low HNR)
@@ -95,9 +97,9 @@ def test_hnr_consistency():
     # Create a shorter signal for direct function testing
     short_tone = pure_tone[:frame_size]
 
-    # Directly call the function to bypass the decorator
-    direct_result = harmonic_features.extract_hnr.__wrapped__(
-        short_tone, sr=sr, frame_size=frame_size, 
+    # extract_hnr frames internally (no decorator), so call it directly
+    direct_result = harmonic_features.extract_hnr(
+        short_tone, sr=sr, frame_size=frame_size,
         hop_length=hop_length, return_metadata=True
     )
 

@@ -2,6 +2,37 @@
 Pitch detection utilities.
 """
 import numpy as np
+from scipy.fft import next_fast_len
+
+
+def _difference_function(frame: np.ndarray, tau_max: int) -> np.ndarray:
+    """
+    YIN difference function d(tau) for tau = 0..tau_max, computed via
+    cumulative energies and one FFT-based autocorrelation:
+
+        d(tau) = sum_{j=0}^{W-tau-1} (x[j] - x[j+tau])^2
+               = E1(tau) + E2(tau) - 2 * r(tau)
+
+    where E1/E2 are prefix/suffix energies of the overlapping segments and
+    r(tau) the linear autocorrelation. Equivalent to the naive O(W * tau_max)
+    loop but O(W log W).
+    """
+    w = len(frame)
+    frame = frame.astype(np.float64)
+    sq = frame ** 2
+    # cumulative energy: cum[k] = sum(sq[:k])
+    cum = np.concatenate(([0.0], np.cumsum(sq)))
+    taus = np.arange(tau_max + 1)
+    # E1(tau) = sum_{j=0}^{w-tau-1} x[j]^2 ;  E2(tau) = sum_{j=tau}^{w-1} x[j]^2
+    e1 = cum[w - taus]
+    e2 = cum[w] - cum[taus]
+    # Linear autocorrelation via FFT (zero-padded to avoid circular wrap)
+    nfft = next_fast_len(2 * w)
+    f = np.fft.rfft(frame, nfft)
+    acf = np.fft.irfft(f * np.conj(f), nfft)[:tau_max + 1]
+    d = e1 + e2 - 2.0 * acf
+    # Guard tiny negative values from float error
+    return np.maximum(d, 0.0)
 
 
 def yin(y: np.ndarray, frame_length: int, hop_length: int, fmin: float = 50.0,
@@ -44,26 +75,20 @@ def yin(y: np.ndarray, frame_length: int, hop_length: int, fmin: float = 50.0,
         start = frame_idx * hop_length
         frame = y[start:start + frame_length]
 
-        # Step 1: Calculate the difference function
-        # Using the formula d_t(tau) = Σ(x_t(j) - x_t(j + tau))²
-        difference = np.zeros(tau_max + 1)
-
-        # Start with autocorrelation-like method for better efficiency
-        for tau in range(1, tau_max + 1):
-            difference[tau] = np.sum((frame[:frame_length-tau] - frame[tau:frame_length])**2)
+        # Step 1: Calculate the difference function (FFT-based, O(W log W))
+        difference = _difference_function(frame, tau_max)
 
         # Step 2: Calculate the cumulative mean normalized difference function
-        cmnd = np.zeros_like(difference)
+        cmnd = np.ones_like(difference)
         cmnd[0] = 1.0  # By definition in the YIN paper
 
-        # Calculate the cumulative sum for normalization
+        # cmnd[tau] = d[tau] * tau / sum(d[1..tau]); 1.0 where the sum is 0
         cum_sum = np.cumsum(difference[1:])
-        for tau in range(1, tau_max + 1):
-            # Avoid division by zero
-            if cum_sum[tau-1] > 0:
-                cmnd[tau] = difference[tau] * tau / cum_sum[tau-1]
-            else:
-                cmnd[tau] = 1.0  # Set to 1 if normalization fails
+        valid = cum_sum > 0
+        taus = np.arange(1, tau_max + 1)
+        cmnd[1:][valid] = (
+            difference[1:][valid] * taus[valid] / cum_sum[valid]
+        )
 
         # Step 3: Find the first dip below threshold within valid tau range
         tau_pitch = tau_min
@@ -89,21 +114,18 @@ def yin(y: np.ndarray, frame_length: int, hop_length: int, fmin: float = 50.0,
             tau_pitch = min_idx + tau_min
 
         # Step 4: Refine the pitch estimation with parabolic interpolation
-        if tau_pitch > 0 and tau_pitch < tau_max:
-            # Ensure we have valid indices
-            prev_tau = max(1, tau_pitch - 1)
-            next_tau = min(tau_max - 1, tau_pitch + 1)
-            
-            # Parabolic interpolation
-            if prev_tau > 0 and next_tau < tau_max:
-                a = cmnd[prev_tau-1]
-                b = cmnd[prev_tau]
-                c = cmnd[next_tau]
-                
-                # Only use interpolation if we have a clear minimum
-                if 2*b < a + c:  # Check if it's a minimum
-                    offset = 0.5 * (a - c) / (a - 2*b + c)
-                    tau_pitch = prev_tau + offset
+        # Fit the parabola through the samples at (tau-1, tau, tau+1),
+        # centered on the detected minimum itself.
+        if 0 < tau_pitch < tau_max:
+            a = cmnd[tau_pitch - 1]
+            b = cmnd[tau_pitch]
+            c = cmnd[tau_pitch + 1]
+
+            # Only use interpolation if we have a clear minimum
+            denom = a - 2 * b + c
+            if denom > 0:  # Convex: it's a minimum
+                offset = 0.5 * (a - c) / denom
+                tau_pitch = tau_pitch + offset
 
         # Convert tau to frequency (Hz)
         if found_pitch or (tau_pitch < len(cmnd) and cmnd[int(tau_pitch)] < 0.5):  # 0.5 is a bit more generous than threshold

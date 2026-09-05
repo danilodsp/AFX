@@ -1,0 +1,169 @@
+"""
+Coverage for AFX.methods modules previously untested directly:
+stft (incl. result cache), delta, gammatone, cqt, chroma, and the
+filterbank caches.
+"""
+import numpy as np
+import pytest
+import librosa
+
+from AFX.methods.stft import stft, clear_stft_cache
+from AFX.methods.mel import mel_filterbank
+from AFX.methods.delta import compute_delta
+from AFX.methods.gammatone import gammatone_filterbank, erb_space
+from AFX.methods.cqt import cqt_filterbank, cqt_approximation
+from AFX.methods.chroma import chroma_from_stft, frequency_to_chroma_bin
+from AFX.utils.cache import (
+    get_cached_mel_filterbank, cache_mel_filterbank, clear_feature_cache
+)
+
+SR = 22050
+
+
+def _tone(freq=440.0, duration=1.0, sr=SR):
+    t = np.linspace(0, duration, int(sr * duration), endpoint=False)
+    return np.sin(2 * np.pi * freq * t)
+
+
+# ---------- stft ----------
+
+def test_stft_matches_librosa():
+    y = _tone(440.0)
+    # Both default to center=True with constant padding (librosa >= 0.10)
+    ours = stft(y, frame_size=2048, hop_length=512, center=True)
+    ref = librosa.stft(y, n_fft=2048, hop_length=512, center=True)
+    n = min(ours.shape[1], ref.shape[1])
+    assert np.allclose(np.abs(ours[:, :n]), np.abs(ref[:, :n]),
+                       rtol=1e-4, atol=1e-6)
+
+
+def test_stft_result_cache_shares_computation():
+    clear_stft_cache()
+    y = _tone(440.0, duration=0.5)
+    a = stft(y, frame_size=1024, hop_length=256)
+    b = stft(y, frame_size=1024, hop_length=256)
+    assert a is b  # second call served from cache
+    assert not a.flags.writeable
+    # Different params -> different result
+    c = stft(y, frame_size=1024, hop_length=512)
+    assert c is not a
+    clear_stft_cache()
+    d = stft(y, frame_size=1024, hop_length=256)
+    assert d is not a
+    assert np.allclose(d, a)
+
+
+def test_stft_float32_gives_complex64():
+    y = _tone(440.0, duration=0.2).astype(np.float32)
+    assert stft(y, frame_size=512, hop_length=128).dtype == np.complex64
+
+
+def test_stft_rejects_empty_and_2d():
+    with pytest.raises(ValueError):
+        stft(np.zeros(0))
+    with pytest.raises(ValueError):
+        stft(np.zeros((10, 2)))
+
+
+def test_stft_short_signal_pads_to_one_frame():
+    y = _tone(440.0, duration=0.01)  # 220 samples
+    out = stft(y, frame_size=2048, hop_length=512, center=False)
+    assert out.shape == (1025, 1)
+
+
+# ---------- delta ----------
+
+def test_compute_delta_matches_librosa_interior():
+    rng = np.random.RandomState(0)
+    feats = rng.randn(5, 60)
+    ours = compute_delta(feats, width=9, order=1)
+    ref = librosa.feature.delta(feats, width=9, order=1, axis=1)
+    # Edge handling differs (edge-replication vs interp); interior must match
+    assert np.allclose(ours[:, 8:-8], ref[:, 8:-8], atol=1e-8)
+
+
+def test_compute_delta_validates_order():
+    with pytest.raises(ValueError, match='order'):
+        compute_delta(np.zeros((3, 20)), order=3)
+
+
+def test_compute_delta_order2_is_delta_of_delta():
+    rng = np.random.RandomState(1)
+    feats = rng.randn(4, 50)
+    d1 = compute_delta(feats, width=5, order=1)
+    d2 = compute_delta(feats, width=5, order=2)
+    assert np.allclose(d2, compute_delta(d1, width=5, order=1), atol=1e-8)
+
+
+# ---------- gammatone ----------
+
+def test_gammatone_filters_peak_at_center_frequencies():
+    fb = gammatone_filterbank(24, 2048, SR, 50.0, None)
+    freqs = np.linspace(0, SR / 2, 1025)
+    cf = erb_space(50.0, SR / 2.0, 24)
+    peak_freqs = freqs[np.argmax(fb, axis=1)]
+    bin_width = freqs[1] - freqs[0]
+    assert np.all(np.abs(peak_freqs - cf) <= bin_width)
+
+
+def test_gammatone_unit_area_and_cached():
+    fb1 = gammatone_filterbank(16, 1024, SR, 50.0, None)
+    assert np.allclose(fb1.sum(axis=1), 1.0)
+    fb2 = gammatone_filterbank(16, 1024, SR, 50.0, None)
+    assert fb1 is fb2  # lru_cache
+    assert not fb1.flags.writeable
+
+
+# ---------- cqt ----------
+
+def test_cqt_filterbank_rejects_super_nyquist():
+    with pytest.raises(ValueError, match='Nyquist'):
+        cqt_filterbank(n_bins=120, bins_per_octave=12,
+                       fmin=32.703, sr=8000, frame_size=2048)
+
+
+def test_cqt_rows_normalized_and_tone_lands_on_right_bin():
+    fb, freqs = cqt_filterbank(84, 12, 32.70319566257483, SR, 2048)
+    assert np.allclose(fb.sum(axis=1), 1.0)
+    # A4 = 440 Hz is CQT bin 45 when fmin = C1
+    cqt_mag, cqt_freqs = cqt_approximation(_tone(440.0), SR, frame_size=2048)
+    peak_bin = int(np.argmax(cqt_mag.mean(axis=1)))
+    expected_bin = int(np.argmin(np.abs(cqt_freqs - 440.0)))
+    assert abs(peak_bin - expected_bin) <= 1
+
+
+# ---------- chroma ----------
+
+def test_chroma_from_stft_tone_maps_to_pitch_class():
+    y = _tone(261.626)  # C4
+    mag = np.abs(stft(y, frame_size=4096, hop_length=512))
+    chroma = chroma_from_stft(mag, SR, 4096)
+    assert chroma.shape[0] == 12
+    assert int(np.argmax(chroma.mean(axis=1))) == 0  # C
+
+
+def test_frequency_to_chroma_bin_validates():
+    assert frequency_to_chroma_bin(440.0) == 9  # A
+    with pytest.raises(ValueError):
+        frequency_to_chroma_bin(0.0)
+
+
+# ---------- mel filterbank cache ----------
+
+def test_mel_filterbank_cache_roundtrip_and_readonly():
+    clear_feature_cache()
+    assert get_cached_mel_filterbank(40, 1024, SR, 0.0, SR / 2) is None
+    fb = mel_filterbank(40, 1024, SR, 0.0, SR / 2, norm='slaney')
+    cache_mel_filterbank(fb, 40, 1024, SR, 0.0, SR / 2)
+    cached = get_cached_mel_filterbank(40, 1024, SR, 0.0, SR / 2)
+    assert cached is fb
+    assert not cached.flags.writeable  # cache is corruption-proof
+    # int/float key normalization: 0 == 0.0
+    assert get_cached_mel_filterbank(40, 1024, SR, 0, SR // 2 * 2 / 2) is fb
+    clear_feature_cache()
+
+
+def test_mel_filterbank_matches_librosa():
+    fb = mel_filterbank(128, 2048, SR, 0.0, SR / 2.0, norm='slaney')
+    ref = librosa.filters.mel(sr=SR, n_fft=2048, n_mels=128)
+    assert np.max(np.abs(fb - ref)) < 1e-6

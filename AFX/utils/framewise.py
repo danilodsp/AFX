@@ -31,11 +31,24 @@ def framewise_extractor(feature_func: Callable) -> Callable:
         frames = frame_signal(signal, frame_length=frame_size, hop_length=hop_length)
 
         results = []
+        key = None
         for i in range(frames.shape[1]):
-            res = feature_func(frames[:, i], sr, *args, **kwargs)
-            results.append(list(res.values())[0])
-
-        key = list(res.keys())[0]
+            # Forward frame_size/hop_length so inner functions that depend on
+            # them (e.g. for FFT sizing) see the actual frame length instead
+            # of silently falling back to their own defaults.
+            res = feature_func(
+                frames[:, i], sr, *args,
+                frame_size=frame_size, hop_length=hop_length, **kwargs
+            )
+            if key is None:
+                keys = [k for k in res.keys() if k != 'metadata']
+                if len(keys) != 1:
+                    raise ValueError(
+                        f'{feature_func.__name__} returned {len(keys)} feature '
+                        f'keys {keys}; framewise extraction supports exactly one.'
+                    )
+                key = keys[0]
+            results.append(res[key])
 
         # Stack results and ensure we have the right shape
 

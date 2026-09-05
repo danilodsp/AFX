@@ -1,0 +1,4 @@
+include AFX/config.json
+include AFX/presets/*.json
+include LICENSE
+include README.md

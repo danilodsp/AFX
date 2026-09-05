@@ -3,11 +3,13 @@
   "features": {
     "zcr": {"frame_size": 2048, "hop_length": 512},
     "variance": {},
+    "entropy": {"frame_size": 2048, "hop_length": 512},
+    "crest_factor": {"frame_size": 2048, "hop_length": 512},
     "kurtosis": {},
-    "autocorr_variance": {},
+    "autocorr_variance": {"frame_size": 2048, "hop_length": 512},
     "mobility": {},
     "complexity": {},
-    "sample_entropy": {},
+    "sample_entropy": {"frame_size": 1024, "hop_length": 1024},
     "energy_ratio": {},
     "short_time_energy": {},
     "rms_energy": {},
@@ -36,6 +38,5 @@
     "hnr": {"frame_size": 2048, "hop_length": 512},
     "gfcc": {"n_gfcc": 13}
   },
-  "aggregation": "mean",
-  "return_metadata": false
+  "aggregation": "mean"
 }

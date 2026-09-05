@@ -22,7 +22,8 @@ def test_yin_against_librosa():
     phase = 2 * np.pi * np.cumsum(freq) / sr
     signal = np.sin(phase)
 
-    # Add a small amount of noise
+    # Add a small amount of noise (seeded for determinism)
+    np.random.seed(42)
     signal = signal + 0.01 * np.random.randn(len(signal))
 
     # Parameters

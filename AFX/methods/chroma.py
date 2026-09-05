@@ -45,19 +45,14 @@ def chroma_from_stft(
     # Compute frequency for each bin: f = bin_index * sr / n_fft
     freqs = np.arange(n_freq) * sr / n_fft
 
-    # Initialize chroma matrix
+    # Vectorized mapping of every non-DC bin to its pitch class
+    chroma_bins = np.mod(
+        np.round(12.0 * np.log2(freqs[1:] / f_ref)).astype(int), 12
+    )
+
+    # Fold all frequency bins into their chroma bins (duplicate-safe)
     chroma = np.zeros((12, n_frames))
-
-    # Skip DC bin (freq=0) to avoid log(0)
-    for bin_idx in range(1, n_freq):
-        freq = freqs[bin_idx]
-
-        # Map frequency to chroma bin using the formula:
-        # chroma_bin = round(12 * log2(f / f_ref)) % 12
-        chroma_bin = int(np.round(12 * np.log2(freq / f_ref))) % 12
-
-        # Accumulate magnitude for this chroma bin across all frames
-        chroma[chroma_bin, :] += magnitude_spec[bin_idx, :]
+    np.add.at(chroma, chroma_bins, magnitude_spec[1:, :])
 
     # Optional L1 normalization per frame
     if normalize:
@@ -83,7 +78,7 @@ def frequency_to_chroma_bin(freq: float, f_ref: float = 261.626) -> int:
         0=C, 1=C#, 2=D, 3=D#, 4=E, 5=F, 6=F#, 7=G, 8=G#, 9=A, 10=A#, 11=B
     """
     if freq <= 0:
-        return 0  # Handle edge case
+        raise ValueError(f'frequency must be positive, got {freq}')
     return int(np.round(12 * np.log2(freq / f_ref))) % 12
 
 
@@ -95,15 +90,19 @@ def extract_chroma_from_cqt(
     bins_per_octave: int = 12,
     fmin: float = 32.70319566257483,
     center: bool = False,
+    frame_size: int = 4096,
 ) -> np.ndarray:
     """
     Extract chroma features from a CQT approximation.
 
-    This function computes a chromagram from a Constant-Q Transform (CQT) approximation,
-    capturing harmonic content and mapping it to 12 pitch classes. The implementation:
+    This function computes a chromagram from a Constant-Q Transform (CQT)
+    approximation, capturing harmonic content and mapping it to 12 pitch
+    classes. The implementation:
 
-    1. Computes a CQT approximation using log-spaced frequency bins and STFT
-    2. Maps frequency bins to chroma bins (12 pitch classes, modulo 12)
+    1. Computes a pseudo-CQT (triangular log-frequency filterbank applied
+       to an STFT magnitude spectrogram)
+    2. Maps each CQT bin to a chroma bin from its center frequency
+       (12 pitch classes, modulo 12)
     3. Aggregates energy into each chroma bin across all octaves
 
     Args:
@@ -115,56 +114,38 @@ def extract_chroma_from_cqt(
         fmin: Minimum frequency in Hz (default: 32.70319566257483 = C1)
         center: If True, pad the signal when computing the STFT so that
             frames are centered (mirrors ``librosa`` behaviour).
+        frame_size: STFT frame size used for the CQT approximation
+            (default 4096 for good low-frequency resolution)
 
     Returns:
         Chroma features of shape (12, n_frames)
 
     Notes:
-        - Uses geometric frequency spacing to approximate CQT behavior
         - CQT frequencies: f[k] = fmin * 2^(k/bins_per_octave)
         - MIDI note mapping: midi = 69 + 12 * log2(freq / 440)
-        - Chroma bin: chroma_bin = midi % 12
+        - Chroma bin: chroma_bin = round(midi) % 12 (0=C, ..., 11=B)
     """
-    from AFX.methods.stft import stft
+    from AFX.methods.cqt import cqt_approximation
 
-    # Compute STFT with appropriate frame size for good frequency resolution
-    frame_size = 4096  # Use larger frame size for better frequency resolution at low frequencies
-    magnitude_spec = np.abs(
-        stft(
-            signal,
-            frame_size=frame_size,
-            hop_length=hop_length,
-            center=center,
-        )
+    cqt_magnitude, cqt_frequencies = cqt_approximation(
+        signal,
+        sr=sr,
+        hop_length=hop_length,
+        n_bins=n_bins,
+        bins_per_octave=bins_per_octave,
+        fmin=fmin,
+        frame_size=frame_size,
+        center=center,
     )
-    n_freq, n_frames = magnitude_spec.shape
+    n_frames = cqt_magnitude.shape[1]
 
-    # Compute frequency for each STFT bin
-    freqs = np.arange(n_freq) * sr / frame_size
+    # Map each CQT bin to its pitch class via its center frequency
+    midi_notes = 69.0 + 12.0 * np.log2(cqt_frequencies / 440.0)
+    chroma_bins = np.mod(np.round(midi_notes).astype(int), 12)
 
-    # Initialize chroma matrix
+    # Fold octaves: chroma[c] = sum of all CQT bins in pitch class c
     chroma = np.zeros((12, n_frames))
-
-    # For each STFT frequency bin, map to the appropriate chroma bin
-    for bin_idx in range(1, n_freq):  # Skip DC bin
-        freq = freqs[bin_idx]
-
-        # Skip frequencies below our range
-        if freq < fmin:
-            continue
-            
-        # Map frequency to MIDI note number
-        # MIDI note 69 = A4 = 440 Hz
-        # MIDI note = 69 + 12 * log2(freq / 440)
-        midi_note = 69 + 12 * np.log2(freq / 440.0)
-
-        # Map to chroma bin (0-11, where 0=C, 1=C#, ..., 11=B)
-        # MIDI note 60 = C4, so chroma_bin = (midi_note - 60) % 12
-        # But we can also use: chroma_bin = midi_note % 12
-        chroma_bin = int(np.round(midi_note)) % 12
-
-        # Accumulate magnitude for this chroma bin
-        chroma[chroma_bin, :] += magnitude_spec[bin_idx, :]
+    np.add.at(chroma, chroma_bins, cqt_magnitude)
 
     # L1 normalize each chroma vector (make each column sum to 1)
     norms = np.sum(chroma, axis=0, keepdims=True) + 1e-10

@@ -31,6 +31,33 @@ __all__ = [
     'get_cache_stats',
 ]
 
+
+def _get_mel_filterbank(n_mels, frame_size, sr, fmin, fmax):
+    """Mel filterbank via the shared cache."""
+    filterbank = get_cached_mel_filterbank(n_mels, frame_size, sr, fmin, fmax, 'slaney')
+    if filterbank is None:
+        filterbank = mel_filterbank(n_mels, frame_size, sr, fmin, fmax, norm='slaney')
+        cache_mel_filterbank(filterbank, n_mels, frame_size, sr, fmin, fmax, 'slaney')
+    return filterbank
+
+
+def _compute_mfcc(
+    signal, sr, n_mfcc, frame_size, hop_length, n_mels, fmin, fmax, center
+):
+    """
+    Shared MFCC pipeline: STFT -> power spectrogram -> mel filterbank ->
+    log (dB) -> DCT-II. Used by extract_mfcc and the delta variants.
+    """
+    stft_matrix = stft(
+        signal, frame_size=frame_size, hop_length=hop_length,
+        window='hann', center=center,
+    )
+    power_spec = power_spectrogram(stft_matrix)
+    filterbank = _get_mel_filterbank(n_mels, frame_size, sr, fmin, fmax)
+    mel_spec = apply_mel_filterbank(power_spec, filterbank)
+    log_mel = log_mel_spectrogram(mel_spec, amin=1e-10, top_db=80.0)
+    return extract_mfcc_coefficients(log_mel, n_mfcc, norm='ortho')
+
 def extract_mfcc(
     signal: np.ndarray,
     sr: int,
@@ -87,33 +114,9 @@ def extract_mfcc(
     if fmax is None:
         fmax = sr / 2.0
 
-    # 1. Compute STFT with Hann window
-    stft_matrix = stft(
-        signal,
-        frame_size=frame_size,
-        hop_length=hop_length,
-        window='hann',
-        center=center,
+    mfcc = _compute_mfcc(
+        signal, sr, n_mfcc, frame_size, hop_length, n_mels, fmin, fmax, center
     )
-
-    # 2. Compute power spectrogram
-    power_spec = power_spectrogram(stft_matrix)
-
-    # 3. Create and apply mel filterbank (with caching)
-    cached_filterbank = get_cached_mel_filterbank(n_mels, frame_size, sr, fmin, fmax, 'slaney')
-    if cached_filterbank is not None:
-        filterbank = cached_filterbank
-    else:
-        filterbank = mel_filterbank(n_mels, frame_size, sr, fmin, fmax, norm='slaney')
-        cache_mel_filterbank(filterbank, n_mels, frame_size, sr, fmin, fmax, 'slaney')
-    
-    mel_spec = apply_mel_filterbank(power_spec, filterbank)
-
-    # 4. Convert to log scale
-    log_mel = log_mel_spectrogram(mel_spec, amin=1e-10, top_db=80.0)
-
-    # 5. Extract MFCC coefficients using DCT-II
-    mfcc = extract_mfcc_coefficients(log_mel, n_mfcc, norm='ortho')
 
     result = {'mfcc': mfcc}
     if return_metadata:
@@ -174,35 +177,14 @@ def extract_mfcc_delta(
         - Width of delta kernel is automatically set to min(9, n_frames) 
         - Returns zeros if insufficient frames (< 3) for delta computation
     """
-    # Compute MFCCs directly (not through the decorator)
-    # This avoids the framewise reshaping that would happen with extract_mfcc
-
     # Set defaults
     n_mels = kwargs.get('n_mels', 128)
     fmin = kwargs.get('fmin', 0.0)
     fmax = kwargs.get('fmax', sr / 2.0)
 
-    # 1. Compute STFT with Hann window and center padding
-    stft_matrix = stft(
-        signal,
-        frame_size=frame_size,
-        hop_length=hop_length,
-        window='hann',
-        center=center,
+    mfcc = _compute_mfcc(
+        signal, sr, n_mfcc, frame_size, hop_length, n_mels, fmin, fmax, center
     )
-
-    # 2. Compute power spectrogram
-    power_spec = power_spectrogram(stft_matrix)
-
-    # 3. Create and apply mel filterbank
-    filterbank = mel_filterbank(n_mels, frame_size, sr, fmin, fmax, norm='slaney')
-    mel_spec = apply_mel_filterbank(power_spec, filterbank)
-
-    # 4. Convert to log scale
-    log_mel = log_mel_spectrogram(mel_spec, amin=1e-10, top_db=80.0)
-
-    # 5. Extract MFCC coefficients using DCT-II
-    mfcc = extract_mfcc_coefficients(log_mel, n_mfcc, norm='ortho')
 
     n_frames = mfcc.shape[1]
 
@@ -277,59 +259,15 @@ def extract_mfcc_delta_delta(
         - Returns zeros if insufficient frames (< 3) for delta computation
         - Computes second-order derivatives (acceleration) of MFCC features
     """
-    # Compute MFCCs directly using internal implementation
-    # This avoids the framewise reshaping that would happen with extract_mfcc
-
-    # Set defaults
-    n_mels = kwargs.get('n_mels', 128)
-    fmin = kwargs.get('fmin', 0.0)
-    fmax = kwargs.get('fmax', sr / 2.0)
-
-    # 1. Compute STFT with Hann window
-    stft_matrix = stft(
-        signal,
-        frame_size=frame_size,
-        hop_length=hop_length,
-        window='hann',
-        center=center,
+    # Delegate to extract_mfcc_delta with order=2 (identical pipeline)
+    out = extract_mfcc_delta(
+        signal, sr, n_mfcc=n_mfcc, frame_size=frame_size,
+        hop_length=hop_length, order=2, center=center,
+        return_metadata=return_metadata, **kwargs
     )
-
-    # 2. Compute power spectrogram
-    power_spec = power_spectrogram(stft_matrix)
-
-    # 3. Create and apply mel filterbank
-    filterbank = mel_filterbank(n_mels, frame_size, sr, fmin, fmax, norm='slaney')
-    mel_spec = apply_mel_filterbank(power_spec, filterbank)
-
-    # 4. Convert to log scale
-    log_mel = log_mel_spectrogram(mel_spec, amin=1e-10, top_db=80.0)
-
-    # 5. Extract MFCC coefficients using DCT-II
-    mfcc = extract_mfcc_coefficients(log_mel, n_mfcc, norm='ortho')
-
-    n_frames = mfcc.shape[1]
-
-    # Ensure width is odd, >=3, and does not exceed n_frames
-    width = min(9, n_frames)
-    if width < 3:
-        delta_delta = np.zeros_like(mfcc)
-    else:
-        if width % 2 == 0:
-            width -= 1
-
-        # Compute delta-delta using internal implementation with order=2
-        delta_delta = compute_delta(mfcc, width=width, order=2)
-
-    result = {'mfcc_delta_delta': delta_delta}
-
+    result = {'mfcc_delta_delta': out['mfcc_delta']}
     if return_metadata:
-        # Calculate frame times manually using hop_length / sr
-        # Account for center padding offset
-        n_frames = delta_delta.shape[1]
-        frame_offset = frame_size // 2 if center else 0
-        times = (np.arange(n_frames) * hop_length + frame_offset) / sr
-        return {'mfcc_delta_delta': delta_delta, 'metadata': {'times': times}}
-
+        result['metadata'] = out['metadata']
     return result
 
 def extract_gfcc(
@@ -397,15 +335,15 @@ def extract_gfcc(
     # 2. Compute power spectrogram
     power_spec = power_spectrogram(stft_matrix)
 
-    # 3. Create and apply gammatone filterbank
+    # 3. Create and apply gammatone filterbank (cached via lru_cache)
     filterbank = gammatone_filterbank(n_gammatone, frame_size, sr, fmin, fmax)
     gammatone_spec = apply_gammatone_filterbank(power_spec, filterbank)
 
-    # 4. Convert to log scale
-    log_gammatone = np.log(np.maximum(gammatone_spec, 1e-10))
+    # 4. Convert to log scale — same dB compression as the MFCC pipeline so
+    # both cepstral feature families are on a comparable scale
+    log_gammatone = log_mel_spectrogram(gammatone_spec, amin=1e-10, top_db=80.0)
 
     # 5. Extract GFCC coefficients using DCT-II
-    from AFX.methods.dct import extract_mfcc_coefficients
     gfcc = extract_mfcc_coefficients(log_gammatone, n_gfcc, norm='ortho')
 
     result = {'gfcc': gfcc}
@@ -478,15 +416,15 @@ def extract_chroma_cqt(
         bins_per_octave=bins_per_octave,
         fmin=fmin,
         center=center,
+        frame_size=frame_size,
     )
 
     result = {'chroma_cqt': chroma}
 
     if return_metadata:
-        # Calculate frame times manually. The internal STFT uses a frame size of
-        # 4096 samples for the CQT approximation.
+        # Calculate frame times from the STFT frame size actually used
         n_frames = chroma.shape[1]
-        frame_offset = 4096 // 2 if center else 0
+        frame_offset = frame_size // 2 if center else 0
         times = (np.arange(n_frames) * hop_length + frame_offset) / sr
         return {'chroma_cqt': chroma, 'metadata': {'times': times}}
 

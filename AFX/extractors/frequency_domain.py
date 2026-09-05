@@ -1,6 +1,14 @@
+"""
+Frequency-domain feature extractors for audio signals.
+
+All extractors are vectorized over a shared STFT (see AFX.methods.stft),
+so multiple features computed on the same signal with the same framing
+reuse a single STFT computation.
+"""
+from typing import Dict, Optional
 import numpy as np
-from typing import Dict
-from AFX.utils.framewise import framewise_extractor
+
+from AFX.methods.stft import stft, magnitude_spectrogram
 
 __all__ = [
     'extract_spectral_centroid',
@@ -14,193 +22,259 @@ __all__ = [
     'extract_spectral_slope',
 ]
 
+_EPS = 1e-10
 
-@framewise_extractor
+
+def _spectrum(
+    signal: np.ndarray,
+    sr: int,
+    frame_size: Optional[int],
+    hop_length: Optional[int],
+    center: bool,
+):
+    """
+    Magnitude spectrum/spectrogram plus bin frequencies.
+
+    Framed mode (frame_size and hop_length given): shared STFT of shape
+    (n_freq, n_frames). Whole-signal mode (either is None): single FFT of
+    the Hann-windowed full signal, shape (n_freq, 1).
+    """
+    if frame_size is None or hop_length is None:
+        n = len(signal)
+        if n == 0:
+            raise ValueError('empty signal')
+        windowed = signal * np.hanning(n)
+        mag = np.abs(np.fft.rfft(windowed, n=n))[:, np.newaxis]
+        freqs = np.fft.rfftfreq(n, d=1.0 / sr)
+        return mag, freqs
+    stft_matrix = stft(
+        signal, frame_size=frame_size, hop_length=hop_length,
+        window='hann', center=center,
+    )
+    mag = magnitude_spectrogram(stft_matrix)
+    freqs = np.fft.rfftfreq(frame_size, d=1.0 / sr)
+    return mag, freqs
+
+
+def _maybe_metadata(result, key, values, sr, hop_length, frame_size,
+                    center, return_metadata):
+    if return_metadata:
+        offset = (frame_size // 2) if (center and frame_size) else 0
+        hop = hop_length if hop_length is not None else 1
+        times = (np.arange(len(values)) * hop + offset) / sr
+        result['metadata'] = {'times': times}
+    return result
+
+
 def extract_spectral_centroid(
     signal: np.ndarray,
     sr: int,
-    frame_size: int = 2048,
-    hop_length: int = 512,
+    frame_size: Optional[int] = 2048,
+    hop_length: Optional[int] = 512,
+    center: bool = False,
     return_metadata: bool = False,
     **kwargs
 ) -> Dict[str, np.ndarray]:
     """
-    Compute the spectral centroid of an audio signal.
+    Compute the spectral centroid (magnitude-weighted mean frequency).
+
     Args:
         signal: Audio signal (1D np.ndarray)
         sr: Sample rate
-        frame_size: Frame size for STFT
-        hop_length: Hop length between frames
+        frame_size: Frame size for STFT (None = analyze whole signal)
+        hop_length: Hop length between frames (None = analyze whole signal)
+        center: If True, pad so frames are centered (librosa-style)
         return_metadata: If True, include frame times in metadata
     Returns:
-        Dict with 'spectral_centroid' key and np.ndarray of values
-    Metadata:
-        shape: (n_frames,)
-        units: Hz
-        times: np.ndarray, shape (n_frames,) if return_metadata is True
-
-    Implementation:
-        Computes spectral centroid as the weighted mean of frequencies 
-        using magnitude spectrum as weights.
+        Dict with 'spectral_centroid' key, np.ndarray shape (n_frames,)
     """
-    window = np.hanning(len(signal))
-    windowed_signal = signal * window
-
-    fft = np.fft.rfft(windowed_signal, n=frame_size)
-    magnitude = np.abs(fft)
-
-    freqs = np.fft.rfftfreq(frame_size, d=1.0/sr)
-
-    # Compute the spectral centroid as weighted mean
-    magnitude_sum = np.sum(magnitude)
-    if magnitude_sum > 0:
-        centroid = np.sum(freqs * magnitude) / magnitude_sum
-    else:
-        centroid = 0.0
-
-    return {'spectral_centroid': np.array([centroid])}
+    mag, freqs = _spectrum(signal, sr, frame_size, hop_length, center)
+    msum = mag.sum(axis=0)
+    safe = np.where(msum > 0, msum, 1.0)
+    centroid = np.where(msum > 0, (freqs @ mag) / safe, 0.0)
+    result = {'spectral_centroid': centroid}
+    return _maybe_metadata(result, 'spectral_centroid', centroid, sr,
+                           hop_length, frame_size, center, return_metadata)
 
 
-@framewise_extractor
 def extract_spectral_bandwidth(
     signal: np.ndarray,
     sr: int,
-    frame_size: int = 2048,
-    hop_length: int = 512,
+    frame_size: Optional[int] = 2048,
+    hop_length: Optional[int] = 512,
+    center: bool = False,
     return_metadata: bool = False,
     **kwargs
 ) -> Dict[str, np.ndarray]:
     """
-    Compute the spectral bandwidth of an audio signal.
+    Compute the spectral bandwidth (magnitude-weighted std of frequency
+    around the spectral centroid).
 
-    Spectral bandwidth is the weighted standard deviation of frequencies around the spectral centroid.
-
-    Args:
-        signal: Audio signal (1D np.ndarray)
-        sr: Sample rate
-        frame_size: Frame size for STFT
-        hop_length: Hop length between frames
-        return_metadata: If True, include frame times in metadata
-    Returns:
-        Dict with 'spectral_bandwidth' key and np.ndarray of values
-    Metadata:
-        shape: (n_frames,)
-        units: Hz
-        times: np.ndarray, shape (n_frames,) if return_metadata is True
-
-    Implementation:
-        Computes spectral bandwidth using the formula:
-        sqrt(sum(((freqs - centroid)^2) * magnitudes) / sum(magnitudes))
+    Args/returns: see extract_spectral_centroid.
     """
-    window = np.hanning(len(signal))
-    windowed_signal = signal * window
-
-    fft = np.fft.rfft(windowed_signal, n=frame_size)
-    magnitude = np.abs(fft)
-    freqs = np.fft.rfftfreq(frame_size, d=1.0/sr)
-
-    # Calculate the spectral centroid first
-    magnitude_sum = np.sum(magnitude)
-    if magnitude_sum > 0:
-        centroid = np.sum(freqs * magnitude) / magnitude_sum
-
-        # Calculate the spectral bandwidth as weighted standard deviation
-        # sqrt(sum(((freqs - centroid)^2) * magnitudes) / sum(magnitudes))
-        bandwidth = np.sqrt(np.sum(((freqs - centroid)**2) * magnitude) / magnitude_sum)
-    else:
-        bandwidth = 0.0
-
-    return {'spectral_bandwidth': np.array([bandwidth])}
+    mag, freqs = _spectrum(signal, sr, frame_size, hop_length, center)
+    msum = mag.sum(axis=0)
+    safe = np.where(msum > 0, msum, 1.0)
+    centroid = (freqs @ mag) / safe
+    dev2 = (freqs[:, np.newaxis] - centroid[np.newaxis, :]) ** 2
+    bandwidth = np.where(
+        msum > 0, np.sqrt((dev2 * mag).sum(axis=0) / safe), 0.0
+    )
+    result = {'spectral_bandwidth': bandwidth}
+    return _maybe_metadata(result, 'spectral_bandwidth', bandwidth, sr,
+                           hop_length, frame_size, center, return_metadata)
 
 
-@framewise_extractor
 def extract_spectral_rolloff(
+    signal: np.ndarray,
+    sr: int,
+    frame_size: Optional[int] = 2048,
+    hop_length: Optional[int] = 512,
+    roll_percent: float = 0.85,
+    center: bool = False,
+    return_metadata: bool = False,
+    **kwargs
+) -> Dict[str, np.ndarray]:
+    """
+    Compute the spectral rolloff: the frequency below which ``roll_percent``
+    of the total spectral energy is contained (linearly interpolated).
+
+    Args/returns: see extract_spectral_centroid, plus roll_percent.
+    """
+    mag, freqs = _spectrum(signal, sr, frame_size, hop_length, center)
+    power = mag ** 2
+    cum = np.cumsum(power, axis=0)
+    total = cum[-1, :]
+    n_frames = mag.shape[1]
+    rolloff = np.zeros(n_frames)
+
+    nonzero = total > 0
+    if np.any(nonzero):
+        target = roll_percent * total
+        # First bin where cumulative energy >= target
+        idx = np.argmax(cum >= target[np.newaxis, :], axis=0)
+        cols = np.arange(n_frames)
+        # Linear interpolation between idx-1 and idx (where idx > 0)
+        prev_idx = np.maximum(idx - 1, 0)
+        e_before = cum[prev_idx, cols]
+        e_after = cum[idx, cols]
+        f_before = freqs[prev_idx]
+        f_after = freqs[idx]
+        denom = np.where(e_after > e_before, e_after - e_before, 1.0)
+        alpha = np.clip((target - e_before) / denom, 0.0, 1.0)
+        interp = f_before + alpha * (f_after - f_before)
+        rolloff = np.where(idx > 0, interp, freqs[idx])
+        rolloff = np.where(nonzero, rolloff, 0.0)
+
+    result = {'spectral_rolloff': rolloff}
+    return _maybe_metadata(result, 'spectral_rolloff', rolloff, sr,
+                           hop_length, frame_size, center, return_metadata)
+
+
+def extract_spectral_skewness(
+    signal: np.ndarray,
+    sr: int,
+    frame_size: Optional[int] = 2048,
+    hop_length: Optional[int] = 512,
+    center: bool = False,
+    return_metadata: bool = False,
+    **kwargs,
+) -> Dict[str, np.ndarray]:
+    """Compute the spectral skewness (third standardized spectral moment)."""
+    mag, freqs = _spectrum(signal, sr, frame_size, hop_length, center)
+    msum = mag.sum(axis=0)
+    safe = np.where(msum > 0, msum, 1.0)
+    centroid = (freqs @ mag) / safe
+    dev = freqs[:, np.newaxis] - centroid[np.newaxis, :]
+    bandwidth = np.sqrt(((dev ** 2) * mag).sum(axis=0) / safe)
+    safe_bw = np.where(bandwidth > 0, bandwidth, 1.0)
+    skewness = ((dev / safe_bw) ** 3 * mag).sum(axis=0) / safe
+    skewness = np.where((msum > 0) & (bandwidth > 0), skewness, 0.0)
+    result = {'spectral_skewness': skewness}
+    return _maybe_metadata(result, 'spectral_skewness', skewness, sr,
+                           hop_length, frame_size, center, return_metadata)
+
+
+def extract_spectral_slope(
+    signal: np.ndarray,
+    sr: int,
+    frame_size: Optional[int] = 2048,
+    hop_length: Optional[int] = 512,
+    center: bool = False,
+    return_metadata: bool = False,
+    **kwargs,
+) -> Dict[str, np.ndarray]:
+    """Compute the spectral slope (linear regression of dB magnitude on Hz)."""
+    mag, freqs = _spectrum(signal, sr, frame_size, hop_length, center)
+    mag_db = 20.0 * np.log10(mag + _EPS)
+    x = freqs - freqs.mean()
+    denom = np.sum(x ** 2)
+    if denom > 0:
+        # sum(x - x_mean) == 0, so centering y is unnecessary
+        slope = (x @ mag_db) / denom
+    else:
+        slope = np.zeros(mag.shape[1])
+    result = {'spectral_slope': slope}
+    return _maybe_metadata(result, 'spectral_slope', slope, sr,
+                           hop_length, frame_size, center, return_metadata)
+
+
+def extract_spectral_entropy(
     signal: np.ndarray,
     sr: int,
     frame_size: int = 2048,
     hop_length: int = 512,
-    roll_percent: float = 0.85,
+    center: bool = False,
     return_metadata: bool = False,
     **kwargs
 ) -> Dict[str, np.ndarray]:
     """
-    Compute the spectral rolloff of an audio signal.
+    Compute the spectral entropy of an audio signal.
 
-    Spectral rolloff is the frequency below which a specified percentage 
-    of the total spectral energy is contained.
+    The magnitude spectrum of each frame is normalized to a probability
+    distribution p(f); entropy is H = -sum(p log2 p). Higher for noise-like
+    frames, lower for tonal frames.
 
-    Args:
-        signal: Audio signal (1D np.ndarray)
-        sr: Sample rate
-        frame_size: Frame size for STFT
-        hop_length: Hop length between frames
-        roll_percent: Roll-off percentage (default 0.85)
-        return_metadata: If True, include frame times in metadata
     Returns:
-        Dict with 'spectral_rolloff' key and np.ndarray of values
-    Metadata:
-        shape: (n_frames,)
-        units: Hz
-        times: np.ndarray, shape (n_frames,) if return_metadata is True
-
-    Implementation:
-        Computes spectral rolloff using the formula:
-        1. Compute power spectrum (magnitude squared)
-        2. Calculate cumulative sum of power
-        3. Normalize to get cumulative energy ratio
-        4. Find frequency bin where cumulative energy >= roll_percent
+        Dict with 'spectral_entropy' key, np.ndarray shape (n_frames,)
     """
-    window = np.hanning(len(signal))
-    windowed_signal = signal * window
+    mag, _ = _spectrum(signal, sr, frame_size, hop_length, center)
+    msum = mag.sum(axis=0)
+    safe = np.where(msum > _EPS, msum, 1.0)
+    ps = mag / safe
+    entropy = -np.sum(ps * np.log2(ps + _EPS), axis=0)
+    entropy = np.where(msum > _EPS, entropy, 0.0)
+    result = {'spectral_entropy': entropy}
+    return _maybe_metadata(result, 'spectral_entropy', entropy, sr,
+                           hop_length, frame_size, center, return_metadata)
 
-    fft = np.fft.rfft(windowed_signal, n=frame_size)
-    magnitude = np.abs(fft)
-    freqs = np.fft.rfftfreq(frame_size, d=1.0/sr)
 
-    # Compute power spectrum
-    power = magnitude ** 2
+def extract_spectral_flatness(
+    signal: np.ndarray,
+    sr: int,
+    frame_size: int = 2048,
+    hop_length: int = 512,
+    center: bool = False,
+    return_metadata: bool = False,
+    **kwargs
+) -> Dict[str, np.ndarray]:
+    """
+    Compute the spectral flatness of an audio signal: the ratio of the
+    geometric mean to the arithmetic mean of the power spectrum per frame.
+    Close to 1.0 for noise, close to 0.0 for tonal content.
 
-    # Calculate total energy
-    total_energy = np.sum(power)
+    Returns:
+        Dict with 'spectral_flatness' key, np.ndarray shape (n_frames,)
+    """
+    mag, _ = _spectrum(signal, sr, frame_size, hop_length, center)
+    power = np.maximum(mag ** 2, _EPS)
+    geometric = np.exp(np.mean(np.log(power), axis=0))
+    arithmetic = np.mean(power, axis=0)
+    flatness = np.where(arithmetic > _EPS, geometric / arithmetic, 0.0)
+    result = {'spectral_flatness': flatness}
+    return _maybe_metadata(result, 'spectral_flatness', flatness, sr,
+                           hop_length, frame_size, center, return_metadata)
 
-    if total_energy > 0:
-        # Calculate cumulative energy
-        cumulative_energy = np.cumsum(power)
-
-        # Normalize to get cumulative energy ratio
-        cumulative_ratio = cumulative_energy / total_energy
-
-        # Find the first frequency bin where cumulative energy >= roll_percent
-        rolloff_idx = np.where(cumulative_ratio >= roll_percent)[0]
-
-        if len(rolloff_idx) > 0:
-            # Use linear interpolation for more precise rolloff frequency
-            idx = rolloff_idx[0]
-            if idx > 0:
-                # Interpolate between idx-1 and idx
-                energy_before = cumulative_energy[idx-1]
-                energy_after = cumulative_energy[idx]
-                freq_before = freqs[idx-1] 
-                freq_after = freqs[idx]
-
-                target_energy = roll_percent * total_energy
-
-                # Linear interpolation
-                if energy_after > energy_before:
-                    alpha = (target_energy - energy_before) / (energy_after - energy_before)
-                    rolloff_frequency = freq_before + alpha * (freq_after - freq_before)
-                else:
-                    rolloff_frequency = freq_after
-            else:
-                rolloff_frequency = freqs[idx]
-        else:
-            # If no bin exceeds the threshold, use the highest frequency
-            rolloff_frequency = freqs[-1]
-    else:
-        # If no energy, rolloff is 0
-        rolloff_frequency = 0.0
-
-    return {'spectral_rolloff': np.array([rolloff_frequency])}
 
 def extract_spectral_contrast(
     signal: np.ndarray,
@@ -210,476 +284,107 @@ def extract_spectral_contrast(
     n_bands: int = 6,
     fmin: float = 200.0,
     quantile: float = 0.02,
+    center: bool = True,
     return_metadata: bool = False,
     **kwargs
 ) -> Dict[str, np.ndarray]:
     """
     Compute the spectral contrast of an audio signal.
 
-    Spectral contrast measures the difference in amplitude between peaks and valleys
-    in the spectrum. Each frame of a spectrogram is divided into sub-bands.
-    For each sub-band, the energy contrast is estimated by comparing
-    the mean energy in the top quantile (peak energy) to that of the
-    bottom quantile (valley energy).
+    For each of n_bands+1 octave-spaced sub-bands, contrast is the dB
+    difference between the mean of the top-quantile (peak) and
+    bottom-quantile (valley) magnitudes in each frame.
 
-    Args:
-        signal: Audio signal (1D np.ndarray)
-        sr: Sample rate
-        frame_size: Frame size for STFT
-        hop_length: Hop length between frames
-        n_bands: Number of frequency bands
-        fmin: Minimum frequency for the first band
-        quantile: Quantile for determining peaks and valleys
-        return_metadata: If True, include frame times in metadata
     Returns:
-        Dict with 'spectral_contrast' key and np.ndarray of values
-    Metadata:
-        shape: (n_bands + 1, n_frames)
-        units: dB
-        times: np.ndarray, shape (n_frames,) if return_metadata is True
-
-    Implementation:
-        1. Compute magnitude spectrogram using STFT
-        2. Divide frequency into logarithmically spaced bands
-        3. For each band and frame:
-           - Find the top and bottom quantile of magnitudes
-           - Calculate contrast as the difference between top and bottom in dB
+        Dict with 'spectral_contrast' key, np.ndarray (n_bands+1, n_frames)
     """
-    window = np.hanning(frame_size)
+    stft_matrix = stft(
+        signal, frame_size=frame_size, hop_length=hop_length,
+        window='hann', center=center, pad_mode='constant',
+    )
+    S_mag = magnitude_spectrogram(stft_matrix)
+    n_frames = S_mag.shape[1]
 
-    # Pad the signal for center framing
-    pad_width = int(frame_size // 2)
-    signal_padded = np.pad(signal, (pad_width, pad_width), mode='constant')
-
-    # Number of frames
-    n_frames = 1 + (len(signal_padded) - frame_size) // hop_length
-
-    # Compute the STFT
-    S = np.zeros((frame_size // 2 + 1, n_frames), dtype=complex)
-    for i in range(n_frames):
-        start = i * hop_length
-        end = start + frame_size
-        frame = signal_padded[start:end] * window
-        S[:, i] = np.fft.rfft(frame, n=frame_size)
-
-    # Get magnitude spectrum
-    S_mag = np.abs(S)
-
-    # Compute frequency bins
-    freq = np.fft.rfftfreq(frame_size, d=1.0/sr)
+    freq = np.fft.rfftfreq(frame_size, d=1.0 / sr)
 
     # Calculate logarithmically spaced bands
     octa = np.zeros(n_bands + 2)
     octa[1:] = fmin * (2.0 ** np.arange(0, n_bands + 1))
 
-    # Check if any band exceeds Nyquist
     nyquist = sr / 2.0
     if np.any(octa[:-1] >= nyquist):
         raise ValueError("Frequency band exceeds Nyquist. Reduce fmin or n_bands.")
 
-    # Initialize arrays for peaks and valleys
     valley = np.zeros((n_bands + 1, n_frames))
     peak = np.zeros((n_bands + 1, n_frames))
 
-    # For each band, compute peak and valley
     for k in range(n_bands + 1):
         f_low, f_high = octa[k], octa[k + 1]
-
-        # Find indices for this band
         current_band = np.logical_and(freq >= f_low, freq <= f_high)
         idx = np.flatnonzero(current_band)
-
         if len(idx) == 0:
             continue
-
-        # Handle band boundaries
         if k > 0 and idx[0] > 0:
             current_band[idx[0] - 1] = True
             idx = np.flatnonzero(current_band)
-
         if k == n_bands:
             current_band[idx[-1] + 1:] = True
             idx = np.flatnonzero(current_band)
 
-        # Get sub-band
         sub_band = S_mag[current_band]
-
         if k < n_bands and len(sub_band) > 0:
-            # Exclude highest bin from all but last band
             sub_band = sub_band[:-1]
-
         if len(sub_band) == 0:
             continue
 
-        # Always take at least one bin
         n_quantile = int(np.maximum(np.rint(quantile * len(sub_band)), 1))
 
-        # For each frame
-        for j in range(n_frames):
-            frame = sub_band[:, j]
+        # Sort once per band (all frames at once) instead of per frame
+        sorted_band = np.sort(sub_band, axis=0)
+        valley[k] = sorted_band[:n_quantile].mean(axis=0)
+        peak[k] = sorted_band[-n_quantile:].mean(axis=0)
 
-            if len(frame) == 0:
-                continue
-
-            # Sort magnitudes
-            sorted_frame = np.sort(frame)
-
-            # Compute valleys and peaks
-            valley[k, j] = np.mean(sorted_frame[:n_quantile])
-            peak[k, j] = np.mean(sorted_frame[-n_quantile:])
-
-    # Small constant to avoid log(0)
-    eps = 1e-10
-
-    # Convert to dB scale
-    peak_db = 20 * np.log10(peak + eps)
-    valley_db = 20 * np.log10(valley + eps)
-
-    # Compute contrast as difference in dB
+    peak_db = 20 * np.log10(peak + _EPS)
+    valley_db = 20 * np.log10(valley + _EPS)
     contrast = peak_db - valley_db
 
     result = {'spectral_contrast': contrast}
     if return_metadata:
+        # With center=True, frame i is centered at i * hop_length / sr
+        # (librosa frames_to_time convention)
         times = np.arange(n_frames) * hop_length / sr
         result['metadata'] = {'times': times}
     return result
 
-@framewise_extractor
-def extract_spectral_entropy(
-    signal: np.ndarray,
-    sr: int,
-    frame_size: int = 2048,
-    hop_length: int = 512,
-    n_bins: int = 128,
-    return_metadata: bool = False,
-    **kwargs
-) -> Dict[str, np.ndarray]:
-    """
-    Compute the spectral entropy of an audio signal.
-
-    Spectral entropy measures the flatness or peakiness of the power spectrum. It is higher for
-    noise-like signals with uniform energy distribution and lower for tonal signals where
-    energy is concentrated in specific frequency bins.
-
-    Args:
-        signal: Audio signal (1D np.ndarray)
-        sr: Sample rate
-        frame_size: Frame size for STFT
-        hop_length: Hop length between frames
-        n_bins: Number of frequency bins
-        return_metadata: If True, include frame times in metadata
-    Returns:
-        Dict with 'spectral_entropy' key and np.ndarray of values
-    Metadata:
-        shape: (n_frames,)
-        units: float
-        times: np.ndarray, shape (n_frames,) if return_metadata is True
-
-    Mathematical formulation:
-        1. Compute the power spectrum P(f) from STFT
-        2. Normalize P(f) to a probability distribution: p(f) = P(f) / sum(P(f))
-        3. Calculate entropy: H = -sum(p(f) * log2(p(f)))
-
-    Implementation:
-        1. Apply windowing to the signal using a Hann window
-        2. Compute the STFT and magnitude spectrum
-        3. Normalize the power spectrum to a probability distribution
-        4. Calculate the spectral entropy for each frame
-    """
-    # Apply windowing (hann window)
-    window = np.hanning(frame_size)
-
-    # Compute STFT - use rfft for real-valued signals
-    n_frames = 1 + (len(signal) - frame_size) // hop_length
-
-    # Initialize output array
-    entropy = np.zeros(n_frames)
-
-    # Small constant to avoid log(0)
-    eps = 1e-10
-
-    # Process each frame
-    for i in range(n_frames):
-        start = i * hop_length
-        end = start + frame_size
-
-        # Apply windowing to the frame
-        if end <= len(signal):
-            frame = signal[start:end] * window
-        else:
-            # Pad the last frame if needed
-            padding = end - len(signal)
-            frame = np.pad(signal[start:], (0, padding)) * window
-
-        # Compute FFT
-        fft = np.fft.rfft(frame, n=frame_size)
-
-        # Compute the magnitude spectrum
-        magnitude = np.abs(fft)
-
-        # Normalize the power spectrum to get a probability distribution
-        power_sum = np.sum(magnitude)
-        if power_sum > eps:
-            # Normalize to probability distribution
-            ps = magnitude / power_sum
-            # Calculate entropy
-            entropy[i] = -np.sum(ps * np.log2(ps + eps))
-        else:
-            entropy[i] = 0.0
-
-    result = {'spectral_entropy': entropy}
-
-    if return_metadata:
-        # Calculate frame times based on the hop length and sample rate
-        times = np.arange(n_frames) * hop_length / sr
-        return {'spectral_entropy': entropy, 'metadata': {'times': times}}
-
-    return result
-
-@framewise_extractor
-def extract_spectral_flatness(
-    signal: np.ndarray,
-    sr: int,
-    frame_size: int = 2048,
-    hop_length: int = 512,
-    return_metadata: bool = False,
-    **kwargs
-) -> Dict[str, np.ndarray]:
-    """
-    Compute the spectral flatness of an audio signal.
-
-    Spectral flatness measures the noisiness or tonality of a sound and is defined as the ratio
-    of the geometric mean to the arithmetic mean of the power spectrum.
-
-    Values close to 1.0 indicate a noise-like signal, while values close to 0.0 indicate tonal content.
-
-    Args:
-        signal: Audio signal (1D np.ndarray)
-        sr: Sample rate
-        frame_size: Frame size for STFT
-        hop_length: Hop length between frames
-        return_metadata: If True, include frame times in metadata
-    Returns:
-        Dict with 'spectral_flatness' key and np.ndarray of values
-    Metadata:
-        shape: (n_frames,)
-        units: float (range from 0 to 1, where 1 is perfectly flat spectrum)
-        times: np.ndarray, shape (n_frames,) if return_metadata is True
-
-    Implementation:
-        1. Apply windowing to the signal using a Hann window
-        2. Compute the STFT and magnitude spectrum
-        3. Calculate the ratio of geometric mean to arithmetic mean of the spectrum for each frame
-    """
-    window = np.hanning(frame_size)
-
-    # Compute the FFT - use rfft for real-valued signals
-    n_frames = 1 + (len(signal) - frame_size) // hop_length
-
-    # Initialize output array
-    flatness = np.zeros(n_frames)
-
-    # Small constant to avoid log(0) and division by zero
-    eps = 1e-10
-
-    # Process each frame
-    for i in range(n_frames):
-        start = i * hop_length
-        end = start + frame_size
-
-        # Apply windowing to the frame
-        if end <= len(signal):
-            frame = signal[start:end] * window
-        else:
-            # Pad the last frame if needed
-            padding = end - len(signal)
-            frame = np.pad(signal[start:], (0, padding)) * window
-
-        # Compute FFT
-        fft = np.fft.rfft(frame, n=frame_size)
-
-        # Compute the power spectrum (squared magnitude)
-        power_spectrum = np.abs(fft) ** 2
-
-        # Ensure spectrum is positive for log calculation
-        power_spectrum = np.maximum(power_spectrum, eps)
-
-        # Compute geometric mean: exp(mean(log(spectrum)))
-        geometric_mean = np.exp(np.mean(np.log(power_spectrum)))
-
-        # Compute arithmetic mean: mean(spectrum)
-        arithmetic_mean = np.mean(power_spectrum)
-
-        # Compute flatness as the ratio of geometric to arithmetic mean
-        if arithmetic_mean > eps:
-            flatness[i] = geometric_mean / arithmetic_mean
-        else:
-            flatness[i] = 0.0
-
-    result = {'spectral_flatness': flatness}
-
-    if return_metadata:
-        # Calculate frame times based on the hop length and sample rate
-        times = np.arange(n_frames) * hop_length / sr
-        return {'spectral_flatness': flatness, 'metadata': {'times': times}}
-
-    return result
 
 def extract_spectral_flux(
     signal: np.ndarray,
     sr: int,
     frame_size: int = 2048,
     hop_length: int = 512,
+    center: bool = True,
     return_metadata: bool = False,
     **kwargs
 ) -> Dict[str, np.ndarray]:
     """
-    Compute the spectral flux of an audio signal.
+    Compute the spectral flux: the Euclidean distance between consecutive
+    magnitude spectra.
 
-    Spectral flux measures the frame-to-frame change in the magnitude spectrum, 
-    computed as the Euclidean distance between consecutive magnitude spectra.
-
-    Args:
-        signal: Audio signal (1D np.ndarray)
-        sr: Sample rate
-        frame_size: Frame size for STFT
-        hop_length: Hop length between frames
-        return_metadata: If True, include frame times in metadata
     Returns:
-        Dict with 'spectral_flux' key and np.ndarray of values
-    Metadata:
-        shape: (n_frames-1,)
-        units: float
-        times: np.ndarray, shape (n_frames-1,) if return_metadata is True
-
-    Implementation:
-        1. Compute magnitude spectrogram using NumPy-based STFT
-        2. Calculate the Euclidean distance between consecutive magnitude spectra:
-           flux[t] = sqrt(sum((|X_t| - |X_{t-1}|)^2)) for t > 0
+        Dict with 'spectral_flux' key, np.ndarray shape (n_frames - 1,)
     """
-    # Create a Hann window
-    window = np.hanning(frame_size)
+    stft_matrix = stft(
+        signal, frame_size=frame_size, hop_length=hop_length,
+        window='hann', center=center, pad_mode='reflect',
+    )
+    magnitude = magnitude_spectrogram(stft_matrix)
 
-    # Compute direct STFT using NumPy
-
-    # Step 1: Calculate number of frames and prepare output array
-    n_samples = len(signal)
-
-    # Centering the frames
-    # We need to pad the signal at both ends
-    pad_width = int(frame_size // 2)
-    signal_padded = np.pad(signal, pad_width, mode='reflect')
-    n_padded = len(signal_padded)
-
-    # Calculate number of frames
-    n_frames = 1 + (n_padded - frame_size) // hop_length
-
-    # Prepare STFT output array - only need the positive frequencies for real signal
-    n_freqs = frame_size // 2 + 1
-    stft_matrix = np.empty((n_freqs, n_frames), dtype=np.complex64)
-
-    # Step 2: Compute STFT frame by frame
-    for i in range(n_frames):
-        # Extract the frame
-        frame_start = i * hop_length
-        frame_end = frame_start + frame_size
-        frame = signal_padded[frame_start:frame_end]
-
-        # Apply window
-        windowed_frame = frame * window
-
-        # Compute FFT
-        stft_matrix[:, i] = np.fft.rfft(windowed_frame, n=frame_size)
-
-    # Step 3: Compute magnitude spectrogram
-    magnitude = np.abs(stft_matrix)
-
-    # Step 4: Compute spectral flux
-    # Compute differences between adjacent spectral frames
     diffs = np.diff(magnitude, axis=1)
-
-    # Compute Euclidean distance (sqrt of sum of squares)
     flux = np.sqrt(np.sum(diffs ** 2, axis=0))
 
-    # Return results
     result = {'spectral_flux': flux}
-
     if return_metadata:
-        # Calculate frame times based on hop length and sample rate
-        # Note: flux has one fewer frame than the STFT because of the diff operation
-        # Match frames_to_time which accounts for center=True by adding frame_size/2 to the time
-        # This is because the center of the first frame is at frame_size/2 samples
-        # and then each hop adds hop_length samples
-        times = (np.arange(len(flux)) * hop_length + frame_size / 2) / sr
+        offset = frame_size / 2 if center else 0
+        times = (np.arange(len(flux)) * hop_length + offset) / sr
         result['metadata'] = {'times': times}
-
     return result
-
-
-@framewise_extractor
-def extract_spectral_skewness(
-    signal: np.ndarray,
-    sr: int,
-    frame_size: int = 2048,
-    hop_length: int = 512,
-    return_metadata: bool = False,
-    **kwargs,
-) -> Dict[str, np.ndarray]:
-    """Compute the spectral skewness of an audio signal."""
-    window = np.hanning(frame_size)
-    windowed_signal = signal[:frame_size] * window
-
-    fft = np.fft.rfft(windowed_signal, n=frame_size)
-    magnitude = np.abs(fft)
-    freqs = np.fft.rfftfreq(frame_size, d=1.0 / sr)
-
-    mag_sum = np.sum(magnitude)
-    if mag_sum > 0:
-        centroid = np.sum(freqs * magnitude) / mag_sum
-        bandwidth = np.sqrt(
-            np.sum(((freqs - centroid) ** 2) * magnitude) / mag_sum
-        )
-        if bandwidth > 0:
-            skewness = (
-                np.sum(((freqs - centroid) / bandwidth) ** 3 * magnitude)
-                / mag_sum
-            )
-        else:
-            skewness = 0.0
-    else:
-        skewness = 0.0
-
-    return {'spectral_skewness': np.array([skewness])}
-
-
-@framewise_extractor
-def extract_spectral_slope(
-    signal: np.ndarray,
-    sr: int,
-    frame_size: int = 2048,
-    hop_length: int = 512,
-    return_metadata: bool = False,
-    **kwargs,
-) -> Dict[str, np.ndarray]:
-    """Compute the spectral slope of an audio signal."""
-    window = np.hanning(frame_size)
-    windowed_signal = signal[:frame_size] * window
-
-    fft = np.fft.rfft(windowed_signal, n=frame_size)
-    magnitude = np.abs(fft)
-    freqs = np.fft.rfftfreq(frame_size, d=1.0 / sr)
-
-    eps = 1e-10
-    mag_db = 20 * np.log10(magnitude + eps)
-
-    x = freqs
-    y = mag_db
-    x_mean = np.mean(x)
-    y_mean = np.mean(y)
-    denom = np.sum((x - x_mean) ** 2)
-    if denom > 0:
-        slope = np.sum((x - x_mean) * (y - y_mean)) / denom
-    else:
-        slope = 0.0
-
-    return {'spectral_slope': np.array([slope])}
