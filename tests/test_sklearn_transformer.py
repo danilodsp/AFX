@@ -2,7 +2,6 @@
 Tests for AFX.sklearn.AFXFeatureExtractor: fit/transform semantics,
 pipeline integration, feature names, and parallel extraction.
 """
-import os
 
 import numpy as np
 import pytest

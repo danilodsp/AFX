@@ -1,22 +1,18 @@
 """
 Batch extractor for processing folders of audio files.
 """
+import copy
 import os
 import numpy as np
 import pandas as pd
 import json
-from typing import Dict, Any, List, Optional, Sequence
+from typing import Dict, Any, List, Optional, Sequence, Union
 
 from AFX.io.io import load_audio
-from AFX.utils.config_loader import load_config
+from AFX.utils.config_loader import load_config, validate_config, VALID_AGGREGATIONS
 from AFX.extract_all import extract_all_features, FEATURE_MAP
 
 _DEFAULT_EXTS = ('.wav', '.mp3', '.flac', '.ogg')
-
-_VALID_AGGREGATIONS = (
-    'mean', 'std', 'summary', 'advanced_summary', 'skew', 'kurtosis',
-    'sliding_window', 'stack',
-)
 
 
 def _flatten_to_columns(feats: Dict[str, list]) -> Dict[str, float]:
@@ -59,7 +55,7 @@ def _process_one_file(
 
 def extract_features_from_folder(
     folder_path: str,
-    config_path: str,
+    config_path: Union[str, Dict[str, Any]],
     output_path: str,
     file_exts: Optional[Sequence[str]] = None,
     save_format: str = 'npy',
@@ -68,13 +64,17 @@ def extract_features_from_folder(
     flatten: Optional[bool] = None,
     normalize: Optional[str] = None,
     n_jobs: Optional[int] = None,
+    sample_rate: Optional[int] = None,
+    verbose: bool = True,
 ) -> Dict[str, Any]:
     """
     Extract features from all audio files in a folder (recursively).
 
     Args:
         folder_path: Root folder to search for audio files
-        config_path: Path to config.json
+        config_path: Path to a config JSON, or an already loaded config
+            dict (for example from ``AFX.presets.load_preset``). A dict is
+            copied, not modified.
         output_path: Path to save output (npy, json, csv, or parquet)
         file_exts: File extensions to include (default: wav/mp3/flac/ogg)
         save_format: Output format ('npy', 'json', 'csv', 'parquet')
@@ -87,6 +87,9 @@ def extract_features_from_folder(
         n_jobs: Number of worker processes for parallel extraction.
             None or 1 = serial; 0 or negative = all available cores.
             Results are identical to serial extraction (same ordering).
+        sample_rate: Override the config's sample_rate (audio is resampled
+            to this rate on load).
+        verbose: Print per-file progress to stdout.
 
     Returns:
         The results dict, keyed by path relative to folder_path. Files that
@@ -103,7 +106,12 @@ def extract_features_from_folder(
           'parquet' requires ``pyarrow`` (``pip install "AFX[parquet]"``)
           and is the recommended format for dataset-scale extraction.
     """
-    config = load_config(config_path)
+    if isinstance(config_path, dict):
+        config = validate_config(copy.deepcopy(config_path))
+    else:
+        config = load_config(config_path)
+    if sample_rate is not None:
+        config['sample_rate'] = sample_rate
 
     # Override config options if requested
     if features is not None:
@@ -119,10 +127,10 @@ def extract_features_from_folder(
             k: v for k, v in config['features'].items() if k in features
         }
     if aggregation is not None:
-        if aggregation not in _VALID_AGGREGATIONS:
+        if aggregation not in VALID_AGGREGATIONS:
             raise ValueError(
                 f'Unknown aggregation: {aggregation!r}. '
-                f'Valid: {_VALID_AGGREGATIONS}'
+                f'Valid: {VALID_AGGREGATIONS}'
             )
         config['aggregation'] = aggregation
     if flatten is not None:
@@ -156,7 +164,8 @@ def extract_features_from_folder(
         if n_jobs <= 0:
             n_jobs = multiprocessing.cpu_count()
         n_jobs = min(n_jobs, total)
-        print(f'Processing {total} file(s) with {n_jobs} workers')
+        if verbose:
+            print(f'Processing {total} file(s) with {n_jobs} workers')
         with concurrent.futures.ProcessPoolExecutor(
             max_workers=n_jobs
         ) as executor:
@@ -168,7 +177,8 @@ def extract_features_from_folder(
             for future in concurrent.futures.as_completed(futures):
                 fkey, feats, err = future.result()
                 done += 1
-                print(f'[{done}/{total}] Processed {fkey}')
+                if verbose:
+                    print(f'[{done}/{total}] Processed {fkey}')
                 if err is not None:
                     errors[fkey] = err
                 else:
@@ -178,7 +188,8 @@ def extract_features_from_folder(
         results = {k: results[k] for k in keys if k in results}
     else:
         for idx, (fpath, fkey) in enumerate(zip(all_files, keys), 1):
-            print(f'[{idx}/{total}] Processing {fkey}')
+            if verbose:
+                print(f'[{idx}/{total}] Processing {fkey}')
             fkey, feats, err = _process_one_file(fpath, fkey, config)
             if err is not None:
                 errors[fkey] = err
@@ -190,6 +201,10 @@ def extract_features_from_folder(
         with open(errors_path, 'w') as f:
             json.dump(errors, f, indent=2)
         print(f'WARNING: {len(errors)} file(s) failed; details in {errors_path}')
+
+    if total == 0:
+        print(f'WARNING: no audio files with extensions {tuple(file_exts)} '
+              f'found under {folder_path}')
 
     if save_format == 'npy':
         np.save(output_path, results)

@@ -2,7 +2,6 @@
 Unit tests for harmonic_features extractors.
 """
 import numpy as np
-import pytest
 from AFX.extractors import harmonic_features
 from AFX.utils.pitch import yin
 
@@ -107,7 +106,35 @@ def test_hnr_consistency():
     assert 'metadata' in direct_result
     assert 'times' in direct_result['metadata']
 
-    # Check that times are calculated correctly
+    # One frame, centered on the middle of the signal (center=False framing)
     times = direct_result['metadata']['times']
-    expected_time = np.array([0.0])  # Only one frame for short_tone
+    expected_time = np.array([frame_size // 2 / sr])
     assert np.allclose(times, expected_time)
+
+
+def test_hnr_is_not_capped_by_frame_length():
+    """The biased autocorrelation estimate caps r_max at (N - lag)/N, which
+    limited HNR of a pure tone to ~13 dB at 2048/22050 and ~2 dB for the
+    speech preset framing (400 samples, 100 Hz). The unbiased estimate
+    must report a pure tone well above any realistic noisy-speech value."""
+    sr = 16000
+    t = np.arange(2 * sr) / sr
+    pure = np.sin(2 * np.pi * 100 * t)
+    hnr = harmonic_features.extract_hnr(
+        pure, sr=sr, frame_size=400, hop_length=160
+    )['hnr']
+    assert np.median(hnr) > 40.0
+
+
+def test_hnr_tracks_snr():
+    """HNR of tone + white noise should sit within a few dB of the SNR."""
+    sr = 16000
+    rng = np.random.RandomState(1)
+    t = np.arange(2 * sr) / sr
+    tone = np.sin(2 * np.pi * 100 * t)
+    for snr_db in (20.0, 10.0):
+        noise = rng.randn(len(t)) * np.sqrt(0.5 / 10 ** (snr_db / 10))
+        hnr = harmonic_features.extract_hnr(
+            tone + noise, sr=sr, frame_size=400, hop_length=160
+        )['hnr']
+        assert abs(np.median(hnr) - snr_db) < 3.0, (snr_db, np.median(hnr))

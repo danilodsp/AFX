@@ -6,13 +6,17 @@ content and parameters), so multiple extractors analyzing the same signal
 with the same settings share a single STFT computation instead of each
 recomputing it.
 """
+import hashlib
 from collections import OrderedDict
 from functools import lru_cache
 
 import numpy as np
 from scipy.signal import get_window
 
-# Result cache: maps (signal bytes, dtype, params) -> read-only STFT matrix.
+# Result cache: maps (signal digest, dtype, params) -> read-only STFT matrix.
+# Keys hold a 32-byte BLAKE2b digest of the samples rather than the samples
+# themselves, so the cache costs one STFT matrix per entry, not one signal
+# copy as well.
 _STFT_CACHE: 'OrderedDict[tuple, np.ndarray]' = OrderedDict()
 _STFT_CACHE_MAX_ENTRIES = 6
 # Skip caching for very large signals to bound memory usage.
@@ -70,8 +74,11 @@ def stft(
 
     use_cache = signal.nbytes <= _STFT_CACHE_MAX_SIGNAL_BYTES
     if use_cache:
+        digest = hashlib.blake2b(
+            np.ascontiguousarray(signal).view(np.uint8), digest_size=32
+        ).digest()
         key = (
-            signal.tobytes(), signal.dtype.str,
+            digest, signal.dtype.str, len(signal),
             frame_size, hop_length, window, center, pad_mode,
         )
         cached = _STFT_CACHE.get(key)

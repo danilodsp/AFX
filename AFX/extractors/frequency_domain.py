@@ -9,6 +9,7 @@ from typing import Dict, Optional
 import numpy as np
 
 from AFX.methods.stft import stft, magnitude_spectrogram
+from AFX.utils.frame_utils import frame_times
 
 __all__ = [
     'extract_spectral_centroid',
@@ -57,11 +58,13 @@ def _spectrum(
 
 
 def _maybe_metadata(result, key, values, sr, hop_length, frame_size,
-                    center, return_metadata):
+                    center, return_metadata, n_samples=None):
     if return_metadata:
-        offset = (frame_size // 2) if (center and frame_size) else 0
-        hop = hop_length if hop_length is not None else 1
-        times = (np.arange(len(values)) * hop + offset) / sr
+        if frame_size is None or hop_length is None:
+            # Whole-signal mode: one frame centered on the signal
+            times = np.array([n_samples / (2.0 * sr)])
+        else:
+            times = frame_times(len(values), sr, hop_length, frame_size, center)
         result['metadata'] = {'times': times}
     return result
 
@@ -94,7 +97,8 @@ def extract_spectral_centroid(
     centroid = np.where(msum > 0, (freqs @ mag) / safe, 0.0)
     result = {'spectral_centroid': centroid}
     return _maybe_metadata(result, 'spectral_centroid', centroid, sr,
-                           hop_length, frame_size, center, return_metadata)
+                           hop_length, frame_size, center, return_metadata,
+                           len(signal))
 
 
 def extract_spectral_bandwidth(
@@ -122,7 +126,8 @@ def extract_spectral_bandwidth(
     )
     result = {'spectral_bandwidth': bandwidth}
     return _maybe_metadata(result, 'spectral_bandwidth', bandwidth, sr,
-                           hop_length, frame_size, center, return_metadata)
+                           hop_length, frame_size, center, return_metadata,
+                           len(signal))
 
 
 def extract_spectral_rolloff(
@@ -168,7 +173,8 @@ def extract_spectral_rolloff(
 
     result = {'spectral_rolloff': rolloff}
     return _maybe_metadata(result, 'spectral_rolloff', rolloff, sr,
-                           hop_length, frame_size, center, return_metadata)
+                           hop_length, frame_size, center, return_metadata,
+                           len(signal))
 
 
 def extract_spectral_skewness(
@@ -192,7 +198,8 @@ def extract_spectral_skewness(
     skewness = np.where((msum > 0) & (bandwidth > 0), skewness, 0.0)
     result = {'spectral_skewness': skewness}
     return _maybe_metadata(result, 'spectral_skewness', skewness, sr,
-                           hop_length, frame_size, center, return_metadata)
+                           hop_length, frame_size, center, return_metadata,
+                           len(signal))
 
 
 def extract_spectral_slope(
@@ -216,7 +223,8 @@ def extract_spectral_slope(
         slope = np.zeros(mag.shape[1])
     result = {'spectral_slope': slope}
     return _maybe_metadata(result, 'spectral_slope', slope, sr,
-                           hop_length, frame_size, center, return_metadata)
+                           hop_length, frame_size, center, return_metadata,
+                           len(signal))
 
 
 def extract_spectral_entropy(
@@ -246,7 +254,8 @@ def extract_spectral_entropy(
     entropy = np.where(msum > _EPS, entropy, 0.0)
     result = {'spectral_entropy': entropy}
     return _maybe_metadata(result, 'spectral_entropy', entropy, sr,
-                           hop_length, frame_size, center, return_metadata)
+                           hop_length, frame_size, center, return_metadata,
+                           len(signal))
 
 
 def extract_spectral_flatness(
@@ -273,7 +282,8 @@ def extract_spectral_flatness(
     flatness = np.where(arithmetic > _EPS, geometric / arithmetic, 0.0)
     result = {'spectral_flatness': flatness}
     return _maybe_metadata(result, 'spectral_flatness', flatness, sr,
-                           hop_length, frame_size, center, return_metadata)
+                           hop_length, frame_size, center, return_metadata,
+                           len(signal))
 
 
 def extract_spectral_contrast(
@@ -350,10 +360,9 @@ def extract_spectral_contrast(
 
     result = {'spectral_contrast': contrast}
     if return_metadata:
-        # With center=True, frame i is centered at i * hop_length / sr
-        # (librosa frames_to_time convention)
-        times = np.arange(n_frames) * hop_length / sr
-        result['metadata'] = {'times': times}
+        result['metadata'] = {
+            'times': frame_times(n_frames, sr, hop_length, frame_size, center)
+        }
     return result
 
 
@@ -384,7 +393,7 @@ def extract_spectral_flux(
 
     result = {'spectral_flux': flux}
     if return_metadata:
-        offset = frame_size / 2 if center else 0
-        times = (np.arange(len(flux)) * hop_length + offset) / sr
+        # flux[i] compares frames i and i+1; report the time of frame i+1
+        times = frame_times(len(flux) + 1, sr, hop_length, frame_size, center)[1:]
         result['metadata'] = {'times': times}
     return result

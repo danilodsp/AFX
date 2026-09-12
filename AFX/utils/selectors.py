@@ -111,7 +111,6 @@ def correlation_selector(
     corr = np.atleast_2d(corr)
     # Constant columns yield NaN correlations; treat those as 0 (uncorrelated)
     corr = np.nan_to_num(corr, nan=0.0)
-    n = corr.shape[0]
     # Upper-triangle mask (excluding diagonal): column j is removed if any
     # earlier column i < j correlates with it above the threshold.
     upper = np.triu(np.abs(corr) > threshold, k=1)

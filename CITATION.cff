@@ -1,0 +1,10 @@
+cff-version: 1.2.0
+message: If you use AFX in your research, please cite it as below.
+title: "AFX: Audio Feature Extraction for Machine Learning"
+authors:
+  - family-names: Pena
+    given-names: Danilo
+type: software
+license: MIT
+repository-code: https://github.com/danilodsp/AFX
+version: 0.2.0

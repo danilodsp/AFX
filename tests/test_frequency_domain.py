@@ -2,7 +2,6 @@
 Unit tests for frequency_domain feature extractors.
 """
 import numpy as np
-import pytest
 from AFX.extractors import frequency_domain
 
 def test_extract_spectral_centroid():

@@ -153,3 +153,39 @@ def test_cli_main(audio_folder, small_config, tmp_path, monkeypatch):
 def test_cli_default_config_is_package_relative():
     assert os.path.isabs(cli.DEFAULT_CONFIG)
     assert os.path.exists(cli.DEFAULT_CONFIG)
+
+
+def test_batch_accepts_config_dict(audio_folder, tmp_path):
+    from AFX.presets import load_preset
+    config = load_preset('speech')
+    out = str(tmp_path / 'preset.csv')
+    extract_features_from_folder(
+        str(audio_folder), config, out, save_format='csv',
+        features=['mfcc', 'zcr'], verbose=False,
+    )
+    df = pd.read_csv(out, index_col='file')
+    assert len(df) == 3
+    assert 'mfcc_mean_0' in df.columns and 'zcr_mean' in df.columns
+    # The caller's dict is left untouched
+    assert set(config['features']) > {'mfcc', 'zcr'}
+
+
+def test_cli_preset_and_format_inference(audio_folder, tmp_path, monkeypatch):
+    out = str(tmp_path / 'out.csv')
+    cli.main([str(audio_folder), '--preset', 'machinery',
+              '--features', 'rms_energy,kurtosis', '--output', out, '-q'])
+    df = pd.read_csv(out, index_col='file')
+    assert len(df) == 3
+    assert {'rms_energy_mean', 'kurtosis_kurt'} <= set(df.columns)
+
+
+def test_cli_list_options(capsys):
+    assert cli.main(['--list-features']) == 0
+    assert 'mfcc' in capsys.readouterr().out.split()
+    assert cli.main(['--list-presets']) == 0
+    assert 'speech' in capsys.readouterr().out.split()
+
+
+def test_cli_rejects_missing_folder(tmp_path):
+    with pytest.raises(SystemExit):
+        cli.main([str(tmp_path / 'nope')])

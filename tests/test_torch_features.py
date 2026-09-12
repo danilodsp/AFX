@@ -250,3 +250,34 @@ def test_module_device_movement(signal):
         module = module.to('cuda')
         out = module(_t(signal).cuda())
         assert out['mfcc'].is_cuda
+
+
+@pytest.mark.parametrize('batched', [True, False])
+def test_module_mean_std_shapes(signal, batched):
+    """mean_std must add a trailing (mean, std) pair for per-frame features
+    and concatenate [means, stds] for 2-D ones, for batched and unbatched
+    input alike. It used to concatenate along the batch axis."""
+    module = AFXFeatureModule(
+        features={'spectral_centroid': {}, 'mfcc': {'n_mfcc': 4},
+                  'rms_energy': {}},
+        sample_rate=SR, aggregation='mean_std',
+    ).double()
+    x = _t(np.stack([signal, 0.5 * signal])) if batched else _t(signal)
+    out = module(x)
+    lead = (2,) if batched else ()
+    assert tuple(out['spectral_centroid'].shape) == lead + (2,)
+    assert tuple(out['mfcc'].shape) == lead + (8,)
+    assert tuple(out['rms_energy'].shape) == lead + (2,)
+
+    # Column order: means then stds, per sample
+    centroid = F_afx.spectral_centroid(x, SR)
+    expected = torch.stack(
+        [centroid.mean(dim=-1), centroid.std(dim=-1, unbiased=False)], dim=-1
+    )
+    assert torch.allclose(out['spectral_centroid'], expected)
+
+    vec = AFXFeatureModule(
+        features={'spectral_centroid': {}, 'mfcc': {'n_mfcc': 4}},
+        sample_rate=SR, aggregation='mean_std', output='vector',
+    ).double()(x)
+    assert tuple(vec.shape) == lead + (10,)

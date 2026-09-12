@@ -6,7 +6,7 @@ import pytest
 
 import AFX
 from AFX.presets import list_presets, load_preset, preset_info
-from AFX import extract_all_features, aggregate_features
+from AFX import extract_all_features
 
 
 EXPECTED = {'speech', 'bioacoustics', 'music', 'machinery'}

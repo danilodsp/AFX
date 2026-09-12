@@ -2,7 +2,7 @@
 Discrete Cosine Transform (DCT) utilities.
 """
 import numpy as np
-from scipy.fftpack import dct
+from scipy.fft import dct
 
 
 def dct_ii(
@@ -13,7 +13,7 @@ def dct_ii(
     """
     Compute DCT-II (Type 2 DCT) of input array.
 
-    This is a wrapper around scipy.fftpack.dct for consistency.
+    This is a wrapper around scipy.fft.dct for consistency.
 
     Args:
         x: Input array

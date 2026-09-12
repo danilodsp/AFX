@@ -101,7 +101,8 @@ def test_hnr_discriminates_harmonic_from_noise():
 
 def test_extract_all_features_covers_default_config():
     """Every feature in the shipped config must be extracted (no silent skips)."""
-    import json, os
+    import json
+    import os
     config_path = os.path.join(
         os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
         'AFX', 'config.json'
@@ -127,7 +128,8 @@ def test_extract_all_features_rejects_unknown_feature():
 
 
 def test_feature_map_covers_default_config():
-    import json, os
+    import json
+    import os
     config_path = os.path.join(
         os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
         'AFX', 'config.json'

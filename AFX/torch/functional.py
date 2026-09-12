@@ -183,7 +183,7 @@ def dct_matrix(
 ) -> torch.Tensor:
     """
     DCT-II matrix with orthogonal normalization, shape (n_out, n_in), such
-    that ``dct_matrix(k, N) @ x == scipy.fftpack.dct(x, type=2,
+    that ``dct_matrix(k, N) @ x == scipy.fft.dct(x, type=2,
     norm='ortho', axis=0)[:k]``.
     """
     n = np.arange(n_in)

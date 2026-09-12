@@ -2,6 +2,7 @@
 Unit tests for the new aggregate_features API (flatten and normalization).
 """
 import numpy as np
+import pytest
 from AFX.utils.aggregator import aggregate_features
 
 def test_aggregate_features_flatten():
@@ -139,3 +140,32 @@ def test_minmax_normalize_vector():
     normed = minmax_normalize(features)
     expected = (arr - np.min(arr)) / (np.max(arr) - np.min(arr))
     assert np.allclose(normed['a'], expected)
+
+
+def test_sliding_window_reachable_from_config():
+    """aggregation_params must be forwarded to aggregate_features; before,
+    aggregation='sliding_window' in a config always raised."""
+    from AFX.extract_all import extract_all_features
+    sr = 22050
+    signal = np.random.RandomState(0).randn(sr)
+    config = {
+        'sample_rate': sr,
+        'features': {'zcr': {'frame_size': 2048, 'hop_length': 512},
+                     'mfcc': {'n_mfcc': 5, 'frame_size': 2048, 'hop_length': 512}},
+        'aggregation': 'sliding_window',
+        'aggregation_params': {'window_size': 10, 'hop_length': 5,
+                               'sliding_agg': 'max'},
+        'flatten': False,
+    }
+    out = extract_all_features(signal, sr, config)
+    n_frames = 1 + (sr - 2048) // 512
+    n_windows = (n_frames - 10) // 5 + 1
+    assert out['zcr'].shape == (n_windows,)
+    assert out['mfcc'].shape == (5, n_windows)
+
+
+def test_extract_all_features_rejects_stereo():
+    from AFX.extract_all import extract_all_features
+    stereo = np.zeros((1000, 2))
+    with pytest.raises(ValueError, match='1-D'):
+        extract_all_features(stereo, 22050, {'features': {'zcr': {}}})

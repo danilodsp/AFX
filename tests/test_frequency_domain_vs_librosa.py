@@ -2,7 +2,6 @@
 Compare frequency domain extractors against librosa implementations.
 """
 import numpy as np
-import pytest
 from AFX.extractors import frequency_domain
 
 import librosa
@@ -56,10 +55,12 @@ def test_extract_spectral_centroid_against_librosa():
     assert 'metadata' in result_with_meta
     assert 'times' in result_with_meta['metadata']
 
-    # Check that times computation is correct
+    # center=False: frame centers sit at i * hop + frame_size // 2
     times = result_with_meta['metadata']['times']
-    expected_times = np.arange(len(centroid_custom) + start_idx) * hop_length / sr
-    expected_times = expected_times[start_idx:]
+    expected_times = librosa.frames_to_time(
+        np.arange(len(centroid_custom) + start_idx), sr=sr,
+        hop_length=hop_length, n_fft=frame_size
+    )[start_idx:]
     assert np.allclose(times[start_idx:min_length], expected_times)
 
 def test_extract_spectral_bandwidth_against_librosa():
@@ -110,10 +111,12 @@ def test_extract_spectral_bandwidth_against_librosa():
     assert 'metadata' in result_with_meta
     assert 'times' in result_with_meta['metadata']
 
-    # Check that times computation is correct
+    # center=False: frame centers sit at i * hop + frame_size // 2
     times = result_with_meta['metadata']['times']
-    expected_times = np.arange(len(bandwidth_custom) + start_idx) * hop_length / sr
-    expected_times = expected_times[start_idx:]
+    expected_times = librosa.frames_to_time(
+        np.arange(len(bandwidth_custom) + start_idx), sr=sr,
+        hop_length=hop_length, n_fft=frame_size
+    )[start_idx:]
     assert np.allclose(times[start_idx:min_length], expected_times)
 
 def test_extract_spectral_contrast_against_librosa():
@@ -217,11 +220,11 @@ def test_extract_spectral_flux_against_librosa():
     assert 'metadata' in result_with_meta
     assert 'times' in result_with_meta['metadata']
 
-    # Check that times computation is correct
+    # flux[i] compares centered frames i and i+1 and is stamped with the
+    # time of frame i+1
     times = result_with_meta['metadata']['times']
-    # Librosa frames_to_time for comparison
     librosa_times = librosa.frames_to_time(
-        np.arange(len(flux_librosa)), sr=sr, hop_length=hop_length, n_fft=frame_size
+        np.arange(1, len(flux_librosa) + 1), sr=sr, hop_length=hop_length
     )
 
     assert np.allclose(times, librosa_times, rtol=1e-5, atol=1e-5)

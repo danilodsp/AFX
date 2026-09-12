@@ -1,183 +1,91 @@
-# AFX (Audio Feature Extraction)
+# AFX
 
-This project can be used for audio research in fields such as machine learning, sound classification, speech analysis, and music information retrieval.
+Audio feature extraction for machine learning. 38 time-domain, spectral, cepstral and harmonic features, computed with NumPy and SciPy, driven by a JSON config, with a scikit-learn transformer, a differentiable PyTorch path and a parallel batch CLI on top.
 
----
-
-## Features List
-
-- **Standard Audio Features**
-  - Mel-Spectrogram
-  - MFCC (Mel-Frequency Cepstral Coefficients)
-  - Delta MFCC
-  - Delta-Delta MFCC
-  - Zero Crossing Rate (ZCR)
-  - Variance
-  - Entropy (Sample Entropy)
-  - Crest Factor
-  - Spectral Centroid
-  - Spectral Bandwidth
-  - Spectral Rolloff
-  - Chroma Features (STFT-based)
-  - Chroma Features (CQT-based)
-  - Constant-Q Transform (CQT)
-  - Pitch (Fundamental Frequency)
-  - Total Harmonic Distortion (THD)
-  - Harmonic to Noise Ratio (HNR)
-
-- **Additional Implemented Features**
-  - Spectral Contrast
-  - Spectral Flatness
-  - Spectral Entropy
-  - Spectral Flux
-  - Kurtosis
-  - Short-Time Energy
-  - Energy Ratio
-  - Autocorrelation-based features (variance, SNR, zero crossings, peak width, decay rate, coeffs deviation, max peak envelope)
-  - Mobility
-  - Complexity
-  - Sample Entropy (alternative implementation)
-
-- **Support for ML/DL Pipelines**
-  - Frame-level and file-level feature aggregation, with options for flattening, stacking, and normalization (z-score, min-max)
-  - Compatible with numpy arrays and torch tensors
-  - Custom windowing and hop-length settings
-  - Differentiable, GPU-capable PyTorch path (`AFX.torch`) with an `nn.Module` wrapper for use inside training graphs
-  - scikit-learn compatible transformer (`AFX.sklearn.AFXFeatureExtractor`) for Pipelines, GridSearchCV, and cross-validation
-
-- **I/O & Formats**
-  - WAV, MP3, FLAC, OGG (via `soundfile`)
-  - Batch processing via folder-based loaders, with optional multiprocessing (`n_jobs`)
-  - Dataset-scale output to Parquet / CSV / JSON / NPY with named feature columns
-
----
-
-## Project Structure
-
-```
-AFX/
-│
-├── AFX/                      # Core package
-│   ├── extractors/           # Each group features extractor is a modular class
-│   ├── io/                   # Audio loading and format handling
-│   ├── methods/              # Signal processing algorithms
-│   ├── torch/                # Differentiable PyTorch path (optional dep)
-│   ├── utils/                # Helpers (e.g. windowing, normalization)
-│   ├── sklearn.py            # scikit-learn compatible transformer
-│   └── __init__.py
-│
-├── notebooks/                # Jupyter notebooks for examples
-├── examples/                 # Script examples
-├── tests/                    # Unit tests
-├── requirements.txt
-├── README.md
-└── pyproject.toml
-```
-
----
-
-## Getting Started
-
-```bash
-git clone https://github.com/danilodsp/AFX.git
-cd AFX
-
-python -m venv venv
-source venv/bin/activate    # macOS/Linux
-venv\Scripts\activate       # Windows
-
-pip install -e .
-```
-
-To also install the dependencies used by the example notebooks (seaborn, librosa, jupyter):
-
-```bash
-pip install -e ".[notebooks]"
-```
-
----
-
-
-## Example Usage
+[![Tests](https://github.com/danilodsp/AFX/actions/workflows/test.yml/badge.svg)](https://github.com/danilodsp/AFX/actions/workflows/test.yml)
+![Python](https://img.shields.io/badge/python-3.9%20%7C%203.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 ```python
-from AFX import extract_all_features
-from AFX.utils.config_loader import load_config
-from AFX.utils.aggregator import aggregate_features
-from AFX.io.io import load_audio
+import AFX
 
-config = load_config('AFX/config.json')
-signal, sr = load_audio('path/to/audio.wav', sr=config['sample_rate'])
-
-# 1. extract individual features (original, per-frame shape)
-features = extract_all_features(signal, sr=sr, config=config)
-# features is a dict of per-frame feature arrays
-
-# 2. aggregate, flatten, and z-score normalize features
-agg_features = aggregate_features(features, method='mean', flatten=True, normalize='zscore')
-# agg_features is a dict of 1-D arrays (all features in dict flattened, concatenated and normalized)
-
-# 3. aggregate features (stacked)
-agg_stacked = aggregate_features(features, method='stack')
-# agg_stacked is a 1D numpy array (all features stacked, no normalization)
+config = AFX.load_preset('speech')                     # or AFX.load_config('my_config.json')
+signal, sr = AFX.load_audio('clip.wav', sr=config['sample_rate'])
+features = AFX.extract_all_features(signal, sr, config)  # {'mfcc_mean': (20,), 'mfcc_std': (20,), 'pitch_mean': (1,), ...}
 ```
 
-Another way of implementing them:
+## Install
 
-```python
-# per-frame features (original shape)
-config['preserve_shape'] = True
-features = extract_all_features(signal, sr, config)
-
-# aggregated, flattened, and normalized features
-config['preserve_shape'] = False
-config['aggregation'] = 'mean'
-config['flatten'] = True
-config['normalize'] = 'zscore'
-agg_features = extract_all_features(signal, sr, config)
-
-# aggregated, stacked (not flattened) features
-config['preserve_shape'] = False
-config['aggregation'] = 'stack'
-agg_stacked = extract_all_features(signal, sr, config)
+```bash
+pip install git+https://github.com/danilodsp/AFX.git
 ```
 
-Check the [Notebooks](notebooks/) folder for more examples.
+Extras: `AFX[torch]` for the PyTorch path, `AFX[parquet]` for Parquet output, `AFX[notebooks]` for the demo notebooks (librosa, seaborn, jupyter), `AFX[dev]` for all of the above plus pytest and ruff. For a local checkout use `pip install -e ".[dev]"`.
 
-## Domain feature packs
+## Why AFX
 
-AFX ships small, curated **presets** tuned for common audio domains, so you can
-skip hand-picking features and start from a sensible, domain-appropriate set.
-Each pack is a validated config (same schema as `AFX/config.json`) that drops
-into any AFX entry point.
+librosa, torchaudio and openSMILE each cover part of this space. AFX is for the case where you want a fixed-length feature vector per clip, selected from a config, with the same numbers on the NumPy, PyTorch and scikit-learn paths and no compiled dependencies beyond NumPy/SciPy. The spectral and cepstral features are tested against librosa (`tests/test_frequency_domain_vs_librosa.py`, `tests/test_cepstral_features.py`), and `notebooks/feature_benchmark_validation.ipynb` reports tolerances against librosa, torchaudio and openSMILE.
+
+## Features
+
+Every feature is a function `extract_<name>(signal, sr, **params)` returning `{name: ndarray}`, registered in `AFX.FEATURE_MAP`. Per-frame shapes are `(n_frames,)` or `(n_dims, n_frames)`; `extract_all_features` aggregates them over time unless `preserve_shape` is set.
+
+| Group | Features | Parameters |
+|-------|----------|------------|
+| Time domain | `zcr`, `rms_energy`, `short_time_energy`, `energy_ratio`, `variance`, `kurtosis`, `crest_factor`, `entropy`, `sample_entropy`, `mobility`, `complexity` (Hjorth) | `frame_size`, `hop_length` for frame-wise output; omit both for one value per clip |
+| Autocorrelation | `autocorr_variance`, `autocorr_snr`, `autocorr_zero_crossings`, `autocorr_peak_width`, `autocorr_decay_rate`, `autocorr_coeffs_deviation`, `max_peak_autocorr_envelope` | `max_lag` (default 100), plus the frame parameters |
+| Spectral | `spectral_centroid`, `spectral_bandwidth`, `spectral_rolloff`, `spectral_flatness`, `spectral_entropy`, `spectral_flux`, `spectral_contrast`, `spectral_skewness`, `spectral_slope` | `frame_size`, `hop_length`, `center`; `roll_percent`; `n_bands`, `fmin`, `quantile` |
+| Cepstral, spectrogram | `mfcc`, `mfcc_delta`, `mfcc_delta_delta`, `gfcc`, `melspectrogram`, `chroma_stft`, `chroma_cqt`, `cqt` | `n_mfcc`, `n_mels`, `fmin`, `fmax`, `center`; `n_gfcc`, `n_gammatone`; `n_bins`, `bins_per_octave` |
+| Harmonic | `pitch` (YIN), `hnr`, `thd` | `frame_size`, `hop_length`, `fmin`, `fmax` |
+
+Run `afx --list-features` for the names, or read the docstrings in `AFX/extractors/` for definitions and references.
+
+## Config
+
+A config is a JSON object (or the equivalent dict) with `sample_rate`, a `features` block mapping feature names to extractor parameters, and optional aggregation settings. `AFX/config.json` enables everything; `AFX/presets/*.json` are smaller domain packs.
+
+```json
+{
+  "sample_rate": 16000,
+  "features": {
+    "mfcc": {"n_mfcc": 20, "frame_size": 400, "hop_length": 160},
+    "pitch": {"frame_size": 400, "hop_length": 160},
+    "rms_energy": {}
+  },
+  "aggregation": "summary",
+  "normalize": null
+}
+```
+
+`aggregation` is one of `mean`, `std`, `summary` (mean and std), `advanced_summary` (mean, std, skew, kurtosis), `skew`, `kurtosis`, `sliding_window` (with `window_size`, `hop_length` and `sliding_agg` under `aggregation_params`) or `stack` (concatenate everything into one vector, no aggregation). `flatten` (default true) flattens each aggregated feature to 1-D. `normalize` is `zscore`, `minmax` or null; without `aggregation_params.norm_stats` it rescales each clip by its own statistics, so for training pipelines leave it null and scale in scikit-learn. `preserve_shape: true` returns the per-frame arrays instead.
+
+`AFX.load_config` and `AFX.validate_config` reject unknown feature names, bad aggregation or normalize values and non-object feature parameters, so typos fail at load time rather than mid-extraction.
+
+### Presets
 
 ```python
 from AFX.presets import list_presets, load_preset, preset_info
-
-list_presets()
-# ['bioacoustics', 'machinery', 'music', 'speech']
-
-config = load_preset('speech')      # a validated AFX config dict
-features = extract_all_features(signal, sr=config['sample_rate'], config=config)
+list_presets()   # ['bioacoustics', 'machinery', 'music', 'speech']
 ```
 
-| Pack           | Focus                                   | Highlights                                             |
-|----------------|-----------------------------------------|--------------------------------------------------------|
-| `speech`       | Speech & paralinguistics (emotion, voice quality) | 16 kHz, MFCC + Δ + ΔΔ, pitch, HNR, energy         |
-| `bioacoustics` | Animal / environmental sound            | 32 kHz, mel + MFCC, spectral shape, flatness, entropy  |
-| `music`        | Music information retrieval             | chroma (CQT + STFT), spectral contrast, MFCC           |
-| `machinery`    | Condition monitoring / fault detection  | framewise crest factor, kurtosis, Hjorth params, HNR   |
+| Pack | Sample rate | Emphasis |
+|------|-------------|----------|
+| `speech` | 16 kHz | 20 MFCC with deltas, pitch, HNR, energy, spectral contrast; `summary` aggregation |
+| `bioacoustics` | 32 kHz | mel and MFCC, spectral shape, flatness, entropy |
+| `music` | 22.05 kHz | chroma (STFT and CQT), spectral contrast, MFCC |
+| `machinery` | 16 kHz | frame-wise crest factor, kurtosis, Hjorth parameters, HNR; `advanced_summary` aggregation |
 
-The [`domain_feature_packs_demo.ipynb`](notebooks/) notebook runs each pack
-end-to-end on a small open dataset (download → extract → classify → plot) — set
-`DOMAIN` and Run All. Build your own pack by copying a JSON file in
-`AFX/presets/` and picking the features that matter for your problem.
+`notebooks/domain_feature_packs_demo.ipynb` runs each pack end to end on an open dataset. Copy a preset JSON to build your own.
 
-## scikit-learn integration
+### Frame times
 
-`AFXFeatureExtractor` is a standard sklearn transformer: it accepts file
-paths or raw 1-D signals and produces fixed-length feature matrices, so it
-drops straight into Pipelines and cross-validation:
+With `return_metadata=True`, every extractor returns `metadata['times']`: the time of each frame's center in the original signal, equal to `librosa.frames_to_time(i, sr, hop_length)` for `center=True` and `librosa.frames_to_time(i, sr, hop_length, n_fft=frame_size)` for `center=False`. Features computed with the same `frame_size` and `hop_length` therefore share one time axis regardless of `center`. `spectral_flux[i]` compares frames i and i+1 and carries the time of frame i+1.
+
+`center` defaults to `False` for MFCC, GFCC and the spectral features and to `True` for `melspectrogram`, `chroma_stft`, `chroma_cqt` and `cqt` (matching librosa). Set it explicitly in the config when frame counts must match across features.
+
+## scikit-learn
+
+`AFXFeatureExtractor` accepts file paths or 1-D signals and produces `(n_samples, n_features)` matrices, so it works inside `Pipeline`, `GridSearchCV` and `cross_val_score`. `n_jobs` parallelizes over samples with joblib.
 
 ```python
 from AFX.sklearn import AFXFeatureExtractor
@@ -187,87 +95,81 @@ from sklearn.svm import SVC
 
 pipe = make_pipeline(
     AFXFeatureExtractor(features=['mfcc', 'spectral_centroid', 'zcr'],
-                        sample_rate=16000, n_jobs=-1),
+                        sample_rate=16000, aggregation='summary', n_jobs=-1),
     StandardScaler(),
     SVC(),
 )
-pipe.fit(train_wav_paths, y_train)   # X can be paths or raw signals
-pipe.predict(test_wav_paths)
+pipe.fit(train_paths, y_train)
+pipe.predict(test_paths)
+pipe[0].get_feature_names_out()   # ['zcr_mean', 'zcr_std', 'mfcc_mean_0', ...]
 ```
 
-`get_feature_names_out()` returns expanded column names (`mfcc_0`,
-`mfcc_1`, ..., `spectral_centroid`), and `n_jobs` parallelizes extraction
-over samples via joblib. For train/test-consistent scaling, prefer
-`normalize=None` (default) plus a `StandardScaler` pipeline step.
+## PyTorch
 
-## PyTorch path (differentiable / GPU)
-
-`AFX.torch` provides pure-torch implementations of the core transforms
-(STFT, mel, MFCC, spectral descriptors) that numerically match the NumPy
-path, run on CPU or CUDA, and are differentiable end-to-end — install with
-`pip install "AFX[torch]"`:
+`AFX.torch.functional` reimplements the STFT, mel, MFCC and spectral descriptors in pure torch with the same windowing, padding and filterbank conventions as the NumPy path (parity is tested to 1e-6 or tighter). Inputs are `(time,)` or `(batch, time)` tensors on any device; gradients flow back to the waveform except through the counting and selection steps of `zero_crossing_rate` and `spectral_rolloff`.
 
 ```python
 import torch
 from AFX.torch import AFXFeatureModule, functional as F_afx
 
-# Functional API: works on (time,) or batched (batch, time) tensors
-mfcc = F_afx.mfcc(waveform, sr=16000, n_mfcc=13)          # differentiable
-mel = F_afx.melspectrogram(waveform.cuda(), sr=16000)     # GPU
+mfcc = F_afx.mfcc(waveform, sr=16000, n_mfcc=13)
 
-# nn.Module wrapper: usable as a trainable front end
 frontend = AFXFeatureModule(
     features={'mfcc': {'n_mfcc': 13}, 'spectral_centroid': {}},
-    sample_rate=16000, aggregation='mean', output='vector',
+    sample_rate=16000, aggregation='mean_std', output='vector',
 ).to('cuda')
-model = torch.nn.Sequential(frontend, torch.nn.Linear(14, 2))
+model = torch.nn.Sequential(frontend, torch.nn.Linear(28, 2))
 ```
 
-Constants (windows, mel filterbanks, DCT matrices) are registered as
-buffers, so they follow `.to(device)` and add no per-forward overhead.
-`AFX.torch.supported_features()` lists what's available on this path;
-everything else remains available via the NumPy API. PyTorch stays an
-optional dependency — `import AFX` works without it.
+Windows, mel filterbanks and DCT matrices are registered as buffers, so they move with `.to(device)`. `AFX.torch.supported_features()` lists the ten features available on this path; the rest stay on the NumPy API. `import AFX` does not import torch.
 
-## Parallel batch extraction
+## Batch extraction and CLI
 
-`extract_features_from_folder` (and the CLI) can fan extraction out over
-worker processes and write dataset-friendly formats:
+`extract_features_from_folder` walks a folder recursively, extracts one vector per file with a config path or dict, and writes `npy`, `json`, `csv` or `parquet`. Rows are keyed by path relative to the folder, vector features expand to `name_0, name_1, ...` columns, and files that fail are reported in `<output>.errors.json` instead of aborting the run. `n_jobs` fans out over processes with output identical to the serial run.
 
 ```python
 from AFX import extract_features_from_folder
 
-extract_features_from_folder(
-    'path/to/dataset', 'AFX/config.json', 'features.parquet',
-    save_format='parquet',   # or 'csv', 'json', 'npy'
-    n_jobs=8,                # 0 = all cores; results identical to serial
-)
+extract_features_from_folder('dataset/', 'AFX/presets/speech.json', 'features.parquet', n_jobs=8)
 ```
 
-Parquet output (one row per file, columns like `mfcc_0 ... mfcc_12`,
-`zcr`, ...) requires `pip install "AFX[parquet]"` and loads directly into
-pandas: `pd.read_parquet('features.parquet')`.
-
-## CLI
-
-Installing the package provides an `afx` command for batch feature extraction over a folder of audio files:
+The same operation from the shell:
 
 ```bash
-afx <input_folder> [--config path/to/config.json] [--output features.npy] \
-    [--format npy|json|csv|parquet] [--features mfcc,zcr,spectral_centroid] \
-    [--aggregation mean] [--normalize zscore] [--no-flatten] [--jobs 8]
+afx dataset/ --preset speech --output features.parquet --jobs 8
+afx dataset/ --config my_config.json --features mfcc,zcr --aggregation summary --output features.csv
+afx --list-features
 ```
 
-- `input_folder`: folder containing audio files to process
-- `--config`: path to a config JSON (defaults to the bundled `AFX/config.json`)
-- `--output`: output file path (default `features.npy`)
-- `--format`: output format, one of `npy`, `json`, `csv` (default `npy`)
-- `--features`: comma-separated list of features to extract (default: all in config)
-- `--aggregation`: aggregation method (e.g. `mean`)
-- `--normalize`: normalization method, `zscore` or `minmax`
-- `--no-flatten`: disable flattening after aggregation
-- `--jobs` / `-j`: number of parallel worker processes (`0` = all cores, default `1`)
+The output format follows the `--output` extension unless `--format` is given. `--sample-rate` overrides the config, `--no-flatten` keeps aggregated arrays 2-D, `--normalize zscore|minmax` applies per-file normalization, `-q` silences progress.
+
+## Project layout
+
+```
+AFX/
+  extractors/     one module per feature group (time_domain, frequency_domain, cepstral_features, harmonic_features)
+  methods/        STFT, mel, DCT, delta, CQT, chroma, gammatone, autocorrelation
+  torch/          functional transforms and AFXFeatureModule
+  utils/          framing, aggregation, normalization, config validation, selectors, plotting
+  presets/        domain packs (JSON)
+  sklearn.py      AFXFeatureExtractor
+  batch_extractor.py, cli.py
+notebooks/        demos and the librosa/torchaudio/openSMILE benchmark
+tests/            pytest suite, including parity tests against librosa
+```
+
+## Development
+
+```bash
+pip install -e ".[dev]"
+pytest
+ruff check AFX tests
+```
 
 ## Acknowledgment
 
-- The audio examples used in the notebooks are derived from the LibriSpeech corpus ([Panayotov et al., 2015](https://www.danielpovey.com/files/2015_icassp_librispeech.pdf)), which is released under a public domain-compatible license ([download link](https://www.openslr.org/12)). No audio files are committed to this repository.
+The audio examples used in the notebooks are derived from the LibriSpeech corpus ([Panayotov et al., 2015](https://www.danielpovey.com/files/2015_icassp_librispeech.pdf)), released under a public domain-compatible license ([download](https://www.openslr.org/12)). No audio files are committed to this repository.
+
+## License
+
+MIT, see [LICENSE](LICENSE).

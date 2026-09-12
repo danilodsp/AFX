@@ -2,7 +2,6 @@
 Unit tests for cepstral_features extractors.
 """
 import numpy as np
-import pytest
 from AFX.extractors import cepstral_features
 
 import librosa
@@ -54,7 +53,7 @@ def test_extract_mfcc_librosa_compatibility():
     # Librosa implementation
     mfcc_librosa = librosa.feature.mfcc(y=signal, sr=sr, n_mfcc=n_mfcc, n_fft=2048, hop_length=512)
     times_librosa = librosa.frames_to_time(
-        np.arange(mfcc_librosa.shape[1]), sr=sr, hop_length=512, n_fft=2048
+        np.arange(mfcc_librosa.shape[1]), sr=sr, hop_length=512
     )
 
     # Check shapes match
@@ -116,7 +115,7 @@ def test_extract_mfcc_delta_librosa_compatibility():
     mfcc_librosa = librosa.feature.mfcc(y=signal, sr=sr, n_mfcc=n_mfcc, n_fft=2048, hop_length=512)
     delta_librosa = librosa.feature.delta(mfcc_librosa, width=9, order=1)
     times_librosa = librosa.frames_to_time(
-        np.arange(delta_librosa.shape[1]), sr=sr, hop_length=512, n_fft=2048
+        np.arange(delta_librosa.shape[1]), sr=sr, hop_length=512
     )
 
     # Check shapes match
@@ -274,10 +273,9 @@ def test_extract_chroma_stft_metadata():
     assert chroma.shape[0] == 12
     assert times.shape[0] == chroma.shape[1]
 
-    # Check time computation (manual calculation)
+    # center=True (default): frame i is centered on sample i * hop_length
     n_frames = chroma.shape[1]
-    frame_offset = frame_size // 2
-    expected_times = (np.arange(n_frames) * hop_length + frame_offset) / sr
+    expected_times = np.arange(n_frames) * hop_length / sr
 
     np.testing.assert_array_almost_equal(times, expected_times)
 
@@ -305,7 +303,7 @@ def test_extract_chroma_stft_librosa_compatibility():
         y=signal, sr=sr, n_fft=2048, hop_length=512
     )
     times_librosa = librosa.frames_to_time(
-        np.arange(chroma_librosa.shape[1]), sr=sr, hop_length=512, n_fft=2048
+        np.arange(chroma_librosa.shape[1]), sr=sr, hop_length=512
     )
 
     # Check shapes match
@@ -376,7 +374,7 @@ def test_extract_mfcc_delta_delta_librosa_compatibility():
             width -= 1
         delta_delta_librosa = librosa.feature.delta(mfcc_librosa, width=width, order=2)
     times_librosa = librosa.frames_to_time(
-        np.arange(delta_delta_librosa.shape[1]), sr=sr, hop_length=512, n_fft=2048
+        np.arange(delta_delta_librosa.shape[1]), sr=sr, hop_length=512
     )
 
     # Check shapes match
@@ -442,7 +440,7 @@ def test_extract_melspectrogram_librosa_compatibility():
         y=signal, sr=sr, n_mels=n_mels, n_fft=frame_size, hop_length=hop_length
     )
     times_librosa = librosa.frames_to_time(
-        np.arange(mel_librosa.shape[1]), sr=sr, hop_length=hop_length, n_fft=frame_size
+        np.arange(mel_librosa.shape[1]), sr=sr, hop_length=hop_length
     )
 
     # Check shapes

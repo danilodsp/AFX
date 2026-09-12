@@ -134,35 +134,3 @@ def cqt_approximation(
 
     return cqt_magnitude, cqt_frequencies
 
-
-def pseudo_cqt(
-    signal: np.ndarray,
-    sr: int,
-    hop_length: int = 512,
-    n_bins: int = 84,
-    bins_per_octave: int = 12,
-    fmin: Optional[float] = None,
-    frame_size: int = 2048,
-) -> np.ndarray:
-    """
-    Simplified CQT approximation for chroma feature extraction.
-
-    This is a streamlined version of cqt_approximation() that returns
-    only the magnitude matrix, optimized for chroma computation.
-
-    Args:
-        signal: Input audio signal (1D array)
-        sr: Sample rate in Hz
-        hop_length: Number of samples between adjacent frames
-        n_bins: Total number of CQT frequency bins
-        bins_per_octave: Number of bins per octave
-        fmin: Minimum frequency in Hz (default: C1)
-        frame_size: STFT frame size for frequency resolution
-
-    Returns:
-        CQT magnitude matrix of shape (n_bins, n_frames)
-    """
-    cqt_mag, _ = cqt_approximation(
-        signal, sr, hop_length, n_bins, bins_per_octave, fmin, frame_size
-    )
-    return cqt_mag

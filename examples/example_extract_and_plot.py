@@ -1,21 +1,44 @@
 """
-Example script: Extract features from a single audio file and plot MFCCs.
+Extract features from one audio file with the bundled config, print the
+aggregated feature vector, and plot the per-frame MFCCs.
+
+Usage: python examples/example_extract_and_plot.py <audio_file> [--no-plot]
 """
+import os
 import sys
-from AFX.io.io import load_audio
-from AFX.utils.config_loader import load_config
-from AFX.extract_all import extract_all_features
+
+import AFX
 from AFX.utils.visualization import plot_mfcc
 
+CONFIG_PATH = os.path.join(os.path.dirname(AFX.__file__), 'config.json')
+
+
+def main(argv):
+    if not argv or argv[0] in ('-h', '--help'):
+        print(__doc__.strip())
+        return 1
+    audio_path = argv[0]
+    show_plot = '--no-plot' not in argv
+
+    config = AFX.load_config(CONFIG_PATH)
+    signal, sr = AFX.load_audio(audio_path, sr=config['sample_rate'])
+
+    # File-level vector: mean over frames, one entry per feature dimension
+    aggregated = AFX.extract_all_features(signal, sr, config)
+    for name, values in aggregated.items():
+        print(f'{name:28s} shape={values.shape}')
+
+    # Per-frame arrays for plotting
+    config['preserve_shape'] = True
+    per_frame = AFX.extract_all_features(signal, sr, config)
+    mfcc = per_frame['mfcc']
+    print(f'mfcc per-frame shape: {mfcc.shape}')
+
+    if show_plot:
+        hop_length = config['features']['mfcc'].get('hop_length', 512)
+        plot_mfcc(mfcc, sr, hop_length=hop_length)
+    return 0
+
+
 if __name__ == '__main__':
-    if len(sys.argv) < 2:
-        print('Usage: python example_extract_and_plot.py <audio_file>')
-        sys.exit(1)
-    audio_path = sys.argv[1]
-    config = load_config('AFX/config.json')
-    signal, sr = load_audio(audio_path, sr=config['sample_rate'])
-    features = extract_all_features(signal, sr, config)
-    if 'mfcc' in features:
-        plot_mfcc(features['mfcc'], sr)
-    else:
-        print('MFCC not found in extracted features.')
+    sys.exit(main(sys.argv[1:]))

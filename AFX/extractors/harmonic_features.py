@@ -1,12 +1,14 @@
-
 """
 Harmonic feature extractors for audio signals (pitch, THD, HNR).
 """
 import numpy as np
 from typing import Dict
+from scipy.fft import rfft
+from AFX.methods.autocorrelation import autocorrelation as _autocorr
+from AFX.utils.frame_utils import frame_times
 from AFX.utils.framewise import framewise_extractor
 from AFX.utils.pitch import yin
-from scipy.fft import rfft
+
 _EPS = 1e-10
 
 def _pad_frame(frame: np.ndarray, frame_size: int) -> np.ndarray:
@@ -58,7 +60,7 @@ def extract_pitch(
     )
     result = {'pitch': pitch}
     if return_metadata:
-        times = np.arange(len(pitch)) * hop_length / sr
+        times = frame_times(len(pitch), sr, hop_length, frame_size)
         return {'pitch': pitch, 'metadata': {'times': times}}
     return result
 
@@ -123,6 +125,17 @@ def extract_hnr(
 
         HNR = 10 * log10(r_max / (1 - r_max))
 
+    r(tau) is the normalized cross-correlation of the two segments that
+    overlap at lag tau (the NCCF of Talkin, 1995, "A robust algorithm for
+    pitch tracking"):
+
+        r(tau) = sum_j x[j] x[j+tau] / sqrt(sum_j x[j]^2 * sum_j x[j+tau]^2)
+
+    with j running over 0..N-tau-1. It is bounded in [-1, 1] and equals 1
+    for a perfectly periodic frame. The biased estimate R(tau)/R(0) used
+    previously is capped at (N - tau)/N, which for a 400-sample frame and
+    a 160-sample period limits HNR to about 2 dB even for a pure tone.
+
     Args:
         signal: Audio signal (1D np.ndarray)
         sr: Sample rate
@@ -147,26 +160,29 @@ def extract_hnr(
     lag_min = max(1, int(sr / fmax)) if fmax > 0 else 1
     lag_max = min(int(sr / fmin) if fmin > 0 else frame_size - 1, frame_size - 1)
 
-    hnr = []
+    lags = np.arange(lag_max + 1)
+
+    hnr = np.full(n_frames, np.nan)
     for i in range(n_frames):
         start = i * hop_length
         end = min(start + frame_size, n_samples)
-        frame = signal[start:end]
-        frame = _pad_frame(frame, frame_size)
-        autocorr = np.correlate(frame, frame, mode='full')
-        autocorr = autocorr[len(autocorr) // 2:]
-        if autocorr[0] <= 0 or lag_min >= lag_max:
-            hnr.append(np.nan)
+        frame = _pad_frame(signal[start:end], frame_size).astype(np.float64)
+        # Energies of the leading (x[0:N-tau]) and trailing (x[tau:N])
+        # segments for every lag, from one cumulative sum
+        cum = np.concatenate(([0.0], np.cumsum(frame ** 2)))
+        e_lead = cum[frame_size - lags]
+        e_trail = cum[frame_size] - cum[lags]
+        if e_lead[0] <= 0 or lag_min >= lag_max:
             continue
-        r = autocorr / autocorr[0]
+        r = _autocorr(frame, lag_max + 1) / np.sqrt(
+            np.maximum(e_lead * e_trail, _EPS)
+        )
         r_max = np.max(r[lag_min:lag_max + 1])
         # Clip to the open interval (0, 1) to keep the log-ratio finite
         r_max = np.clip(r_max, _EPS, 1.0 - _EPS)
-        hnr_val = 10 * np.log10(r_max / (1.0 - r_max))
-        hnr.append(hnr_val)
-    hnr = np.array(hnr)
+        hnr[i] = 10 * np.log10(r_max / (1.0 - r_max))
     result = {'hnr': hnr}
     if return_metadata:
-        times = np.arange(n_frames) * hop_length / sr
+        times = frame_times(n_frames, sr, hop_length, frame_size)
         return {'hnr': hnr, 'metadata': {'times': times}}
     return result

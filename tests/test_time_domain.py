@@ -1,3 +1,10 @@
+"""
+Unit tests for time_domain feature extractors.
+"""
+import librosa
+import numpy as np
+
+from AFX.extractors import time_domain
 from AFX.extractors.time_domain import (
     extract_kurtosis,
     extract_short_time_energy,
@@ -6,14 +13,6 @@ from AFX.extractors.time_domain import (
     extract_mobility,
     extract_rms_energy
 )
-"""
-Unit tests for time_domain feature extractors.
-"""
-import numpy as np
-import pytest
-from AFX.extractors import time_domain
-
-import librosa
 
 
 def test_extract_zero_crossing_rate():
@@ -78,7 +77,6 @@ def test_extract_rms_energy():
 
 def test_extract_zero_crossing_rate_compare_with_librosa():
     """Test that our implementation closely matches librosa's implementation."""
-    import librosa
 
     # Create a test signal with known zero-crossings
     np.random.seed(42)  # for reproducibility
@@ -115,6 +113,8 @@ def test_extract_zero_crossing_rate_compare_with_librosa():
     assert 'metadata' in result_with_meta
     assert 'times' in result_with_meta['metadata']
 
-    # Check that times computation is correct
-    expected_times = np.arange(len(zcr_custom)) * hop_length / sr
+    # Frame centers (no center padding): librosa's n_fft offset convention
+    expected_times = librosa.frames_to_time(
+        np.arange(len(zcr_custom)), sr=sr, hop_length=hop_length, n_fft=frame_size
+    )
     assert np.allclose(result_with_meta['metadata']['times'], expected_times)

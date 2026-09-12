@@ -1,7 +1,6 @@
 """
 Unit tests for config_loader and io modules.
 """
-import os
 import numpy as np
 import pytest
 from AFX.utils import config_loader
@@ -86,3 +85,39 @@ def test_load_audio_missing_file_raises(tmp_path):
     missing = tmp_path / "does_not_exist.wav"
     with pytest.raises((FileNotFoundError, RuntimeError)):
         io.load_audio(str(missing))
+
+
+def _write(tmp_path, config):
+    import json
+    path = tmp_path / 'config.json'
+    path.write_text(json.dumps(config))
+    return str(path)
+
+
+def test_load_config_rejects_unknown_feature(tmp_path):
+    path = _write(tmp_path, {'sample_rate': 22050, 'features': {'mfc': {}}})
+    with pytest.raises(ValueError, match="mfc"):
+        config_loader.load_config(path)
+
+
+def test_load_config_rejects_bad_aggregation_and_normalize(tmp_path):
+    path = _write(tmp_path, {'sample_rate': 22050, 'features': {'zcr': {}},
+                             'aggregation': 'median'})
+    with pytest.raises(ValueError, match='aggregation'):
+        config_loader.load_config(path)
+    path = _write(tmp_path, {'sample_rate': 22050, 'features': {'zcr': {}},
+                             'normalize': 'l2'})
+    with pytest.raises(ValueError, match='normalize'):
+        config_loader.load_config(path)
+
+
+def test_load_config_rejects_non_dict_feature_params(tmp_path):
+    path = _write(tmp_path, {'sample_rate': 22050, 'features': {'zcr': [1]}})
+    with pytest.raises(ValueError, match='zcr'):
+        config_loader.load_config(path)
+
+
+def test_validate_config_accepts_presets():
+    from AFX.presets import list_presets, load_preset
+    for name in list_presets():
+        config_loader.validate_config(load_preset(name))

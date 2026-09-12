@@ -5,19 +5,25 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "AFX"
 version = "0.2.0"
-description = "Audio feature extraction for ML/AI"
+description = "Audio feature extraction for machine learning: 38 time, spectral, cepstral and harmonic features with NumPy, PyTorch and scikit-learn front ends"
 readme = "README.md"
 license = { file = "LICENSE" }
 authors = [
     { name = "Danilo Pena" },
 ]
 requires-python = ">=3.9"
+keywords = [
+    "audio", "feature-extraction", "mfcc", "spectral-features", "signal-processing",
+    "music-information-retrieval", "speech", "bioacoustics", "pytorch", "scikit-learn",
+]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
@@ -52,6 +58,11 @@ test = [
     "librosa>=0.10",
     "pyarrow>=10",
 ]
+dev = [
+    "AFX[test,torch,notebooks]",
+    "ruff",
+    "build",
+]
 
 [project.scripts]
 afx = "AFX.cli:main"
@@ -66,3 +77,14 @@ include = ["AFX*"]
 
 [tool.setuptools.package-data]
 AFX = ["config.json", "presets/*.json"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py39"
+
+[tool.ruff.lint.per-file-ignores]
+# importorskip must run before the imports that need torch
+"tests/test_torch_features.py" = ["E402"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

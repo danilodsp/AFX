@@ -3,9 +3,10 @@ Time-domain feature extractors for audio signals.
 """
 from typing import Dict, Optional
 import numpy as np
-from scipy.fft import next_fast_len
-from AFX.utils.framewise import framewise_extractor
 from scipy.stats import kurtosis
+from AFX.methods.autocorrelation import autocorrelation as _autocorr
+from AFX.utils.frame_utils import frame_times
+from AFX.utils.framewise import framewise_extractor
 
 __all__ = [
     'extract_zero_crossing_rate',
@@ -28,20 +29,6 @@ __all__ = [
     'extract_max_peak_autocorr_envelope',
 ]
 
-
-def _autocorr(signal: np.ndarray, max_lag: int) -> np.ndarray:
-    """
-    Linear autocorrelation for lags 0..max_lag-1 via FFT (O(N log N)),
-    equivalent to np.correlate(signal, signal, 'full')[mid:mid+max_lag].
-    """
-    signal = np.asarray(signal, dtype=np.float64)
-    n = len(signal)
-    if n == 0:
-        return np.zeros(0)
-    nfft = next_fast_len(2 * n)
-    f = np.fft.rfft(signal, nfft)
-    acf = np.fft.irfft(f * np.conj(f), nfft)
-    return acf[:min(max_lag, n)]
 
 def extract_zero_crossing_rate(
     signal: np.ndarray,
@@ -103,8 +90,7 @@ def extract_zero_crossing_rate(
     if return_metadata:
         if sr is None:
             raise ValueError('sr is required when return_metadata=True')
-        # Convert frame indices to time (seconds)
-        times = np.arange(len(zcr)) * hop_length / float(sr)
+        times = frame_times(len(zcr), sr, hop_length, min(frame_size, len(signal)))
         return {'zcr': zcr, 'metadata': {'times': times}}
     return result
 

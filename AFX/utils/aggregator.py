@@ -1,7 +1,7 @@
 """
 Feature aggregation utilities (mean, std, pooling strategies).
 """
-from typing import Dict, Callable, Union
+from typing import Dict, Union
 import numpy as np
 from scipy.stats import skew, kurtosis
 

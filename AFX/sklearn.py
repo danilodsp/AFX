@@ -201,7 +201,15 @@ class AFXFeatureExtractor(BaseEstimator, TransformerMixin):
             raise RuntimeError('Call fit before get_feature_names_out.')
         return self.feature_names_out_
 
+    # Inputs are file paths or ragged signals, not a numeric matrix.
+    # _more_tags is read by sklearn < 1.6, __sklearn_tags__ by >= 1.6.
     def _more_tags(self):
-        # Inputs are file paths or ragged signals, not a numeric matrix.
         return {'X_types': ['string'], 'no_validation': True,
                 'requires_fit': True}
+
+    def __sklearn_tags__(self):
+        tags = super().__sklearn_tags__()
+        tags.input_tags.string = True
+        tags.input_tags.two_d_array = False
+        tags.requires_fit = True
+        return tags

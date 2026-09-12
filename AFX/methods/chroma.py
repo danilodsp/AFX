@@ -2,7 +2,6 @@
 Chroma feature computation methods.
 """
 import numpy as np
-from typing import Optional
 
 
 def chroma_from_stft(

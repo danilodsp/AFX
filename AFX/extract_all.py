@@ -63,16 +63,29 @@ def extract_all_features(
     Args:
         signal: Audio signal (1D np.ndarray)
         sr: Sample rate
-        config: Config dict with 'features' and 'aggregation'. Shape
-            preservation is controlled via ``config['preserve_shape']``.
-        return_metadata: If True, include metadata in results
+        config: Config dict with a 'features' block mapping feature names to
+            extractor keyword arguments. Optional keys: 'aggregation'
+            (default 'mean'), 'flatten' (default True), 'normalize'
+            ('zscore', 'minmax' or None), 'aggregation_params' (extra
+            keyword arguments for ``aggregate_features``, e.g. window_size
+            and hop_length for 'sliding_window'), and 'preserve_shape'
+            (True skips aggregation and returns per-frame arrays).
+        return_metadata: If True, include per-feature metadata (frame times)
     Returns:
-        Dict of feature names to np.ndarray
+        Dict of feature names to np.ndarray, or a single stacked 1-D array
+        when aggregation is 'stack'. With return_metadata=True a dict with
+        'features' and 'metadata' keys.
     """
     if not isinstance(config, dict) or 'features' not in config:
         raise ValueError(
             "config must be a dict with a 'features' key mapping feature "
             "names to parameter dicts (see AFX/config.json)"
+        )
+    signal = np.asarray(signal)
+    if signal.ndim != 1:
+        raise ValueError(
+            f'signal must be 1-D (mono), got shape {signal.shape}. '
+            'Downmix multichannel audio first, e.g. signal.mean(axis=1).'
         )
     preserve_shape = config.get('preserve_shape', False)
     features = {}
@@ -94,14 +107,14 @@ def extract_all_features(
             features[feat_name] = out[feat_name]
 
     if not preserve_shape:
-        # Aggregate, flatten, and normalize if specified
-        agg_kwargs = {}
-        # Always pass aggregation, flatten, and normalize, with sensible defaults
+        # Extra keyword arguments for aggregate_features: window_size /
+        # hop_length / sliding_agg for method='sliding_window', norm_stats
+        # for dataset-level normalization.
+        agg_kwargs = dict(config.get('aggregation_params', {}))
         agg_kwargs['method'] = config.get('aggregation', 'mean')
         agg_kwargs['flatten'] = config.get('flatten', True)
         agg_kwargs['normalize'] = config.get('normalize', None)
         features = aggregate_features(features, **agg_kwargs)
-    # else: keep original shapes
 
     if return_metadata:
         return {'features': features, 'metadata': metadata}

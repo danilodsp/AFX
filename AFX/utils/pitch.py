@@ -2,7 +2,7 @@
 Pitch detection utilities.
 """
 import numpy as np
-from scipy.fft import next_fast_len
+from AFX.methods.autocorrelation import autocorrelation
 
 
 def _difference_function(frame: np.ndarray, tau_max: int) -> np.ndarray:
@@ -26,10 +26,7 @@ def _difference_function(frame: np.ndarray, tau_max: int) -> np.ndarray:
     # E1(tau) = sum_{j=0}^{w-tau-1} x[j]^2 ;  E2(tau) = sum_{j=tau}^{w-1} x[j]^2
     e1 = cum[w - taus]
     e2 = cum[w] - cum[taus]
-    # Linear autocorrelation via FFT (zero-padded to avoid circular wrap)
-    nfft = next_fast_len(2 * w)
-    f = np.fft.rfft(frame, nfft)
-    acf = np.fft.irfft(f * np.conj(f), nfft)[:tau_max + 1]
+    acf = autocorrelation(frame, tau_max + 1)
     d = e1 + e2 - 2.0 * acf
     # Guard tiny negative values from float error
     return np.maximum(d, 0.0)

@@ -2,7 +2,6 @@
 Unit tests for modular signal processing methods.
 """
 import numpy as np
-import pytest
 from AFX.methods.stft import stft, magnitude_spectrogram, power_spectrogram
 from AFX.methods.mel import mel_filterbank, apply_mel_filterbank, log_mel_spectrogram
 from AFX.methods.dct import extract_mfcc_coefficients, dct_ii
@@ -11,7 +10,6 @@ from AFX.methods.dct import extract_mfcc_coefficients, dct_ii
 def test_stft_basic():
     """Test basic STFT functionality."""
     signal = np.random.randn(2048)
-    sr = 22050
 
     result = stft(signal, frame_size=1024, hop_length=512)
 
@@ -20,7 +18,7 @@ def test_stft_basic():
     expected_n_frames = 1 + (len(signal) + 1024 - 1024) // 512  # With center padding
 
     assert result.shape[0] == expected_n_freq
-    assert result.shape[1] > 0
+    assert result.shape[1] == expected_n_frames
     assert result.dtype == np.complex128
 
 

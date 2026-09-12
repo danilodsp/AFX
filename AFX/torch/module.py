@@ -3,14 +3,14 @@
 AFX torch transforms, so feature extraction can sit inside a training
 graph (e.g. as the front end of a classifier, or for feature-space losses).
 """
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import torch
 from torch import nn
 
 from AFX.torch import functional as F_afx
 
-# Feature name -> (functional, params that need precomputed constants)
+# Feature name -> functional
 _TORCH_FEATURES = {
     'melspectrogram': F_afx.melspectrogram,
     'mfcc': F_afx.mfcc,
@@ -43,6 +43,8 @@ _ACCEPTED_PARAMS = {
 }
 
 _SPECTRAL = set(_TORCH_FEATURES) - {'zcr', 'rms_energy'}
+# Features with a channel axis: (..., n_channels, n_frames)
+_TWO_DIM = {'melspectrogram', 'mfcc'}
 
 
 def supported_features() -> List[str]:
@@ -71,8 +73,7 @@ class AFXFeatureModule(nn.Module):
             'mean_std' (both, concatenated) over the time axis.
         output: 'dict' returns ``{name: tensor}``; 'vector' flattens and
             concatenates everything into a single (batch, dim) tensor
-            (features sorted by insertion order, matching
-            ``feature_dim()`` / ``feature_names()``).
+            (features in insertion order, see ``feature_names()``).
 
     Example::
 
@@ -165,21 +166,24 @@ class AFXFeatureModule(nn.Module):
             params['mel_fb'] = getattr(self, f'_melfb_{name}')
         if name == 'mfcc':
             params['dct_mat'] = self._dct_mfcc
-        if name in ('zcr', 'rms_energy'):
-            return fn(x, self.sample_rate, **params)
         return fn(x, self.sample_rate, **params)
 
-    def _aggregate(self, t: torch.Tensor) -> torch.Tensor:
+    def _aggregate(self, t: torch.Tensor, has_channels: bool) -> torch.Tensor:
         if self.aggregation == 'none':
             return t
         if self.aggregation == 'mean':
             return t.mean(dim=-1)
         if self.aggregation == 'std':
             return t.std(dim=-1, unbiased=False)
-        # mean_std
-        return torch.cat(
-            [t.mean(dim=-1), t.std(dim=-1, unbiased=False)], dim=-1
-        )
+        mean = t.mean(dim=-1)
+        std = t.std(dim=-1, unbiased=False)
+        if has_channels:
+            # (..., n, T) -> (..., 2n): all means, then all stds, matching
+            # the NumPy 'summary' aggregation order.
+            return torch.cat([mean, std], dim=-1)
+        # (..., T) -> (..., 2). Concatenating along dim=-1 here would merge
+        # the batch axis and fail on unbatched input.
+        return torch.stack([mean, std], dim=-1)
 
     def forward(self, waveform: torch.Tensor):
         """
@@ -197,7 +201,7 @@ class AFXFeatureModule(nn.Module):
             # rms_energy already has a singleton "time" axis of size 1;
             # aggregation over it is a no-op numerically but normalizes
             # the shape with the other features.
-            feats[name] = self._aggregate(t)
+            feats[name] = self._aggregate(t, name in _TWO_DIM)
 
         if self.output == 'dict':
             return feats

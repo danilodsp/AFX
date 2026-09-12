@@ -26,12 +26,11 @@ from __future__ import annotations
 import csv
 import os
 import random
-import re
 import sys
 import tarfile
 import urllib.request
 import zipfile
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np

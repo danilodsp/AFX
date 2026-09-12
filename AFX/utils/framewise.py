@@ -4,16 +4,17 @@ Decorator for frame-wise feature extraction.
 from typing import Callable, Dict
 import numpy as np
 import functools
-from AFX.utils.frame_utils import frame_signal
+from AFX.utils.frame_utils import frame_signal, frame_times
 
 
 def framewise_extractor(feature_func: Callable) -> Callable:
     """
     Decorator to apply a feature function frame-wise over an audio signal.
     The decorated function will accept frame_size and hop_length kwargs.
-    If frame_size or hop_length are not provided,
-    the function is called on the whole signal.
-    Returns a dict with the same key as the feature function,
+    If frame_size or hop_length are not provided, or the signal is shorter
+    than one frame, the function is called once on the whole signal (no
+    zero padding, so statistics of a short clip are not diluted by
+    padding). Returns a dict with the same key as the feature function,
     with values stacked over frames.
     """
     @functools.wraps(feature_func)
@@ -27,8 +28,11 @@ def framewise_extractor(feature_func: Callable) -> Callable:
             else:
                 return feature_func(signal, sr, *args, return_metadata=return_metadata, **kwargs)
 
-        # Use our custom framing function
-        frames = frame_signal(signal, frame_length=frame_size, hop_length=hop_length)
+        signal = np.asarray(signal)
+        if len(signal) < frame_size:
+            frames = signal.reshape(-1, 1)
+        else:
+            frames = frame_signal(signal, frame_length=frame_size, hop_length=hop_length)
 
         results = []
         key = None
@@ -67,12 +71,10 @@ def framewise_extractor(feature_func: Callable) -> Callable:
             stacked = np.stack(results, axis=-1)
         result = {key: stacked}
 
-        # Add metadata if requested
         if return_metadata:
-            # Calculate frame times: frame_index * hop_length / sr
-            n_frames = frames.shape[1]
-            times = np.arange(n_frames) * hop_length / sr
-            result['metadata'] = {'times': times}
+            result['metadata'] = {
+                'times': frame_times(frames.shape[1], sr, hop_length, frames.shape[0])
+            }
 
         return result
     return wrapper
