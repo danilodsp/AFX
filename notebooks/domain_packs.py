@@ -55,7 +55,7 @@ def _reporthook(block_num: int, block_size: int, total_size: int) -> None:
         return
     done = min(block_num * block_size, total_size)
     pct = 100.0 * done / total_size
-    sys.stdout.write(f'\r    downloading… {pct:5.1f}%  '
+    sys.stdout.write(f'\r    downloading... {pct:5.1f}%  '
                      f'({done/1e6:7.1f} / {total_size/1e6:7.1f} MB)')
     sys.stdout.flush()
     if done >= total_size:
@@ -123,7 +123,7 @@ def _prepare_ravdess(root: str) -> str:
     marker = os.path.join(d, 'Actor_01')
     if not os.path.isdir(marker):
         arc = download_file(_RAVDESS_URL, os.path.join(root, 'ravdess.zip'))
-        print('    extracting…')
+        print('    extracting...')
         _extract(arc, d)
     return d
 
@@ -155,7 +155,7 @@ def _prepare_esc50(root: str) -> str:
     inner = os.path.join(d, 'ESC-50-master')
     if not os.path.isdir(inner):
         arc = download_file(_ESC50_URL, os.path.join(root, 'esc50.zip'))
-        print('    extracting…')
+        print('    extracting...')
         _extract(arc, d)
     return inner
 
@@ -188,7 +188,7 @@ def _prepare_gtzan(root: str) -> str:
         if os.path.isdir(os.path.join(d, cand)):
             return os.path.join(d, cand)
     arc = download_file(_GTZAN_URL, os.path.join(root, 'gtzan.tar.gz'))
-    print('    extracting…')
+    print('    extracting...')
     _extract(arc, d)
     for cand in ('genres', 'genres_original'):
         if os.path.isdir(os.path.join(d, cand)):
@@ -217,7 +217,7 @@ def _prepare_dcase_pump(root: str) -> str:
     inner = os.path.join(d, 'pump')
     if not os.path.isdir(inner):
         arc = download_file(_DCASE_URL, os.path.join(root, 'dcase_pump.zip'))
-        print('    extracting…')
+        print('    extracting...')
         _extract(arc, d)
     return inner
 
