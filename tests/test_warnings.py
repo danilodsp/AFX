@@ -44,23 +44,26 @@ def test_sample_rate_mismatch():
 def test_batch_failed_file(tmp_path):
     folder = _write_tones(tmp_path / 'audio', [0.25])
     (folder / 'broken.wav').write_bytes(b'not audio')
-    with pytest.warns(afx.AFXWarning, match='1 file'):
+    with pytest.warns(afx.AFXWarning, match='1 file') as record:
         afx.extract_features_from_folder(str(folder), {'sample_rate': SR, 'features': ['zcr']},
                                          str(tmp_path / 'f.json'), verbose=False)
+    assert record[0].filename == __file__
 
 
 def test_batch_empty_folder(tmp_path):
     (tmp_path / 'empty').mkdir()
-    with pytest.warns(afx.AFXWarning, match='no audio files'):
+    with pytest.warns(afx.AFXWarning, match='no audio files') as record:
         afx.extract_features_from_folder(str(tmp_path / 'empty'), {'sample_rate': SR, 'features': ['zcr']},
                                          str(tmp_path / 'f.json'), verbose=False)
+    assert record[0].filename == __file__
 
 
 def test_batch_ragged_columns(tmp_path):
     folder = _write_tones(tmp_path / 'audio', [0.25, 0.5])
     config = {'sample_rate': SR, 'features': ['zcr'], 'aggregation': 'stack'}
-    with pytest.warns(afx.AFXWarning, match='different numbers of values'):
+    with pytest.warns(afx.AFXWarning, match='different numbers of values') as record:
         afx.extract_features_from_folder(str(folder), config, str(tmp_path / 'f.csv'), verbose=False)
+    assert record[0].filename == __file__
 
 
 def test_filter_by_category_leaves_numpy_warnings():

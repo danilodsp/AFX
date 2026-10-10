@@ -41,7 +41,7 @@ def _table(results: dict[str, Any]) -> tuple[list[str], list[str], list[dict[str
             'Files produced different numbers of values, so some cells are empty. With '
             "aggregation='stack' every clip must have the same length; use a pooling aggregation otherwise.",
             AFXWarning,
-            stacklevel=3,
+            stacklevel=5,  # _table < _write_csv/_write_parquet < _extract_folder < extract_features_from_folder
         )
     return list(results), columns, rows
 
@@ -371,13 +371,13 @@ def _extract_folder(
         errors_path = f'{output_path}.errors.json'
         with open(errors_path, 'w', encoding='utf-8') as f:
             json.dump(errors, f, indent=2)
-        warnings.warn(f'{len(errors)} file(s) failed; details in {errors_path}', AFXWarning, stacklevel=2)
+        warnings.warn(f'{len(errors)} file(s) failed; details in {errors_path}', AFXWarning, stacklevel=3)
 
     if total == 0:
         warnings.warn(
             f'no audio files with extensions {tuple(file_exts)} found under {folder_path}',
             AFXWarning,
-            stacklevel=2,
+            stacklevel=3,
         )
 
     provenance = build_provenance(
