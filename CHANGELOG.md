@@ -71,7 +71,7 @@
 - Dataset statistics: `extract_features_from_folder(dataset_stats=True)` and `afx --stats` write per-column count, mean, variance, min, max and NaN count to `<output>.stats.json` in one streaming pass (Welford, with Chan's merge for workers); `afx.load_stats` and `afx_audio.sklearn.scaler_from_stats` turn it into a fitted `StandardScaler`.
 - Coverage: `"coverage": true` (also `coverage=` on `extract_features_from_folder`, `AFXFeatureExtractor`, `AFXFeatureModule`, and `afx --coverage`) adds `<feature>_valid_frac`, the fraction of frames a feature's statistics are based on. `afx.valid_fraction`, `metadata['voiced']` from `extract_pitch`, and `feature_info(name)['undefined']`, which says when each feature is NaN.
 - Numbered notebooks `01_quickstart` to `08_egemaps` that run on synthetic audio without a dataset, `notebooks/demo_data.py` (synthetic clips, and voices with known F0, jitter and shimmer), and `tests/test_notebooks.py` (runs them with `AFX_RUN_NOTEBOOKS=1`).
-- `benchmarks/bench_features.py --librosa --torch-batch N --markdown` and the `docs/benchmarks.md` page; `docs/reproducibility.md`; a JOSS paper draft in `paper/`.
+- `benchmarks/bench_features.py --librosa --torch-batch N --markdown` and the `docs/benchmarks.md` page; `docs/reproducibility.md`.
 - `afx_audio.methods.lpc.levinson`.
 - `benchmarks/baselines.py` and `docs/baselines.md`: ESC-50 accuracy over the 5 official folds for every preset and `config.json`, with a fixed logistic regression and random forest, config hashes, extraction time and versions.
 - `config_hash` hashes `afx_audio.provenance.computed_config(config)`: every default written out, labels and `flatten` dropped. A preset, its copy in a file and the config the scikit-learn transformer builds from it hash alike.

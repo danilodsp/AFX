@@ -189,3 +189,6 @@ notebooks/datasets/
 
 # mkdocs output
 site/
+
+# Paper drafts are kept outside version control until submission
+paper/
