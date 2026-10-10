@@ -106,3 +106,26 @@ def test_version_without_installed_metadata():
 def test_unknown_attribute_error_names_the_module():
     with pytest.raises(AttributeError, match="module 'afx_audio' has no attribute 'nope'"):
         afx_audio.nope  # noqa: B018
+
+
+_BLOCK_TORCH = "import sys; sys.modules['torch'] = None\n"
+
+
+@pytest.mark.parametrize('statement', [
+    'import afx_audio.torch',
+    'import afx_audio.torch.functional',
+    'import afx_audio.torch.module',
+    'from afx_audio.torch import functional',
+    'from afx_audio.torch import AFXFeatureModule',
+])
+def test_torch_import_without_torch_raises_install_hint(statement):
+    result = _run(_BLOCK_TORCH + statement)
+    assert result.returncode != 0
+    assert 'ImportError: afx_audio.torch requires PyTorch' in result.stderr
+    assert 'afx-audio[torch]' in result.stderr
+
+
+def test_core_import_without_torch():
+    result = _run(_BLOCK_TORCH + 'import afx_audio\nprint(afx_audio.feature_info("mfcc")["torch"]["function"])')
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == 'afx_audio.torch.functional.mfcc'
