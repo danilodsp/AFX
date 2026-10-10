@@ -117,7 +117,6 @@ def test_batch_stack_aggregation(audio_folder, small_config, tmp_path):
 
 
 def test_batch_errors_separated(audio_folder, small_config, tmp_path):
-    # Add a corrupt "wav"
     bad = audio_folder / 'broken.wav'
     bad.write_bytes(b'this is not audio')
     out = str(tmp_path / 'features.csv')

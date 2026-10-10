@@ -77,9 +77,7 @@ def test_extract_rms_energy():
 
 def test_extract_zero_crossing_rate_compare_with_librosa():
     """Test that our implementation closely matches librosa's implementation."""
-
-    # Create a test signal with known zero-crossings
-    np.random.seed(42)  # for reproducibility
+    np.random.seed(42)
     signal = np.random.randn(10000)
     frame_size = 2048
     hop_length = 512
@@ -94,7 +92,6 @@ def test_extract_zero_crossing_rate_compare_with_librosa():
     np.testing.assert_allclose(result['zcr'], zcr_librosa, atol=1e-12)
     zcr_custom = result['zcr']
 
-    # Check metadata return
     result_with_meta = time_domain.extract_zero_crossing_rate(
         signal, sr=sr, frame_size=frame_size, hop_length=hop_length,
         return_metadata=True
