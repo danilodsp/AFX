@@ -39,12 +39,12 @@ wall time for all 2000 clips including file hashing.
 <!-- results start -->
 | Config | Config hash | Sample rate | Columns | NaN columns | Extraction (s) | Logistic regression | Random forest |
 |---|---|---:|---:|---:|---:|---:|---:|
-| `speech@1` | `71f5a1447dc2` | 16000 | 154 | 2 (1%) | 259 | 0.577 ± 0.038 | 0.604 ± 0.015 |
-| `bioacoustics@1` | `f2fbc8a2bb11` | 32000 | 194 | 0 (0%) | 134 | 0.548 ± 0.028 | 0.548 ± 0.034 |
-| `music@1` | `cef990b7ffe1` | 22050 | 114 | 0 (0%) | 270 | 0.617 ± 0.022 | 0.605 ± 0.027 |
-| `machinery@1` | `563073e5d310` | 16000 | 96 | 0 (0%) | 177 | 0.557 ± 0.026 | 0.546 ± 0.014 |
-| `egemaps@1` | `cd530990145e` | 16000 | 88 | 0 (0%) | 275 | 0.491 ± 0.023 | 0.508 ± 0.025 |
-| `config.json` | `867dfd4b73ab` | 22050 | 343 | 2 (1%) | 665 | 0.476 ± 0.040 | 0.530 ± 0.032 |
+| `speech@1` | `71f5a1447dc2` | 16000 | 154 | 2 (1%) | 184 | 0.583 ± 0.039 | 0.612 ± 0.020 |
+| `bioacoustics@1` | `f2fbc8a2bb11` | 32000 | 194 | 0 (0%) | 121 | 0.548 ± 0.028 | 0.548 ± 0.034 |
+| `music@1` | `cef990b7ffe1` | 22050 | 114 | 0 (0%) | 167 | 0.617 ± 0.022 | 0.605 ± 0.027 |
+| `machinery@1` | `563073e5d310` | 16000 | 96 | 0 (0%) | 100 | 0.556 ± 0.030 | 0.541 ± 0.028 |
+| `egemaps@1` | `cd530990145e` | 16000 | 88 | 0 (0%) | 196 | 0.489 ± 0.020 | 0.514 ± 0.023 |
+| `config.json` | `867dfd4b73ab` | 22050 | 343 | 2 (1%) | 669 | 0.477 ± 0.038 | 0.536 ± 0.030 |
 <!-- results end -->
 
 <!-- environment start -->
@@ -63,15 +63,15 @@ of AST pretrained on AudioSet (Gong et al., 2021). These are linear and
 random-forest classifiers on clip-level statistics of hand-crafted features,
 with default hyperparameters and no augmentation; they exist to compare
 presets with each other and to show when a change to AFX moves them, not to
-compete with learned representations. The fold standard deviation is 0.014
-to 0.040, so differences under about 0.03 are not resolved by five folds, for
+compete with learned representations. The fold standard deviation is 0.020
+to 0.039, so differences under about 0.03 are not resolved by five folds, for
 example `speech@1`, `machinery@1` and `bioacoustics@1` with the logistic
 regression, or `speech@1` against `music@1` and `bioacoustics@1` against
 `machinery@1` with the random forest. `egemaps@1` is lower,
 which fits a set of 88 functionals built around voiced speech (F0, jitter,
 shimmer, formants) applied to environmental sound. `config.json` aggregates
 with the mean only, so its 343 columns hold no within-clip spread; the
-logistic regression reaches 0.476 on it and the random forest 0.530. The NaN
+logistic regression reaches 0.477 on it and the random forest 0.536. The NaN
 columns are `pitch` statistics of clips without a voiced frame (5 clips for
 `speech@1`, 280 for `config.json`) and F3 (`formants_2`) in 6 clips for
 `config.json`.
@@ -81,18 +81,18 @@ columns are `pitch` statistics of clips without a voiced frame (5 clips for
 <!-- folds start -->
 | Config | Model | Fold 1 | Fold 2 | Fold 3 | Fold 4 | Fold 5 |
 |---|---|---:|---:|---:|---:|---:|
-| `speech@1` | Logistic regression | 0.550 | 0.545 | 0.570 | 0.650 | 0.570 |
-| `speech@1` | Random forest | 0.593 | 0.585 | 0.630 | 0.608 | 0.605 |
+| `speech@1` | Logistic regression | 0.568 | 0.532 | 0.580 | 0.652 | 0.580 |
+| `speech@1` | Random forest | 0.588 | 0.598 | 0.645 | 0.623 | 0.608 |
 | `bioacoustics@1` | Logistic regression | 0.525 | 0.530 | 0.562 | 0.598 | 0.527 |
 | `bioacoustics@1` | Random forest | 0.557 | 0.505 | 0.583 | 0.585 | 0.510 |
 | `music@1` | Logistic regression | 0.627 | 0.623 | 0.600 | 0.650 | 0.588 |
 | `music@1` | Random forest | 0.598 | 0.610 | 0.603 | 0.650 | 0.568 |
-| `machinery@1` | Logistic regression | 0.550 | 0.532 | 0.562 | 0.605 | 0.537 |
-| `machinery@1` | Random forest | 0.555 | 0.537 | 0.547 | 0.565 | 0.525 |
-| `egemaps@1` | Logistic regression | 0.517 | 0.492 | 0.453 | 0.512 | 0.482 |
-| `egemaps@1` | Random forest | 0.505 | 0.512 | 0.492 | 0.552 | 0.477 |
-| `config.json` | Logistic regression | 0.480 | 0.445 | 0.510 | 0.527 | 0.420 |
-| `config.json` | Random forest | 0.502 | 0.492 | 0.550 | 0.580 | 0.525 |
+| `machinery@1` | Logistic regression | 0.542 | 0.540 | 0.557 | 0.613 | 0.527 |
+| `machinery@1` | Random forest | 0.562 | 0.527 | 0.560 | 0.562 | 0.492 |
+| `egemaps@1` | Logistic regression | 0.505 | 0.492 | 0.455 | 0.510 | 0.482 |
+| `egemaps@1` | Random forest | 0.507 | 0.490 | 0.510 | 0.557 | 0.505 |
+| `config.json` | Logistic regression | 0.477 | 0.448 | 0.510 | 0.527 | 0.425 |
+| `config.json` | Random forest | 0.517 | 0.490 | 0.557 | 0.578 | 0.537 |
 <!-- folds end -->
 
 ## References
