@@ -1,9 +1,9 @@
 # AFX
 
 AFX turns audio clips into fixed-length feature vectors for machine
-learning. It implements 47 time-domain, autocorrelation, spectral,
-spectrogram, cepstral, harmonic and linear-prediction features and the
-eGeMAPS v02 parameter set with NumPy and SciPy, selects
+learning. It implements 47 features (time-domain, autocorrelation,
+spectral, spectrogram, cepstral, harmonic, linear-prediction, and the
+eGeMAPS v02 parameter set) with NumPy and SciPy, selects
 and parameterizes them from a JSON config, and aggregates the per-frame
 values into one vector per clip. The same config drives a scikit-learn
 transformer, a parallel batch extractor with a CLI, and (for 20 features)

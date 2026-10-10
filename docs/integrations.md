@@ -30,8 +30,9 @@ operations and the same conventions as the NumPy path: mel spectrogram,
 MFCC, MFCC deltas, GFCC, chroma_stft, the twelve spectral descriptors
 (centroid, bandwidth, rolloff, entropy, flatness, flux, skewness,
 kurtosis, slope, crest, decrease, contrast), zero-crossing rate and RMS. `afx.torch.supported_features()`
-lists them, and the tests hold every one to 1e-6 of the NumPy extractor
-at two framings. Inputs are `(time,)` or
+lists them, and the tests hold every one to rtol 1e-9 of the NumPy
+extractor in float64 at two framings (`afx.feature_info(name)['torch']`
+gives each tolerance). Inputs are `(time,)` or
 `(batch, time)` tensors on any device. Gradients reach the waveform except
 through the counting in `zcr` and the bin selection in `spectral_rolloff`.
 
