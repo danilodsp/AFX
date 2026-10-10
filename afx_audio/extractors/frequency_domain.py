@@ -16,7 +16,7 @@ import numpy as np
 
 from afx_audio.methods.stft import magnitude_spectrogram, stft
 from afx_audio.utils.frame_utils import frame_times
-from afx_audio.utils.validation import validate_signal
+from afx_audio.utils.validation import float64_signal
 
 __all__ = [
     'extract_spectral_centroid',
@@ -50,8 +50,8 @@ def _spectrum(
     (n_freq, n_frames). Whole-signal mode (either is None): single FFT of
     the Hann-windowed full signal, shape (n_freq, 1).
     """
+    signal = float64_signal(signal)
     if frame_size is None or hop_length is None:
-        signal = validate_signal(signal)
         n = len(signal)
         windowed = signal * _periodic_hann(n)
         mag = np.abs(np.fft.rfft(windowed, n=n))[:, np.newaxis]
@@ -94,7 +94,7 @@ def extract_spectral_centroid(
     *,
     frame_size: int | None = 2048,
     hop_length: int | None = 512,
-    center: bool = False,
+    center: bool = True,
     return_metadata: bool = False,
 ) -> dict[str, Any]:
     """Magnitude-weighted mean frequency in Hz, as librosa.feature.spectral_centroid. 0 for a silent frame."""
@@ -114,7 +114,7 @@ def extract_spectral_bandwidth(
     *,
     frame_size: int | None = 2048,
     hop_length: int | None = 512,
-    center: bool = False,
+    center: bool = True,
     return_metadata: bool = False,
 ) -> dict[str, Any]:
     """Magnitude-weighted standard deviation of frequency around the centroid, in Hz (librosa, p=2)."""
@@ -139,7 +139,7 @@ def extract_spectral_rolloff(
     frame_size: int | None = 2048,
     hop_length: int | None = 512,
     roll_percent: float = 0.85,
-    center: bool = False,
+    center: bool = True,
     power: float = 1.0,
     return_metadata: bool = False,
 ) -> dict[str, Any]:
@@ -168,10 +168,10 @@ def extract_spectral_skewness(
     *,
     frame_size: int | None = 2048,
     hop_length: int | None = 512,
-    center: bool = False,
+    center: bool = True,
     return_metadata: bool = False,
 ) -> dict[str, Any]:
-    """Third standardized moment of frequency under the magnitude spectrum. 0 for a silent or single-bin frame."""
+    """Third standardized moment of frequency under the magnitude spectrum. NaN for a silent or single-bin frame."""
     mag, freqs = _spectrum(signal, sr, frame_size, hop_length, center)
     msum = mag.sum(axis=0)
     safe = np.where(msum > 0, msum, 1.0)
@@ -181,7 +181,7 @@ def extract_spectral_skewness(
     safe_bw = np.where(bandwidth > 0, bandwidth, 1.0)
     z = dev / safe_bw
     skewness = (z * z * z * mag).sum(axis=0) / safe
-    skewness = np.where((msum > 0) & (bandwidth > 0), skewness, 0.0)
+    skewness = np.where((msum > 0) & (bandwidth > 0), skewness, np.nan)
     result: dict[str, Any] = {'spectral_skewness': skewness}
     return _maybe_metadata(result, 'spectral_skewness', skewness, sr,
                            hop_length, frame_size, center, return_metadata,
@@ -194,19 +194,24 @@ def extract_spectral_slope(
     *,
     frame_size: int | None = 2048,
     hop_length: int | None = 512,
-    center: bool = False,
+    center: bool = True,
     return_metadata: bool = False,
 ) -> dict[str, Any]:
-    """Least-squares slope of 20 log10(|X| + 1e-10) against frequency, in dB per Hz."""
+    """
+    Least-squares slope of 20 log10(|X| + 1e-10) against frequency, in dB per Hz.
+
+    NaN for a silent frame, where the slope would only be that of the
+    1e-10 floor, and for a single-bin spectrum.
+    """
     mag, freqs = _spectrum(signal, sr, frame_size, hop_length, center)
     mag_db = 20.0 * np.log10(mag + _EPS)
     x = freqs - freqs.mean()
     denom = np.sum(x ** 2)
     if denom > 0:
         # sum(x - x_mean) == 0, so centering y is unnecessary
-        slope = (x @ mag_db) / denom
+        slope = np.where(mag.any(axis=0), (x @ mag_db) / denom, np.nan)
     else:
-        slope = np.zeros(mag.shape[1])
+        slope = np.full(mag.shape[1], np.nan)
     result: dict[str, Any] = {'spectral_slope': slope}
     return _maybe_metadata(result, 'spectral_slope', slope, sr,
                            hop_length, frame_size, center, return_metadata,
@@ -219,7 +224,7 @@ def extract_spectral_kurtosis(
     *,
     frame_size: int | None = 2048,
     hop_length: int | None = 512,
-    center: bool = False,
+    center: bool = True,
     fisher: bool = True,
     return_metadata: bool = False,
 ) -> dict[str, Any]:
@@ -255,18 +260,18 @@ def extract_spectral_crest(
     *,
     frame_size: int | None = 2048,
     hop_length: int | None = 512,
-    center: bool = False,
+    center: bool = True,
     return_metadata: bool = False,
 ) -> dict[str, Any]:
     """
     Largest over mean magnitude of the spectrum, per frame.
 
     1 for a flat spectrum; a sinusoid gives about frame_size / 4 with the
-    Hann window (its energy spreads over three bins). 1 for a silent frame.
+    Hann window (its energy spreads over three bins). NaN for a silent frame.
     """
     mag, _ = _spectrum(signal, sr, frame_size, hop_length, center)
     mean = mag.mean(axis=0)
-    crest = np.divide(mag.max(axis=0), mean, out=np.ones_like(mean), where=mean > 0)
+    crest = np.divide(mag.max(axis=0), mean, out=np.full_like(mean, np.nan), where=mean > 0)
     result: dict[str, Any] = {'spectral_crest': crest}
     return _maybe_metadata(result, 'spectral_crest', crest, sr,
                            hop_length, frame_size, center, return_metadata,
@@ -279,7 +284,7 @@ def extract_spectral_decrease(
     *,
     frame_size: int | None = 2048,
     hop_length: int | None = 512,
-    center: bool = False,
+    center: bool = True,
     return_metadata: bool = False,
 ) -> dict[str, Any]:
     """
@@ -287,16 +292,17 @@ def extract_spectral_decrease(
 
     a_k is the magnitude of bin k, with a_1 the DC bin, as in the Timbre
     Toolbox and Lerch's pyACA. Negative when the spectrum rises above its
-    first bin on average. 0 for a silent frame.
+    first bin on average. NaN when bins 2..K carry no energy (silence) or
+    there is a single bin.
     """
     a, _ = _spectrum(signal, sr, frame_size, hop_length, center)
     if len(a) < 2:
-        decrease = np.zeros(a.shape[1])
+        decrease = np.full(a.shape[1], np.nan)
     else:
         k = np.arange(1, len(a))[:, np.newaxis]
         num = ((a[1:] - a[:1]) / k).sum(axis=0)
         den = a[1:].sum(axis=0)
-        decrease = np.divide(num, den, out=np.zeros_like(num), where=den > 0)
+        decrease = np.divide(num, den, out=np.full_like(num, np.nan), where=den > 0)
     result: dict[str, Any] = {'spectral_decrease': decrease}
     return _maybe_metadata(result, 'spectral_decrease', decrease, sr,
                            hop_length, frame_size, center, return_metadata,
@@ -309,21 +315,22 @@ def extract_spectral_entropy(
     *,
     frame_size: int = 2048,
     hop_length: int = 512,
-    center: bool = False,
+    center: bool = True,
     return_metadata: bool = False,
 ) -> dict[str, Any]:
     """
     Shannon entropy in bits of the magnitude spectrum normalized to sum 1.
 
     At most log2(frame_size // 2 + 1) for a flat spectrum, near 0 for a
-    single tone. 0 for a silent frame.
+    single tone. NaN for a silent frame (magnitude sum at most 1e-10),
+    which has no distribution to normalize.
     """
     mag, _ = _spectrum(signal, sr, frame_size, hop_length, center)
     msum = mag.sum(axis=0)
     safe = np.where(msum > _EPS, msum, 1.0)
     ps = mag / safe
     entropy = -np.sum(ps * np.log2(ps + _EPS), axis=0)
-    entropy = np.where(msum > _EPS, entropy, 0.0)
+    entropy = np.where(msum > _EPS, entropy, np.nan)
     result: dict[str, Any] = {'spectral_entropy': entropy}
     return _maybe_metadata(result, 'spectral_entropy', entropy, sr,
                            hop_length, frame_size, center, return_metadata,
@@ -336,7 +343,7 @@ def extract_spectral_flatness(
     *,
     frame_size: int = 2048,
     hop_length: int = 512,
-    center: bool = False,
+    center: bool = True,
     return_metadata: bool = False,
 ) -> dict[str, Any]:
     """
@@ -380,7 +387,7 @@ def extract_spectral_contrast(
     20 log10 magnitude ratio.
     """
     stft_matrix = stft(
-        signal, frame_size=frame_size, hop_length=hop_length,
+        float64_signal(signal), frame_size=frame_size, hop_length=hop_length,
         window='hann', center=center, pad_mode='constant',
     )
     S_mag = magnitude_spectrogram(stft_matrix)
@@ -453,7 +460,7 @@ def extract_spectral_flux(
     carries the time of frame i + 1.
     """
     stft_matrix = stft(
-        signal, frame_size=frame_size, hop_length=hop_length,
+        float64_signal(signal), frame_size=frame_size, hop_length=hop_length,
         window='hann', center=center, pad_mode='reflect',
     )
     magnitude = magnitude_spectrogram(stft_matrix)

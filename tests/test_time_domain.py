@@ -89,7 +89,7 @@ def test_extract_zero_crossing_rate_compare_with_librosa():
         signal, sr=sr, frame_size=frame_size, hop_length=hop_length
     )
     zcr_librosa = librosa.feature.zero_crossing_rate(
-        signal, frame_length=frame_size, hop_length=hop_length, center=False
+        signal, frame_length=frame_size, hop_length=hop_length
     )[0]
     np.testing.assert_allclose(result['zcr'], zcr_librosa, atol=1e-12)
     zcr_custom = result['zcr']
@@ -102,8 +102,6 @@ def test_extract_zero_crossing_rate_compare_with_librosa():
     assert 'metadata' in result_with_meta
     assert 'times' in result_with_meta['metadata']
 
-    # Frame centers (no center padding): librosa's n_fft offset convention
-    expected_times = librosa.frames_to_time(
-        np.arange(len(zcr_custom)), sr=sr, hop_length=hop_length, n_fft=frame_size
-    )
+    # Centered frames, as librosa's default
+    expected_times = librosa.frames_to_time(np.arange(len(zcr_custom)), sr=sr, hop_length=hop_length)
     assert np.allclose(result_with_meta['metadata']['times'], expected_times)

@@ -11,6 +11,8 @@ except ImportError as e:
     raise ImportError('afx_audio.utils.visualization requires matplotlib: pip install "afx-audio[plot]"') from e
 import numpy as np
 
+from afx_audio.utils.frame_utils import frame_times
+
 
 def plot_mfcc(
     mfcc: np.ndarray,
@@ -19,6 +21,9 @@ def plot_mfcc(
     title: str = 'MFCC',
     ax: plt.Axes | None = None,
     show: bool = True,
+    *,
+    frame_size: int = 2048,
+    center: bool = True,
 ) -> plt.Axes:
     """
     Plot a Mel-frequency cepstral coefficients (MFCC) matrix as an image.
@@ -32,8 +37,11 @@ def plot_mfcc(
             axes are created.
         show: Whether to call plt.show(). Only honored when a new figure was
             created (ax was None).
+        frame_size: Frame size used in feature extraction
+        center: Whether the frames were centered
     Returns:
-        The matplotlib Axes containing the plot.
+        The matplotlib Axes containing the plot, with each column drawn at
+        the frame time the extractors report in ``metadata['times']``.
     """
     mfcc = np.asarray(mfcc)
     if mfcc.ndim != 2 or mfcc.shape[1] == 0 or mfcc.shape[0] == 0:
@@ -43,8 +51,10 @@ def plot_mfcc(
     created_fig = ax is None
     if ax is None:
         _, ax = plt.subplots(figsize=(10, 4))
-    time_axis = np.arange(mfcc.shape[1]) * hop_length / sr
-    extent = (float(time_axis[0]), float(time_axis[-1]), 0.0, float(mfcc.shape[0]))
+    time_axis = frame_times(mfcc.shape[1], sr, hop_length, frame_size, center)
+    # Each column spans one hop around its frame time
+    half_hop = 0.5 * hop_length / sr
+    extent = (float(time_axis[0]) - half_hop, float(time_axis[-1]) + half_hop, 0.0, float(mfcc.shape[0]))
     im = ax.imshow(mfcc, aspect='auto', origin='lower', cmap='viridis', extent=extent)
     # MFCCs are dimensionless coefficients, not dB
     ax.figure.colorbar(im, ax=ax)
@@ -65,6 +75,9 @@ def plot_spectrogram(
     title: str = 'Spectrogram',
     ax: plt.Axes | None = None,
     show: bool = True,
+    *,
+    frame_size: int = 2048,
+    center: bool = True,
 ) -> plt.Axes:
     """
     Plot a spectrogram (in power scale, displayed in dB) as an image.
@@ -79,8 +92,11 @@ def plot_spectrogram(
             axes are created.
         show: Whether to call plt.show(). Only honored when a new figure was
             created (ax was None).
+        frame_size: Frame size (n_fft) used in feature extraction
+        center: Whether the frames were centered
     Returns:
-        The matplotlib Axes containing the plot.
+        The matplotlib Axes containing the plot, with each column drawn at
+        the frame time the extractors report in ``metadata['times']``.
 
     Notes:
         Frequency rows of an STFT spectrogram are linearly spaced bin centers
@@ -99,7 +115,7 @@ def plot_spectrogram(
     created_fig = ax is None
     if ax is None:
         _, ax = plt.subplots(figsize=(10, 4))
-    time_axis = np.arange(S.shape[1]) * hop_length / sr
+    time_axis = frame_times(S.shape[1], sr, hop_length, frame_size, center)
     # True linear bin center frequencies for the rows of S
     freq_axis = np.linspace(0, sr / 2, S.shape[0])
     mesh = ax.pcolormesh(time_axis, freq_axis, S_db, cmap='magma', shading='auto')

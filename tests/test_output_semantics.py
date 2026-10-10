@@ -1,0 +1,120 @@
+"""Output conventions shared by every built-in feature: dtype, framing and silent frames."""
+import inspect
+
+import numpy as np
+import pytest
+
+import afx_audio
+
+SR = 16000
+FEATURES = sorted(afx_audio.FEATURE_MAP)
+NOISE = np.random.default_rng(0).standard_normal(SR // 2) * 0.1
+
+
+@pytest.mark.parametrize('dtype', [np.float32, np.float64])
+@pytest.mark.parametrize('name', FEATURES)
+def test_output_is_float64(name, dtype):
+    out = afx_audio.FEATURE_MAP[name](NOISE.astype(dtype), SR, return_metadata=True)
+    assert out[name].dtype == np.float64
+    assert np.asarray(out['metadata']['times']).dtype == np.float64
+
+
+@pytest.mark.parametrize('dtype_name', ['float32', 'float64'])
+def test_torch_output_follows_input_dtype(dtype_name):
+    torch = pytest.importorskip('torch')
+    from afx_audio.torch import functional as F_afx
+    from afx_audio.torch.module import _TORCH_FEATURES
+
+    dtype = getattr(torch, dtype_name)
+    x = torch.as_tensor(NOISE, dtype=dtype)
+    for name, func in _TORCH_FEATURES.items():
+        assert func(x, SR).dtype == dtype, name
+    assert F_afx.delta(F_afx.mfcc(x, SR)).dtype == dtype
+
+
+FRAMED = [name for name in FEATURES if 'frame_size' in afx_audio.feature_info(name)['parameters']]
+
+
+def test_framed_features_share_frames_and_times():
+    # Centered by default everywhere, so one framing gives one time axis
+    signal = np.random.default_rng(1).standard_normal(SR // 2)
+    ref = np.arange(1 + len(signal) // 128) * 128 / SR
+    assert len(FRAMED) == 45
+    for name in FRAMED:
+        out = afx_audio.FEATURE_MAP[name](signal, SR, frame_size=512, hop_length=128, return_metadata=True)
+        # flux[i] compares frames i and i + 1 and carries the time of frame i + 1
+        expected = ref[1:] if name == 'spectral_flux' else ref
+        assert out[name].shape[-1] == len(expected), name
+        np.testing.assert_allclose(out['metadata']['times'], expected, rtol=0, atol=1e-12, err_msg=name)
+
+
+def test_torch_framing_defaults_match_numpy():
+    pytest.importorskip('torch')
+    from afx_audio.torch.module import _TORCH_FEATURES
+
+    for name, func in _TORCH_FEATURES.items():
+        torch_params = inspect.signature(func).parameters
+        numpy_params = afx_audio.feature_info(name)['parameters']
+        for key in ('frame_size', 'hop_length', 'center'):
+            assert torch_params[key].default == numpy_params[key], (name, key)
+
+
+@pytest.mark.parametrize('preset', afx_audio.list_presets())
+def test_preset_features_with_one_framing_share_frame_counts(preset):
+    config = afx_audio.load_preset(preset)
+    sr = config['sample_rate']
+    frames = afx_audio.extract_all_features(np.random.default_rng(2).standard_normal(sr), sr,
+                                            {**config, 'preserve_shape': True})
+    counts: dict[tuple, set] = {}
+    for name, params in config['features'].items():
+        defaults = afx_audio.feature_info(name)['parameters']
+        framing = (params.get('frame_size', defaults.get('frame_size')),
+                   params.get('hop_length', defaults.get('hop_length')))
+        if None in framing:
+            continue
+        counts.setdefault(framing, set()).add(frames[name].shape[-1] + (name == 'spectral_flux'))
+    assert all(len(n) == 1 for n in counts.values()), counts
+
+
+# Undefined on an all-zero frame: 0 / 0, or the log or normalized distribution of nothing
+NAN_ON_SILENCE = {
+    'crest_factor', 'kurtosis', 'energy_ratio', 'mobility', 'complexity', 'autocorr_snr', 'autocorr_peak_width',
+    'autocorr_decay_rate', 'spectral_entropy', 'spectral_skewness', 'spectral_slope', 'spectral_kurtosis',
+    'spectral_crest', 'spectral_decrease', 'pitch', 'thd', 'hnr', 'formants',
+}
+# The value librosa gives on silence
+REFERENCE_ON_SILENCE = {
+    'zcr': 0.0, 'spectral_centroid': 0.0, 'spectral_bandwidth': 0.0, 'spectral_rolloff': 0.0,
+    'spectral_flatness': 1.0, 'spectral_contrast': 0.0, 'chroma_stft': 0.0, 'tonnetz': 0.0, 'onset_strength': 0.0,
+    'lpc': 0.0,
+}
+
+
+@pytest.mark.parametrize('name', [n for n in FEATURES if not n.startswith('egemaps')])
+def test_silent_frames(name):
+    values = afx_audio.FEATURE_MAP[name](np.zeros(SR // 2), SR)[name]
+    if name in NAN_ON_SILENCE:
+        assert np.isnan(values).all()
+        assert afx_audio.feature_info(name)['undefined'] is not None
+    elif name in REFERENCE_ON_SILENCE:
+        np.testing.assert_allclose(values, REFERENCE_ON_SILENCE[name], rtol=0, atol=1e-12)
+    else:
+        assert np.isfinite(values).all()
+
+
+def test_torch_silent_frames_match_numpy():
+    torch = pytest.importorskip('torch')
+    from afx_audio.torch import AFXFeatureModule, supported_features
+
+    signal = np.concatenate([np.zeros(SR // 2), NOISE])
+    params = {'frame_size': 512, 'hop_length': 256}
+    names = supported_features()
+    module = AFXFeatureModule({name: params for name in names}, sample_rate=SR).double()
+    out = module(torch.as_tensor(signal))
+    for name in names:
+        expected = afx_audio.FEATURE_MAP[name](signal, SR, **params)[name]
+        got = out[name].numpy()
+        assert np.isnan(expected).any() == (name in NAN_ON_SILENCE), name
+        np.testing.assert_array_equal(np.isnan(got), np.isnan(expected), err_msg=name)
+        scale = max(1.0, np.nanmax(np.abs(expected)))
+        np.testing.assert_allclose(got, expected, rtol=1e-5, atol=1e-5 * scale, equal_nan=True, err_msg=name)

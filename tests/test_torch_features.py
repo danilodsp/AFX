@@ -346,7 +346,8 @@ def test_torch_delta_matches_numpy(width, order):
 
 
 @pytest.mark.parametrize('name', ['spectral_bandwidth', 'spectral_skewness', 'spectral_flux', 'rms_energy',
-                                  'spectral_contrast', 'mfcc_delta'])
+                                  'spectral_contrast', 'mfcc_delta', 'spectral_entropy', 'spectral_slope',
+                                  'spectral_kurtosis', 'spectral_crest', 'spectral_decrease'])
 def test_silent_frames_give_finite_gradients(name):
     x = np.random.default_rng(1).standard_normal(8000)
     x[:4000] = 0.0

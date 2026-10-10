@@ -30,8 +30,10 @@ def _tone(freq=440.0, duration=1.0, sr=SR):
     return np.sin(2 * np.pi * freq * t)
 
 
-def expected_n_frames(n_samples, frame_size, hop_length):
-    """Matches afx_audio.utils.frame_utils.frame_signal's framing convention."""
+def expected_n_frames(n_samples, frame_size, hop_length, center=True):
+    """Frame count of the extractors; centered frames pad frame_size // 2 on both sides."""
+    if center:
+        n_samples += 2 * (frame_size // 2)
     return max(1, 1 + (n_samples - frame_size) // hop_length)
 
 
@@ -69,7 +71,7 @@ def test_spectral_entropy_and_flatness_frame_counts(frame_size, hop_length):
     signal = _tone(440.0)
     # Previously frame_size < 2048 raised (np.zeros(-1)) and
     # frame_size > 2048 produced wrong-shaped output.
-    n_exp = 1 + (len(signal) - frame_size) // hop_length
+    n_exp = expected_n_frames(len(signal), frame_size, hop_length)
     ent = frequency_domain.extract_spectral_entropy(
         signal, sr=SR, frame_size=frame_size, hop_length=hop_length
     )['spectral_entropy']

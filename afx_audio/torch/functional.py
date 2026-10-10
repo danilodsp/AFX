@@ -260,8 +260,7 @@ def melspectrogram(
 ) -> torch.Tensor:
     """
     Mel-scaled power spectrogram, (..., n_mels, n_frames). Mirrors
-    ``afx_audio.extractors.cepstral_features.extract_melspectrogram``
-    (center=True).
+    ``afx_audio.extractors.cepstral_features.extract_melspectrogram``.
     """
     spec = stft(
         signal, frame_size=frame_size, hop_length=hop_length,
@@ -286,7 +285,7 @@ def mfcc(
     n_mels: int = 128,
     fmin: float = 0.0,
     fmax: float | None = None,
-    center: bool = False,
+    center: bool = True,
     top_db: float | None = 80.0,
     window: torch.Tensor | None = None,
     mel_fb: torch.Tensor | None = None,
@@ -294,8 +293,7 @@ def mfcc(
 ) -> torch.Tensor:
     """
     MFCCs, (..., n_mfcc, n_frames). Mirrors
-    ``afx_audio.extractors.cepstral_features.extract_mfcc`` (center=False
-    default): STFT -> power -> mel (slaney) -> dB (top_db below each
+    ``afx_audio.extractors.cepstral_features.extract_mfcc``: STFT -> power -> mel (slaney) -> dB (top_db below each
     clip's peak) -> DCT-II. Fully differentiable.
     """
     mel_spec = melspectrogram(
@@ -336,7 +334,7 @@ def spectral_centroid(
     *,
     frame_size: int = 2048,
     hop_length: int = 512,
-    center: bool = False,
+    center: bool = True,
     window: torch.Tensor | None = None,
 ) -> torch.Tensor:
     """Magnitude-weighted mean frequency, (..., n_frames)."""
@@ -354,7 +352,7 @@ def spectral_bandwidth(
     *,
     frame_size: int = 2048,
     hop_length: int = 512,
-    center: bool = False,
+    center: bool = True,
     window: torch.Tensor | None = None,
 ) -> torch.Tensor:
     """Magnitude-weighted std of frequency around the centroid."""
@@ -377,7 +375,7 @@ def spectral_rolloff(
     frame_size: int = 2048,
     hop_length: int = 512,
     roll_percent: float = 0.85,
-    center: bool = False,
+    center: bool = True,
     window: torch.Tensor | None = None,
     power: float = 1.0,
 ) -> torch.Tensor:
@@ -402,17 +400,17 @@ def spectral_entropy(
     *,
     frame_size: int = 2048,
     hop_length: int = 512,
-    center: bool = False,
+    center: bool = True,
     window: torch.Tensor | None = None,
 ) -> torch.Tensor:
-    """Shannon entropy (bits) of the normalized magnitude spectrum."""
+    """Shannon entropy (bits) of the normalized magnitude spectrum; NaN when silent."""
     mag, _ = _mag_and_freqs(signal, sr, frame_size, hop_length, center,
                             window)
     msum = mag.sum(dim=-2)
     safe = torch.where(msum > _EPS, msum, torch.ones_like(msum))
     ps = mag / safe.unsqueeze(-2)
     entropy = -(ps * torch.log2(ps + _EPS)).sum(dim=-2)
-    return torch.where(msum > _EPS, entropy, torch.zeros_like(entropy))
+    return torch.where(msum > _EPS, entropy, torch.full_like(entropy, float('nan')))
 
 
 def spectral_flatness(
@@ -421,7 +419,7 @@ def spectral_flatness(
     *,
     frame_size: int = 2048,
     hop_length: int = 512,
-    center: bool = False,
+    center: bool = True,
     window: torch.Tensor | None = None,
 ) -> torch.Tensor:
     """Geometric / arithmetic mean ratio of the power spectrum."""
@@ -442,8 +440,8 @@ def spectral_flux(
 ) -> torch.Tensor:
     """
     Euclidean distance between consecutive magnitude spectra,
-    (..., n_frames - 1). Mirrors extract_spectral_flux (center=True,
-    reflect padding).
+    (..., n_frames - 1). Mirrors extract_spectral_flux (reflect
+    padding when centered).
     """
     mag, _ = _mag_and_freqs(signal, sr, frame_size, hop_length, center,
                             window, pad_mode='reflect')
@@ -475,7 +473,7 @@ def zero_crossing_rate(
     *,
     frame_size: int | None = 2048,
     hop_length: int | None = 512,
-    center: bool = False,
+    center: bool = True,
     threshold: float = 1e-10,
 ) -> torch.Tensor:
     """
@@ -497,7 +495,7 @@ def rms_energy(
     *,
     frame_size: int | None = None,
     hop_length: int | None = None,
-    center: bool = False,
+    center: bool = True,
 ) -> torch.Tensor:
     """RMS per frame, (..., n_frames); the whole clip as one frame without frame sizes. Differentiable."""
     x, unbatched = _as_batch(signal)
@@ -511,10 +509,10 @@ def spectral_skewness(
     *,
     frame_size: int = 2048,
     hop_length: int = 512,
-    center: bool = False,
+    center: bool = True,
     window: torch.Tensor | None = None,
 ) -> torch.Tensor:
-    """Third standardized moment of frequency under the magnitude spectrum, (..., n_frames)."""
+    """Third standardized moment of frequency under the magnitude spectrum, (..., n_frames); NaN when silent."""
     mag, freqs = _mag_and_freqs(signal, sr, frame_size, hop_length, center, window)
     msum = mag.sum(dim=-2)
     safe = torch.where(msum > 0, msum, torch.ones_like(msum))
@@ -524,7 +522,7 @@ def spectral_skewness(
     safe_bw = torch.where(bandwidth > 0, bandwidth, torch.ones_like(bandwidth))
     z = dev / safe_bw.unsqueeze(-2)
     skew = (z ** 3 * mag).sum(dim=-2) / safe
-    return torch.where((msum > 0) & (bandwidth > 0), skew, torch.zeros_like(skew))
+    return torch.where((msum > 0) & (bandwidth > 0), skew, torch.full_like(skew, float('nan')))
 
 
 def spectral_slope(
@@ -533,14 +531,15 @@ def spectral_slope(
     *,
     frame_size: int = 2048,
     hop_length: int = 512,
-    center: bool = False,
+    center: bool = True,
     window: torch.Tensor | None = None,
 ) -> torch.Tensor:
-    """Least-squares slope of 20 log10(|X| + 1e-10) against frequency in dB/Hz, (..., n_frames)."""
+    """Least-squares slope of 20 log10(|X| + 1e-10) against frequency in dB/Hz, (..., n_frames); NaN when silent."""
     mag, freqs = _mag_and_freqs(signal, sr, frame_size, hop_length, center, window)
     mag_db = 20.0 * torch.log10(mag + _EPS)
     x = freqs - freqs.mean()
-    return (x.unsqueeze(-1) * mag_db).sum(dim=-2) / (x ** 2).sum()
+    slope = (x.unsqueeze(-1) * mag_db).sum(dim=-2) / (x ** 2).sum()
+    return torch.where((mag > 0).any(dim=-2), slope, torch.full_like(slope, float('nan')))
 
 
 def spectral_kurtosis(
@@ -549,7 +548,7 @@ def spectral_kurtosis(
     *,
     frame_size: int = 2048,
     hop_length: int = 512,
-    center: bool = False,
+    center: bool = True,
     fisher: bool = True,
     window: torch.Tensor | None = None,
 ) -> torch.Tensor:
@@ -573,15 +572,15 @@ def spectral_crest(
     *,
     frame_size: int = 2048,
     hop_length: int = 512,
-    center: bool = False,
+    center: bool = True,
     window: torch.Tensor | None = None,
 ) -> torch.Tensor:
-    """Largest over mean magnitude of the spectrum, (..., n_frames); 1 when silent."""
+    """Largest over mean magnitude of the spectrum, (..., n_frames); NaN when silent."""
     mag, _ = _mag_and_freqs(signal, sr, frame_size, hop_length, center, window)
     mean = mag.mean(dim=-2)
     positive = mean > 0
     ratio = mag.amax(dim=-2) / torch.where(positive, mean, torch.ones_like(mean))
-    return torch.where(positive, ratio, torch.ones_like(ratio))
+    return torch.where(positive, ratio, torch.full_like(ratio, float('nan')))
 
 
 def spectral_decrease(
@@ -590,16 +589,17 @@ def spectral_decrease(
     *,
     frame_size: int = 2048,
     hop_length: int = 512,
-    center: bool = False,
+    center: bool = True,
     window: torch.Tensor | None = None,
 ) -> torch.Tensor:
-    """Spectral decrease (Peeters, 2004) with the DC bin as reference, (..., n_frames); 0 when silent."""
+    """Spectral decrease (Peeters, 2004) with the DC bin as reference, (..., n_frames); NaN when silent."""
     mag, _ = _mag_and_freqs(signal, sr, frame_size, hop_length, center, window)
     k = torch.arange(1, mag.shape[-2], device=mag.device, dtype=mag.dtype).unsqueeze(-1)
     num = ((mag[..., 1:, :] - mag[..., :1, :]) / k).sum(dim=-2)
     den = mag[..., 1:, :].sum(dim=-2)
     positive = den > 0
-    return torch.where(positive, num / torch.where(positive, den, torch.ones_like(den)), torch.zeros_like(num))
+    ratio = num / torch.where(positive, den, torch.ones_like(den))
+    return torch.where(positive, ratio, torch.full_like(ratio, float('nan')))
 
 
 def _contrast_bands(sr: int, frame_size: int, n_bands: int, fmin: float, quantile: float):
@@ -742,7 +742,7 @@ def gfcc(
     n_gammatone: int = 64,
     fmin: float = 50.0,
     fmax: float | None = None,
-    center: bool = False,
+    center: bool = True,
     window: torch.Tensor | None = None,
     gammatone_fb: torch.Tensor | None = None,
     dct_mat: torch.Tensor | None = None,

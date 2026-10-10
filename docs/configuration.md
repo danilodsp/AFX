@@ -30,28 +30,34 @@ the rate as an argument and only warns when it differs from the config's.
 
 ## Framing
 
+Every framed feature takes `center`, and it defaults to `True` for all
+of them (librosa's convention): the signal is first zero-padded by
+`frame_size // 2` on each side, so frame i is centred on sample
+`i * hop_length`. Features with the same `frame_size` and `hop_length`
+then have the same number of frames and the same frame times
+(`spectral_flux` has one value fewer, stamped with the later frame of
+each pair). `center=False` gives frames that start at sample 0 and
+leaves out the partly padded frames at the edges. `egemaps` and
+`egemaps_lld` keep openSMILE's framing.
+
 Time-domain, autocorrelation and THD features use frames of `frame_size`
 samples every `hop_length` samples; samples after the last full frame are
-dropped. With `center=True` the signal is first zero-padded by
-`frame_size // 2` on each side (`zcr` repeats the edge samples, as librosa
-does), which gives the same frames and times as a centered STFT with the
-same sizes. Leave both sizes out (the default for most of them) to get one
-value for the whole clip; an uncentered clip shorter than one frame is also
-analyzed as a single unpadded frame. `zcr` defaults to 2048/512.
+dropped. Centered frames are zero-padded (`zcr` repeats the edge samples,
+as librosa does), which gives the same frames and times as a centered
+STFT with the same sizes. Leave both sizes out (the default for most of
+them) to get one value for the whole clip; an uncentered clip shorter
+than one frame is also analyzed as a single unpadded frame. `zcr`
+defaults to 2048/512.
 
 Spectral, spectrogram and cepstral features use the STFT with a periodic
-Hann window and `n_fft = frame_size`. With `center=True` the signal is
-first zero-padded by `frame_size // 2` on each side, as librosa does
-(`spectral_flux` pads by reflection). `center` defaults to `False` for
-MFCC, GFCC, deltas and the spectral shape features, and to `True` for
-`melspectrogram`, `chroma_stft`, `cqt`, `spectral_contrast` and
-`spectral_flux`. Set it explicitly when frame counts must agree across
-features. The spectral shape features also accept `frame_size=None` for
-one periodic-Hann-windowed FFT of the whole clip.
+Hann window and `n_fft = frame_size`, zero-padded when centered as
+librosa does (`spectral_flux` pads by reflection). The spectral shape
+features also accept `frame_size=None` for one periodic-Hann-windowed
+FFT of the whole clip.
 
-`pitch` and `hnr` work on unpadded frames of the raw signal (`hnr` pads a
-clip shorter than one frame with zeros); `thd` frames like the
-time-domain features.
+`pitch` and `hnr` zero-pad centered frames the same way and otherwise
+work on unpadded frames of the raw signal (`hnr` pads a clip shorter
+than one frame with zeros); `thd` frames like the time-domain features.
 
 With `return_metadata=True` every extractor also returns
 `metadata['times']`, the time in seconds of each frame's center in the
@@ -86,11 +92,18 @@ leave it `null` and scale in scikit-learn.
 ## Undefined frames and coverage
 
 A frame where a feature has no defined value is NaN: pitch on an unvoiced
-frame, HNR, THD and spectral kurtosis on a zero-energy frame, kurtosis on
-a constant frame, formants where fewer than `n_formants` resonances pass
-the bandwidth test. `afx.feature_info(name)['undefined']` states the
-condition for each feature (None for features that are always finite,
-which give 0 or a log floor on silence). Every statistic skips NaN
+frame, formants where fewer than `n_formants` resonances pass the
+bandwidth test, kurtosis on a constant frame (as in scipy), and on an
+all-zero frame every feature whose definition there is 0 / 0 or needs a
+normalized spectrum or autocorrelation: crest factor, energy ratio,
+mobility, complexity, autocorrelation SNR, peak width and decay rate,
+spectral entropy, skewness, kurtosis, slope, crest and decrease, THD and
+HNR. Features with a librosa counterpart keep librosa's value on
+silence instead (`zcr`, centroid, bandwidth and rolloff 0, flatness 1,
+MFCC at the log floor), and level features (RMS, energy, variance, mel
+power) are 0. `afx.feature_info(name)['undefined']` states the
+condition for each feature (None for features that are always finite).
+The torch path follows the same rules. Every statistic skips NaN
 frames, so `pitch_mean` is the mean f0 of the voiced frames; a statistic
 is NaN only when every frame is undefined, as for the pitch of silence
 or noise.
@@ -126,6 +139,12 @@ integer PCM must be scaled by the caller (`x / 32768.0` for int16).
 `afx.load_audio(path, sr)` returns mono float32 audio resampled with a
 polyphase filter, or the file's own rate with `sr=None`; `offset` and
 `duration` (seconds) read part of a file.
+
+Extractors compute in float64 and return float64 arrays for float32 and
+float64 input alike. Counts such as `autocorr_zero_crossings` are float64
+too, so any feature can mark a frame NaN. The torch functions and
+`AFXFeatureModule` return the dtype of the input tensor instead (float32
+in, float32 out); the module's filterbank buffers follow `.to(dtype)`.
 
 ## Presets
 

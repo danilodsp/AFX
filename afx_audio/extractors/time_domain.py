@@ -4,9 +4,10 @@ Time-domain feature extractors.
 Every extractor takes ``frame_size``, ``hop_length`` and ``center``. With
 both sizes set the signal is cut into frames of ``frame_size`` samples
 every ``hop_length`` samples (trailing samples that do not fill a frame are
-dropped) and the result has shape (n_frames,). ``center=True`` first
-zero-pads frame_size // 2 samples on both sides, so frame i is centred on
-sample i * hop_length as in librosa and in the centered STFT. With either
+dropped) and the result has shape (n_frames,). ``center=True`` (the
+default) first zero-pads frame_size // 2 samples on both sides, so frame i
+is centred on sample i * hop_length as in librosa and in the centered STFT.
+With either
 size left as None, or an uncentered clip shorter than one frame, the whole
 signal is analyzed as a single unpadded frame and the result has shape (1,).
 
@@ -48,7 +49,8 @@ _EPS = 1e-10
 
 
 def _result(name, values, frames, sr, frame_size, hop_length, center, return_metadata):
-    out = {name: np.asarray(values)}
+    # float64 even for counts, so every feature can mark a frame NaN
+    out = {name: np.asarray(values, dtype=np.float64)}
     if return_metadata:
         if sr is None:
             raise ValueError('sr is required when return_metadata=True')
@@ -65,7 +67,7 @@ def extract_zero_crossing_rate(
     *,
     frame_size: int | None = 2048,
     hop_length: int | None = 512,
-    center: bool = False,
+    center: bool = True,
     threshold: float = 1e-10,
     return_metadata: bool = False,
 ) -> dict[str, Any]:
@@ -92,7 +94,7 @@ def extract_variance(
     *,
     frame_size: int | None = None,
     hop_length: int | None = None,
-    center: bool = False,
+    center: bool = True,
     return_metadata: bool = False,
 ) -> dict[str, Any]:
     """Variance of the samples (population, ddof=0)."""
@@ -132,7 +134,7 @@ def extract_entropy(
     *,
     frame_size: int | None = None,
     hop_length: int | None = None,
-    center: bool = False,
+    center: bool = True,
     num_bins: int = 100,
     return_metadata: bool = False,
 ) -> dict[str, Any]:
@@ -151,14 +153,14 @@ def extract_crest_factor(
     *,
     frame_size: int | None = None,
     hop_length: int | None = None,
-    center: bool = False,
+    center: bool = True,
     return_metadata: bool = False,
 ) -> dict[str, Any]:
-    """Peak amplitude over RMS. 0 for an all-zero frame."""
+    """Peak amplitude over RMS. NaN for an all-zero frame."""
     frames = _frames(signal, frame_size, hop_length, center)
     peak = np.abs(frames).max(axis=1)
     rms = np.sqrt(np.mean(frames ** 2, axis=1))
-    crest = np.divide(peak, rms, out=np.zeros_like(rms), where=rms > 0)
+    crest = np.divide(peak, rms, out=np.full_like(rms, np.nan), where=rms > 0)
     return _result('crest_factor', crest, frames, sr, frame_size, hop_length, center, return_metadata)
 
 
@@ -168,7 +170,7 @@ def extract_kurtosis(
     *,
     frame_size: int | None = None,
     hop_length: int | None = None,
-    center: bool = False,
+    center: bool = True,
     fisher: bool = True,
     return_metadata: bool = False,
 ) -> dict[str, Any]:
@@ -197,7 +199,7 @@ def extract_short_time_energy(
     *,
     frame_size: int | None = None,
     hop_length: int | None = None,
-    center: bool = False,
+    center: bool = True,
     return_metadata: bool = False,
 ) -> dict[str, Any]:
     """Sum of squared samples."""
@@ -212,7 +214,7 @@ def extract_rms_energy(
     *,
     frame_size: int | None = None,
     hop_length: int | None = None,
-    center: bool = False,
+    center: bool = True,
     return_metadata: bool = False,
 ) -> dict[str, Any]:
     """Root mean square of the samples."""
@@ -227,16 +229,17 @@ def extract_energy_ratio(
     *,
     frame_size: int | None = None,
     hop_length: int | None = None,
-    center: bool = False,
+    center: bool = True,
     split: float = 0.5,
     return_metadata: bool = False,
 ) -> dict[str, Any]:
-    """Energy before ``split`` (fraction of the frame length) over energy after it."""
+    """Energy before ``split`` (fraction of the frame length) over energy after it plus 1e-10. NaN for silence."""
     frames = _frames(signal, frame_size, hop_length, center)
     n = int(frames.shape[1] * split)
     e1 = np.sum(frames[:, :n] ** 2, axis=1)
     e2 = np.sum(frames[:, n:] ** 2, axis=1)
-    return _result('energy_ratio', e1 / (e2 + _EPS), frames, sr, frame_size, hop_length, center, return_metadata)
+    ratio = np.where(e1 + e2 > 0, e1 / (e2 + _EPS), np.nan)
+    return _result('energy_ratio', ratio, frames, sr, frame_size, hop_length, center, return_metadata)
 
 
 def _difference_rms(frames):
@@ -256,7 +259,7 @@ def extract_mobility(
     *,
     frame_size: int | None = None,
     hop_length: int | None = None,
-    center: bool = False,
+    center: bool = True,
     return_metadata: bool = False,
 ) -> dict[str, Any]:
     """
@@ -264,10 +267,12 @@ def extract_mobility(
 
     Hjorth (1970), "EEG analysis based on time domain properties". RMS is
     used instead of standard deviation, so a DC offset lowers the value.
+    1e-10 is added to the denominator; NaN for an all-zero frame.
     """
     frames = _frames(signal, frame_size, hop_length, center)
     rms0, rms1, _ = _difference_rms(frames)
-    return _result('mobility', rms1 / (rms0 + _EPS), frames, sr, frame_size, hop_length, center, return_metadata)
+    mobility = np.where(rms0 > 0, rms1 / (rms0 + _EPS), np.nan)
+    return _result('mobility', mobility, frames, sr, frame_size, hop_length, center, return_metadata)
 
 
 def extract_complexity(
@@ -276,13 +281,14 @@ def extract_complexity(
     *,
     frame_size: int | None = None,
     hop_length: int | None = None,
-    center: bool = False,
+    center: bool = True,
     return_metadata: bool = False,
 ) -> dict[str, Any]:
-    """RMS(x'') / RMS(x'), second- over first-difference RMS (the mobility of x')."""
+    """RMS(x'') / (RMS(x') + 1e-10), the mobility of x'. NaN for a constant frame, silence included."""
     frames = _frames(signal, frame_size, hop_length, center)
     _, rms1, rms2 = _difference_rms(frames)
-    return _result('complexity', rms2 / (rms1 + _EPS), frames, sr, frame_size, hop_length, center, return_metadata)
+    complexity = np.where(rms1 > 0, rms2 / (rms1 + _EPS), np.nan)
+    return _result('complexity', complexity, frames, sr, frame_size, hop_length, center, return_metadata)
 
 
 # Above this many candidate pairs the KD-tree count is faster than checking pairs directly
@@ -370,7 +376,7 @@ def extract_autocorrelation_variance(
     *,
     frame_size: int | None = None,
     hop_length: int | None = None,
-    center: bool = False,
+    center: bool = True,
     max_lag: int = 100,
     return_metadata: bool = False,
 ) -> dict[str, Any]:
@@ -386,14 +392,14 @@ def extract_autocorr_snr(
     *,
     frame_size: int | None = None,
     hop_length: int | None = None,
-    center: bool = False,
+    center: bool = True,
     max_lag: int = 100,
     return_metadata: bool = False,
 ) -> dict[str, Any]:
-    """Peak over mean of the autocorrelation over lags 0..max_lag-1."""
+    """Peak over mean (plus 1e-10) of the autocorrelation over lags 0..max_lag-1. NaN for an all-zero frame."""
     frames = _frames(signal, frame_size, hop_length, center)
     acf = _autocorr(frames, max_lag)
-    snr = acf.max(axis=1) / (acf.mean(axis=1) + _EPS)
+    snr = np.where(acf[:, 0] > 0, acf.max(axis=1) / (acf.mean(axis=1) + _EPS), np.nan)
     return _result('autocorr_snr', snr, frames, sr, frame_size, hop_length, center, return_metadata)
 
 
@@ -403,7 +409,7 @@ def extract_autocorr_zero_crossings(
     *,
     frame_size: int | None = None,
     hop_length: int | None = None,
-    center: bool = False,
+    center: bool = True,
     max_lag: int = 100,
     return_metadata: bool = False,
 ) -> dict[str, Any]:
@@ -420,17 +426,21 @@ def extract_autocorr_peak_width(
     *,
     frame_size: int | None = None,
     hop_length: int | None = None,
-    center: bool = False,
+    center: bool = True,
     max_lag: int = 100,
     return_metadata: bool = False,
 ) -> dict[str, Any]:
-    """Lags from the first to the last autocorrelation value at or above half the peak, inclusive."""
+    """
+    Lags from the first to the last autocorrelation value at or above half the peak, inclusive.
+
+    NaN for an all-zero frame, whose autocorrelation has no peak.
+    """
     frames = _frames(signal, frame_size, hop_length, center)
     acf = _autocorr(frames, max_lag)
     above = acf >= 0.5 * acf.max(axis=1, keepdims=True)
     first = np.argmax(above, axis=1)
     last = acf.shape[1] - 1 - np.argmax(above[:, ::-1], axis=1)
-    width = np.where(above.any(axis=1), last - first + 1, 0)
+    width = np.where(acf[:, 0] > 0, last - first + 1, np.nan)
     return _result('autocorr_peak_width', width, frames, sr, frame_size, hop_length, center, return_metadata)
 
 
@@ -440,11 +450,16 @@ def extract_autocorr_decay_rate(
     *,
     frame_size: int | None = None,
     hop_length: int | None = None,
-    center: bool = False,
+    center: bool = True,
     max_lag: int = 100,
     return_metadata: bool = False,
 ) -> dict[str, Any]:
-    """Negative least-squares slope of log|acf| over lags 1..max_lag-1. NaN with fewer than 3 lags."""
+    """
+    Negative least-squares slope of log(|acf| + 1e-10) over lags 1..max_lag-1.
+
+    NaN with fewer than 3 lags and for an all-zero frame, where the slope
+    would only be that of the 1e-10 floor.
+    """
     frames = _frames(signal, frame_size, hop_length, center)
     acf = _autocorr(frames, max_lag)
     if acf.shape[1] < 3:
@@ -453,7 +468,7 @@ def extract_autocorr_decay_rate(
         y = np.log(np.abs(acf[:, 1:]) + _EPS)
         x = np.arange(1, acf.shape[1], dtype=np.float64)
         x -= x.mean()
-        decay = -(y @ x) / (x @ x)
+        decay = np.where(acf[:, 0] > 0, -(y @ x) / (x @ x), np.nan)
     return _result('autocorr_decay_rate', decay, frames, sr, frame_size, hop_length, center, return_metadata)
 
 
@@ -463,7 +478,7 @@ def extract_autocorr_coeffs_deviation(
     *,
     frame_size: int | None = None,
     hop_length: int | None = None,
-    center: bool = False,
+    center: bool = True,
     max_lag: int = 100,
     return_metadata: bool = False,
 ) -> dict[str, Any]:
@@ -480,7 +495,7 @@ def extract_max_peak_autocorr_envelope(
     *,
     frame_size: int | None = None,
     hop_length: int | None = None,
-    center: bool = False,
+    center: bool = True,
     max_lag: int = 100,
     return_metadata: bool = False,
 ) -> dict[str, Any]:

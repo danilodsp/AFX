@@ -27,7 +27,7 @@ def framewise_extractor(feature_func: Callable) -> Callable:
     """
     @functools.wraps(feature_func)
     def wrapper(signal: np.ndarray, sr: int | None = None, *, frame_size: int | None = None,
-                hop_length: int | None = None, center: bool = False, return_metadata: bool = False,
+                hop_length: int | None = None, center: bool = True, return_metadata: bool = False,
                 **params) -> dict[str, Any]:
         frames = analysis_frames(signal, frame_size, hop_length, center)
         key = None
@@ -62,7 +62,7 @@ def framewise_extractor(feature_func: Callable) -> Callable:
     inner = [p for p in inspect.signature(feature_func).parameters.values()
              if p.kind not in (p.VAR_KEYWORD, p.VAR_POSITIONAL)]
     framing = [inspect.Parameter(name, inspect.Parameter.KEYWORD_ONLY, default=default)
-               for name, default in (('frame_size', None), ('hop_length', None), ('center', False),
+               for name, default in (('frame_size', None), ('hop_length', None), ('center', True),
                                          ('return_metadata', False))]
     inner = [p.replace(kind=inspect.Parameter.KEYWORD_ONLY) if i >= 2 else p for i, p in enumerate(inner)]
     wrapper.__signature__ = inspect.Signature(inner[:2] + framing + inner[2:])  # type: ignore[attr-defined]
