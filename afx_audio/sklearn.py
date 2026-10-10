@@ -74,6 +74,9 @@ class AFXFeatureExtractor(BaseEstimator, TransformerMixin):
             pipeline.
         n_jobs: Parallel extraction over samples via joblib
             (None/1 = serial, -1 = all cores).
+        coverage: Add a <feature>_valid_frac column after each feature's
+            statistics, the fraction of frames with a finite value. None
+            takes the config's setting (off if it has none).
 
     Attributes (after fit):
         config_: The resolved config actually used for extraction.
@@ -93,6 +96,7 @@ class AFXFeatureExtractor(BaseEstimator, TransformerMixin):
         aggregation: str | None = None,
         normalize: str | None = None,
         n_jobs: int | None = None,
+        coverage: bool | None = None,
     ):
         self.config = config
         self.features = features
@@ -100,6 +104,7 @@ class AFXFeatureExtractor(BaseEstimator, TransformerMixin):
         self.aggregation = aggregation
         self.normalize = normalize
         self.n_jobs = n_jobs
+        self.coverage = coverage
 
     # -- config resolution --------------------------------------------------
 
@@ -132,6 +137,8 @@ class AFXFeatureExtractor(BaseEstimator, TransformerMixin):
         config['preserve_shape'] = False
         config['flatten'] = False  # flattening handled by features_to_vector
         config['normalize'] = self.normalize
+        if self.coverage is not None:
+            config['coverage'] = self.coverage
         return validate_config(config)
 
     # -- per-sample extraction ----------------------------------------------

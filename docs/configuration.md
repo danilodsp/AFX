@@ -73,11 +73,6 @@ same `frame_size` and `hop_length` share a time axis whatever `center` is.
 | `sliding_window` | `name` | `sliding_agg` (mean, std, max, min) over windows of `window_size` frames every `hop_length` frames, given under `aggregation_params` |
 | `stack` | single vector | no reduction, everything concatenated |
 
-Frames where a feature is undefined are NaN (HNR of a silent frame,
-kurtosis of a constant frame) and are skipped by every statistic; a
-statistic is NaN only if the feature is undefined on all frames. Pitch
-uses 0, not NaN, for unvoiced frames, so its mean includes them.
-
 `flatten` (default true) makes every aggregated array 1-D.
 `preserve_shape: true` skips aggregation and returns the per-frame arrays.
 
@@ -87,6 +82,42 @@ MFCC coefficients; single-value features are left as they are. With
 `aggregation_params.norm_stats` (per-feature mean/std or min/max computed
 over a dataset) every feature is scaled by those instead. For training,
 leave it `null` and scale in scikit-learn.
+
+## Undefined frames and coverage
+
+A frame where a feature has no defined value is NaN: pitch on an unvoiced
+frame, HNR, THD and spectral kurtosis on a zero-energy frame, kurtosis on
+a constant frame, formants where fewer than `n_formants` resonances pass
+the bandwidth test. `afx.feature_info(name)['undefined']` states the
+condition for each feature (None for features that are always finite,
+which give 0 or a log floor on silence). Every statistic skips NaN
+frames, so `pitch_mean` is the mean f0 of the voiced frames; a statistic
+is NaN only when every frame is undefined, as for the pitch of silence
+or noise.
+
+`"coverage": true` adds `<name>_valid_frac` after each feature's
+statistics: the fraction of frames the statistics are based on. A frame
+of a multi-row feature (MFCC, formants) counts as valid only when all of
+its rows are finite, so `formants_valid_frac` is the fraction of frames
+with all `n_formants` formants. With `sliding_window` it has one value
+per window. It is never normalized, and it is an error with `stack` or
+`preserve_shape`, which keep every frame. The same option is the
+`coverage` argument of `extract_features_from_folder`,
+`AFXFeatureExtractor` and `afx_audio.torch.AFXFeatureModule`, and
+`afx --coverage` on the command line.
+
+```python
+cfg = {'features': {'pitch': {}, 'hnr': {}}, 'aggregation': 'summary', 'coverage': True}
+afx.extract_all_features(x, sr, cfg)
+# {'pitch_mean': ..., 'pitch_std': ..., 'pitch_valid_frac': array([0.48]), 'hnr_mean': ..., ...}
+```
+
+`afx.valid_fraction(per_frame)` gives the same number for an array from
+`preserve_shape` or a single extractor, and
+`afx_audio.utils.aggregator.valid_frame_mask` the per-frame mask.
+`extract_pitch(..., return_metadata=True)` also returns
+`metadata['voiced']`, the boolean voicing mask; the low-level
+`afx_audio.utils.pitch.yin` keeps 0 for unvoiced frames.
 
 ## Input
 

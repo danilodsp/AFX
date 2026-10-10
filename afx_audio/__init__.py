@@ -18,7 +18,7 @@ from .methods.stft import clear_stft_cache
 from .presets import list_presets, load_preset, preset_info
 from .provenance import config_hash, read_provenance
 from .registry import feature_info, list_features, register_feature, unregister_feature
-from .utils.aggregator import aggregate_features
+from .utils.aggregator import aggregate_features, valid_fraction
 from .utils.batch_utils import feature_names, flatten_features
 from .utils.config_loader import load_config, validate_config
 
@@ -46,6 +46,7 @@ __all__ = [
     'list_presets',
     'preset_info',
     'aggregate_features',
+    'valid_fraction',
     'clear_feature_cache',
     'get_cache_stats',
     'clear_stft_cache',

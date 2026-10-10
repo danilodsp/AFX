@@ -41,8 +41,9 @@ def test_aggregated_silence_is_finite_where_defined():
     config = afx_audio.load_preset('speech')
     feats = afx_audio.extract_all_features(np.zeros(SR), SR, config)
     for key, value in feats.items():
-        # HNR and formants are undefined on every frame of silence; everything else is a number
-        if key.startswith(('hnr', 'formants')):
+        # Pitch, HNR and formants are undefined on every frame of silence; everything else is a number
+        if key.startswith(('pitch', 'hnr', 'formants')):
+            assert np.isnan(value).all(), key
             continue
         assert np.isfinite(value).all(), key
 

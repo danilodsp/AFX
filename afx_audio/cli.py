@@ -44,6 +44,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument('--features', help='Comma-separated features to extract (default: all in the config)')
     parser.add_argument('--aggregation', choices=_CLI_AGGREGATIONS, help='Aggregation method over frames')
     parser.add_argument('--normalize', choices=['zscore', 'minmax'], help='Per-file normalization method')
+    parser.add_argument('--coverage', action='store_true',
+                        help='Add a <feature>_valid_frac column: the fraction of frames with a finite value')
     parser.add_argument('--no-flatten', action='store_true', help='Disable flattening after aggregation')
     parser.add_argument('--sample-rate', type=int, help='Resample audio to this rate (overrides the config)')
     parser.add_argument('--jobs', '-j', type=int, default=1,
@@ -69,6 +71,8 @@ def _describe(name: str) -> None:
     info = feature_info(name)
     print(f"{info['name']} ({info['group']}, {info['units']}, rows per frame: {info['rows']})")
     print(info['summary'].replace('``', '`'))
+    if info['undefined']:
+        print(f"NaN for: {info['undefined']}")
     for key, value in info['parameters'].items():
         print(f'  {key} = {value!r}')
 
@@ -119,6 +123,7 @@ def _run(args, parser) -> int:
                 aggregation=args.aggregation,
                 flatten=False if args.no_flatten else None,
                 normalize=args.normalize,
+                coverage=True if args.coverage else None,
                 n_jobs=args.jobs,
                 sample_rate=args.sample_rate,
                 verbose=not args.quiet,
