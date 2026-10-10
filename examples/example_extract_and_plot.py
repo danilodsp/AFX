@@ -35,8 +35,8 @@ def main(argv):
     print(f'mfcc per-frame shape: {mfcc.shape}')
 
     if show_plot:
-        hop_length = config['features']['mfcc'].get('hop_length', 512)
-        plot_mfcc(mfcc, sr, hop_length=hop_length)
+        params = config['features']['mfcc']
+        plot_mfcc(mfcc, sr, hop_length=params.get('hop_length', 512), frame_size=params.get('frame_size', 2048))
     return 0
 
 
