@@ -4,6 +4,8 @@ Audio for the example notebooks.
 A local copy of ESC-50, UrbanSound8K or Nonspeech7k is used when one of the
 environment variables in DATASET_ENV_VARS points at it; otherwise labelled
 clips are synthesized with NumPy, so every notebook runs without downloads.
+synthetic_voice makes sustained vowels with known F0, jitter and shimmer for
+the eGeMAPS notebook.
 """
 from __future__ import annotations
 
@@ -14,6 +16,7 @@ import random
 
 import numpy as np
 import soundfile as sf
+from scipy.signal import lfilter
 
 DATASET_ENV_VARS = ('ESC_50_dataset', 'UrbanSound8K_dataset', 'dataset_nonspeech7k')
 AUDIO_EXTS = ('.wav', '.ogg', '.flac')
@@ -117,6 +120,79 @@ def synth_clip(kind: str, seconds: float = 1.0, sr: int = 16000, seed: int = 0) 
     snr_db = rng.uniform(5, 30)
     x = x + rng.standard_normal(n) * np.sqrt(np.mean(x ** 2) / 10 ** (snr_db / 10))
     return (0.8 * x / np.max(np.abs(x))).astype(np.float32)
+
+
+VOWEL_FORMANTS = {
+    'a': ((730, 1090, 2440), (90, 110, 160)),
+    'i': ((270, 2290, 3010), (60, 90, 150)),
+    'u': ((300, 870, 2240), (60, 90, 150)),
+}
+
+
+def synthetic_voice(
+    f0: float | tuple[float, float] = 140.0,
+    jitter: float = 0.0,
+    shimmer: float = 0.0,
+    vowel: str = 'a',
+    seconds: float = 2.0,
+    voiced: tuple[float, float] = (0.25, 1.75),
+    snr_db: float = 40.0,
+    sr: int = 16000,
+    seed: int = 0,
+    return_truth: bool = False,
+):
+    """
+    A sustained vowel: Rosenberg glottal pulses through three formant resonators, float64.
+
+    ``f0`` in Hz is constant, or a (start, end) glide over the voiced
+    stretch. Each period is the nominal one times 1 + jitter * N(0, 1) and
+    each pulse amplitude 1 + shimmer * N(0, 1). The pulse shape follows
+    the nominal period, so the interval between glottal closures equals the
+    drawn period. Silence surrounds the voiced stretch; white noise sets
+    the SNR over it.
+
+    With ``return_truth`` also returns the realized values in eGeMAPS
+    units: mean F0 in semitones above 27.5 Hz, jitter as mean |T_i -
+    T_i-1| / mean T, and shimmer as mean |20 log10(A_i / A_i-1)| in dB.
+    """
+    rng = np.random.default_rng(seed)
+    n = int(round(seconds * sr))
+    f_start, f_end = (f0, f0) if np.isscalar(f0) else f0
+    start, stop = voiced
+    flow = np.zeros(n)
+    periods, amps = [], []
+    pos = start
+    while pos < stop:
+        nominal = 1 / (f_start + (f_end - f_start) * (pos - start) / (stop - start))
+        period = nominal * (1 + jitter * rng.standard_normal())
+        amp = max(0.05, 1 + shimmer * rng.standard_normal())
+        i0, i1 = int(np.ceil(pos * sr)), min(int(np.ceil((pos + nominal) * sr)), n)
+        phase = (np.arange(i0, i1) / sr - pos) / nominal
+        # Rosenberg (1971): opening over 60 % of the nominal period, closing over 25 %
+        pulse = np.where(phase < 0.6, 0.5 * (1 - np.cos(np.pi * phase / 0.6)),
+                         np.where(phase < 0.85, np.cos(np.pi * (phase - 0.6) / 0.5), 0.0))
+        flow[i0:i1] += amp * pulse
+        periods.append(period)
+        amps.append(amp)
+        pos += period
+    y = np.diff(flow, prepend=0.0)
+    for fc, bw in zip(*VOWEL_FORMANTS[vowel], strict=True):
+        r = np.exp(-np.pi * bw / sr)
+        y = lfilter([1 - r], [1, -2 * r * np.cos(2 * np.pi * fc / sr), r * r], y)
+    # Lip radiation, a first difference
+    y = np.diff(y, prepend=0.0)
+    y *= 0.3 / max(np.max(np.abs(y)), 1e-12)
+    power = np.mean(y[int(start * sr):int(stop * sr)] ** 2)
+    y = y + rng.standard_normal(n) * np.sqrt(power / 10 ** (snr_db / 10))
+    if not return_truth:
+        return y
+    t, a = np.array(periods), np.array(amps)
+    truth = {
+        'f0_semitones': float(np.mean(12 * np.log2(1 / t / 27.5))),
+        'jitter': float(np.mean(np.abs(np.diff(t))) / np.mean(t)),
+        'shimmer_db': float(np.mean(np.abs(20 * np.log10(a[1:] / a[:-1])))),
+    }
+    return y, truth
 
 
 def synthetic_dataset(
