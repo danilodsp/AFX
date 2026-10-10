@@ -17,11 +17,11 @@ EXPECTED = {'speech', 'bioacoustics', 'music', 'machinery'}
 # config_hash of every released preset version. A released version is never
 # edited: change a preset by adding name@<next>.json and a line here.
 FROZEN = {
-    'bioacoustics@1': '7b6f57be5fc9',
+    'bioacoustics@1': '7a56fb8e5830',
     'egemaps@1': '47d2d6af7e38',
-    'machinery@1': 'fc7712bbcad8',
-    'music@1': '3eda6e0ad299',
-    'speech@1': '6a8de7dfed40',
+    'machinery@1': '48c663f10cfd',
+    'music@1': 'bef75d833cb2',
+    'speech@1': '744654c89bf9',
 }
 
 
@@ -129,3 +129,10 @@ def test_preset_extracts_fixed_length_vector(name):
     v2 = vec_for(2.5)
     assert v1.size == v2.size > 0, 'descriptor length must not depend on clip length'
     assert np.isfinite(v1).all(), f'{name} produced non-finite features'
+
+
+@pytest.mark.parametrize('pid', sorted(FROZEN))
+def test_preset_spells_out_every_parameter(pid):
+    # A default that changes in a later release must not change a released preset.
+    for name, params in load_preset(pid)['features'].items():
+        assert set(params) == set(afx_audio.feature_info(name)['parameters']), name

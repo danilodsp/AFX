@@ -168,8 +168,9 @@ Batch and sklearn provenance records report `preset_id` (`'speech@1'`) and
 (sample rate, features, aggregation). To cite an extraction, give the
 package version, the preset id and the config hash from the record, for
 example "features: afx-audio 0.3.0, preset speech@1, config hash
-6a8de7dfed40". Parameters a preset leaves at their defaults follow the
-package version, which is why both are needed.
+744654c89bf9". Every preset file spells out all parameters of every
+feature, so a later change to a default does not change a released
+preset; the package version still pins the implementation.
 
 | Preset | Sample rate | Contents |
 |---|---|---|
@@ -177,3 +178,4 @@ package version, which is why both are needed.
 | `bioacoustics` | 32 kHz | mel and MFCC, spectral shape, flatness, entropy |
 | `music` | 22.05 kHz | chroma (STFT and CQT), tonnetz, onset strength, spectral contrast, MFCC |
 | `machinery` | 16 kHz | frame-wise crest factor, kurtosis, Hjorth parameters, HNR; `advanced_summary` |
+| `egemaps` | 16 kHz | the 88 eGeMAPS v02 functionals (see [eGeMAPS](egemaps.md)) |

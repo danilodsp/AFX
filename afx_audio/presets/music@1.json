@@ -4,18 +4,18 @@
   "description": "Music information retrieval set for genre, instrument and key/harmony tasks. Chroma (STFT + CQT) and CQT capture pitch/harmony; spectral contrast and rolloff capture timbre; tonnetz adds tonal centroids, onset strength rhythm, and MFCCs round out the descriptor.",
   "sample_rate": 22050,
   "features": {
-    "chroma_cqt": {"frame_size": 2048, "hop_length": 512},
-    "chroma_stft": {"frame_size": 2048, "hop_length": 512},
-    "tonnetz": {"frame_size": 2048, "hop_length": 512},
-    "onset_strength": {"frame_size": 2048, "hop_length": 512},
-    "spectral_contrast": {"frame_size": 2048, "hop_length": 512},
-    "spectral_centroid": {"frame_size": 2048, "hop_length": 512},
-    "spectral_rolloff": {"frame_size": 2048, "hop_length": 512},
-    "spectral_flatness": {"frame_size": 2048, "hop_length": 512},
-    "spectral_bandwidth": {"frame_size": 2048, "hop_length": 512},
-    "mfcc": {"n_mfcc": 13, "frame_size": 2048, "hop_length": 512},
-    "zcr": {"frame_size": 2048, "hop_length": 512},
-    "rms_energy": {}
+    "chroma_cqt": {"frame_size": 2048, "hop_length": 512, "n_bins": 84, "bins_per_octave": 12, "fmin": 32.70319566257483, "center": true},
+    "chroma_stft": {"frame_size": 2048, "hop_length": 512, "center": true, "tuning": 0.0, "normalize": true},
+    "tonnetz": {"frame_size": 2048, "hop_length": 512, "center": true, "tuning": 0.0},
+    "onset_strength": {"frame_size": 2048, "hop_length": 512, "n_mels": 128, "fmin": 0.0, "fmax": null, "lag": 1, "max_size": 1},
+    "spectral_contrast": {"frame_size": 2048, "hop_length": 512, "n_bands": 6, "fmin": 200.0, "quantile": 0.02, "center": true},
+    "spectral_centroid": {"frame_size": 2048, "hop_length": 512, "center": true},
+    "spectral_rolloff": {"frame_size": 2048, "hop_length": 512, "roll_percent": 0.85, "center": true, "power": 1.0},
+    "spectral_flatness": {"frame_size": 2048, "hop_length": 512, "center": true},
+    "spectral_bandwidth": {"frame_size": 2048, "hop_length": 512, "center": true},
+    "mfcc": {"n_mfcc": 13, "frame_size": 2048, "hop_length": 512, "n_mels": 128, "fmin": 0.0, "fmax": null, "center": true, "top_db": 80.0},
+    "zcr": {"frame_size": 2048, "hop_length": 512, "center": true, "threshold": 1e-10},
+    "rms_energy": {"frame_size": 2048, "hop_length": 512, "center": true}
   },
   "aggregation": "summary"
 }

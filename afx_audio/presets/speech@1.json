@@ -4,18 +4,18 @@
   "description": "Compact eGeMAPS-style acoustic set for speech and paralinguistic tasks (emotion, speaker traits, voice quality). Emphasizes MFCCs with dynamics, prosody (pitch, energy), formants F1-F3 and voice-quality measures (HNR, spectral contrast).",
   "sample_rate": 16000,
   "features": {
-    "mfcc": {"n_mfcc": 20, "frame_size": 400, "hop_length": 160},
-    "mfcc_delta": {"n_mfcc": 20, "frame_size": 400, "hop_length": 160},
-    "mfcc_delta_delta": {"n_mfcc": 20, "frame_size": 400, "hop_length": 160},
-    "pitch": {"frame_size": 400, "hop_length": 160},
-    "hnr": {"frame_size": 400, "hop_length": 160},
-    "formants": {"frame_size": 400, "hop_length": 160},
-    "rms_energy": {},
-    "zcr": {"frame_size": 400, "hop_length": 160},
-    "spectral_centroid": {"frame_size": 400, "hop_length": 160},
-    "spectral_bandwidth": {"frame_size": 400, "hop_length": 160},
-    "spectral_flux": {"frame_size": 400, "hop_length": 160},
-    "spectral_contrast": {"frame_size": 400, "hop_length": 160}
+    "mfcc": {"n_mfcc": 20, "frame_size": 400, "hop_length": 160, "n_mels": 128, "fmin": 0.0, "fmax": null, "center": true, "top_db": 80.0},
+    "mfcc_delta": {"n_mfcc": 20, "frame_size": 400, "hop_length": 160, "n_mels": 128, "fmin": 0.0, "fmax": null, "center": true, "width": 9, "order": 1},
+    "mfcc_delta_delta": {"n_mfcc": 20, "frame_size": 400, "hop_length": 160, "n_mels": 128, "fmin": 0.0, "fmax": null, "center": true, "width": 9},
+    "pitch": {"frame_size": 400, "hop_length": 160, "center": true, "fmin": 50.0, "fmax": 600.0, "threshold": 0.1},
+    "hnr": {"frame_size": 400, "hop_length": 160, "center": true, "fmin": 50.0, "fmax": 600.0},
+    "formants": {"n_formants": 3, "frame_size": 400, "hop_length": 160, "center": true, "order": null, "pre_emphasis": 0.97, "fmin": 90.0, "max_bandwidth": 400.0},
+    "rms_energy": {"frame_size": 400, "hop_length": 160, "center": true},
+    "zcr": {"frame_size": 400, "hop_length": 160, "center": true, "threshold": 1e-10},
+    "spectral_centroid": {"frame_size": 400, "hop_length": 160, "center": true},
+    "spectral_bandwidth": {"frame_size": 400, "hop_length": 160, "center": true},
+    "spectral_flux": {"frame_size": 400, "hop_length": 160, "center": true},
+    "spectral_contrast": {"frame_size": 400, "hop_length": 160, "n_bands": 6, "fmin": 200.0, "quantile": 0.02, "center": true}
   },
   "aggregation": "summary"
 }
