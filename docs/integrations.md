@@ -62,11 +62,15 @@ constructor.
 ## Folders and the CLI
 
 `afx.extract_features_from_folder(folder, config, output)` walks a folder
-recursively and writes one row per file as `npy` (a pickled dict), `json`,
-`csv` or `parquet` (extra `parquet`). Vector features expand to `name_0,
-name_1, ...` columns, except `egemaps` and `egemaps_lld`, whose columns
-take openSMILE's names (see [eGeMAPS](egemaps.md)). `n_jobs` runs files in worker processes with output
-identical to a serial run. The workers never fork (fork deadlocks when the
+recursively, reads every file whose extension (any case) belongs to a
+format the installed soundfile reads (`.wav`, `.flac`, `.ogg`, `.opus`,
+`.mp3`, `.aiff`, `.au`, `.caf`, `.w64`, ...; see
+`afx_audio.batch_extractor.default_extensions()`), and writes one row per
+file as `npy` (a pickled dict), `json`, `csv` or `parquet` (extra
+`parquet`). Vector features expand to `name_0, name_1, ...` columns,
+except `egemaps` and `egemaps_lld`, whose columns take openSMILE's names
+(see [eGeMAPS](egemaps.md)). `n_jobs` runs files in worker processes with
+output identical to a serial run. The workers never fork (fork deadlocks when the
 parent has threads): they start with forkserver on Linux and spawn on
 Windows and macOS, or with the method set by
 `multiprocessing.set_start_method`. Each worker imports the calling script,
@@ -77,6 +81,7 @@ importable (not defined in a notebook).
 ```bash
 afx dataset/ --preset speech --output features.parquet --jobs 8
 afx dataset/ --config my.json --features mfcc,zcr --aggregation summary --output features.csv
+afx dataset/ --preset speech --ext wav,flac --output features.csv   # only .wav and .flac files
 afx --list-features
 afx --describe spectral_rolloff
 ```

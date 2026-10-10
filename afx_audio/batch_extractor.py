@@ -31,7 +31,36 @@ from afx_audio.registry import custom_features, restore_custom_features
 from afx_audio.utils.batch_utils import flatten_features
 from afx_audio.utils.config_loader import load_config, unknown_feature_error, validate_config
 
-_DEFAULT_EXTS = ('.wav', '.mp3', '.flac', '.ogg')
+# Extensions per libsndfile major format. MAT4/MAT5 (.mat), HTK (.htk), IRCAM (.sf) and
+# headerless RAW are left out: in a dataset folder those extensions usually hold other data.
+_FORMAT_EXTENSIONS = {
+    'WAV': ('.wav',), 'WAVEX': ('.wav',), 'RF64': ('.rf64',), 'W64': ('.w64',),
+    'AIFF': ('.aif', '.aiff', '.aifc'), 'AU': ('.au', '.snd'), 'CAF': ('.caf',), 'FLAC': ('.flac',),
+    'OGG': ('.ogg', '.oga'), 'MP3': ('.mp3',), 'NIST': ('.sph', '.nist'), 'SD2': ('.sd2',),
+    'VOC': ('.voc',), 'PAF': ('.paf',), 'SVX': ('.8svx', '.svx'), 'AVR': ('.avr',), 'PVF': ('.pvf',),
+    'SDS': ('.sds',), 'WVE': ('.wve',), 'XI': ('.xi',),
+}
+
+
+def default_extensions() -> tuple[str, ...]:
+    """
+    File extensions read by default: those of every format the installed libsndfile reads.
+
+    For example .wav, .flac, .ogg, .oga, .opus, .mp3, .aif, .aiff, .au,
+    .caf, .w64 and .rf64; .mp3 needs libsndfile 1.1 or later and .opus a
+    build with Opus.
+    """
+    formats = sf.available_formats()
+    exts = {ext for fmt, fmt_exts in _FORMAT_EXTENSIONS.items() if fmt in formats for ext in fmt_exts}
+    if 'OGG' in formats and 'OPUS' in sf.available_subtypes('OGG'):
+        exts.add('.opus')
+    return tuple(sorted(exts))
+
+
+def _normalize_extensions(file_exts: Sequence[str]) -> tuple[str, ...]:
+    if isinstance(file_exts, str):
+        file_exts = [file_exts]
+    return tuple(dict.fromkeys('.' + ext.strip().lower().lstrip('.') for ext in file_exts))
 ERRORS_SUFFIX = '.errors.json'
 
 
@@ -215,7 +244,10 @@ def extract_features_from_folder(
             copied, not modified.
         output_path: Path to save output (npy, json, csv, or parquet). Its
             folder must exist.
-        file_exts: File extensions to include (default: wav/mp3/flac/ogg)
+        file_exts: File extensions to include, with or without the dot,
+            matched case-insensitively. None takes ``default_extensions()``,
+            every format the installed soundfile reads (.wav, .flac, .ogg,
+            .opus, .mp3, .aiff, .au, .caf, .w64, ...).
         save_format: Output format ('npy', 'json', 'csv', 'parquet'); None
             infers it from the output_path extension.
         features: Optional list of feature names to extract. Names missing
@@ -323,8 +355,7 @@ def _extract_folder(
     save_format = _output_format(output_path, save_format)
     _check_output(output_path, save_format)
 
-    if file_exts is None:
-        file_exts = _DEFAULT_EXTS
+    file_exts = default_extensions() if file_exts is None else _normalize_extensions(file_exts)
 
     # Collect files first so we can show progress
     all_files = []

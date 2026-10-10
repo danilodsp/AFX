@@ -125,7 +125,7 @@ afx --list-features
 afx --describe spectral_rolloff
 ```
 
-or `afx.extract_features_from_folder(folder, config, output, n_jobs=8)`. The output format follows the extension (`npy`, `json`, `csv`, `parquet`); rows are keyed by the path relative to the folder; in CSV and Parquet vector features expand to `name_0, name_1, ...` columns (eGeMAPS columns keep their openSMILE names); files that fail are listed in `<output>.errors.json`. Parallel output equals serial output.
+or `afx.extract_features_from_folder(folder, config, output, n_jobs=8)`. The output format follows the extension (`npy`, `json`, `csv`, `parquet`); every file whose extension is a format soundfile reads (wav, flac, ogg, opus, mp3, aiff, ...; `--ext wav,flac` or `file_exts=` narrows it) is read, and rows are keyed by the path relative to the folder; in CSV and Parquet vector features expand to `name_0, name_1, ...` columns (eGeMAPS columns keep their openSMILE names); files that fail are listed in `<output>.errors.json`. Parallel output equals serial output.
 
 Every output records its provenance (config and config hash, preset id, AFX, NumPy, SciPy and Python versions, sample rate and resampling, sha256 of each input file): in the Parquet schema metadata, otherwise in `<output>.provenance.json`. `--stats` (`dataset_stats=True`) also writes per-column mean, variance, min, max and NaN counts in one streaming pass, and `afx_audio.sklearn.scaler_from_stats` turns them into a fitted `StandardScaler`. See [Reproducibility](https://danilopena.com/AFX/reproducibility/).
 
