@@ -1,6 +1,6 @@
 # AFX
 
-Audio feature extraction for machine learning. AFX computes 47 features (time-domain, autocorrelation, spectral, spectrogram, cepstral, harmonic, linear prediction, and the eGeMAPS v02 parameter set) with NumPy and SciPy, selects them from a validated JSON config, and aggregates the frames into one vector per clip. The same config drives a scikit-learn transformer, a differentiable PyTorch module and a parallel batch CLI whose outputs record how they were made.
+Audio feature extraction for machine learning. AFX computes 47 features (time-domain, autocorrelation, spectral, spectrogram, cepstral, harmonic, linear prediction, and the eGeMAPS v02 parameter set) with NumPy and SciPy, selects them from a validated JSON config, and aggregates the frames into one vector per clip. The same config drives a scikit-learn transformer, a parallel batch CLI whose outputs record how they were made, and (for the 20 features with torch implementations) a differentiable PyTorch module.
 
 [![Tests](https://github.com/danilodsp/AFX/actions/workflows/test.yml/badge.svg)](https://github.com/danilodsp/AFX/actions/workflows/test.yml)
 [![codecov](https://codecov.io/gh/danilodsp/AFX/branch/main/graph/badge.svg)](https://codecov.io/gh/danilodsp/AFX)
@@ -111,9 +111,10 @@ from afx_audio.torch import AFXFeatureModule, functional as F_afx
 mfcc = F_afx.mfcc(waveform, sr=16000, n_mfcc=13)   # (time,) or (batch, time), any device
 frontend = AFXFeatureModule(features={'mfcc': {'n_mfcc': 13}, 'spectral_centroid': {}},
                             sample_rate=16000, aggregation='mean_std', output='vector')
+frontend = AFXFeatureModule.from_config('bioacoustics@1', output='vector')  # preset, JSON path or dict
 ```
 
-Twenty features (mel spectrogram, MFCC and deltas, GFCC, chroma_stft, the twelve spectral descriptors, zcr and RMS) have torch implementations with the NumPy conventions, batched and differentiable with respect to the waveform except through the counting in `zcr` and the bin selection in `spectral_rolloff`. `afx.feature_info(name)['torch']` gives the tolerance each one is tested to. `import afx_audio` does not import torch.
+Twenty features (mel spectrogram, MFCC and deltas, GFCC, chroma_stft, the twelve spectral descriptors, zcr and RMS) have torch implementations with the NumPy conventions, batched and differentiable with respect to the waveform except through the counting in `zcr` and the bin selection in `spectral_rolloff`. `afx.feature_info(name)['torch']` gives the tolerance each one is tested to. `AFXFeatureModule.from_config` reads the features, sample rate, aggregation and coverage of a config; a config with other features raises unless `skip_unsupported=True`, which drops them with an `AFXWarning`. `import afx_audio` does not import torch.
 
 ## Batch extraction and CLI
 

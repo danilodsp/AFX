@@ -3,6 +3,9 @@
 AFX torch transforms, so feature extraction can sit inside a training
 graph (e.g. as the front end of a classifier, or for feature-space losses).
 """
+import copy
+import os
+import warnings
 from collections.abc import Callable
 from typing import Any
 
@@ -10,6 +13,7 @@ import numpy as np
 import torch
 from torch import nn
 
+from afx_audio._warnings import AFXWarning
 from afx_audio.methods.gammatone import gammatone_filterbank as _np_gammatone_filterbank
 from afx_audio.torch import functional as F_afx
 
@@ -195,6 +199,66 @@ class AFXFeatureModule(nn.Module):
             if name == 'chroma_stft':
                 fb = F_afx.chroma_filterbank(sample_rate, frame_size, params.get('tuning', 0.0), dtype=f64)
                 self.register_buffer('_chroma_chroma_stft', fb, persistent=False)
+
+    @classmethod
+    def from_config(
+        cls,
+        config: dict[str, Any] | str | os.PathLike,
+        *,
+        output: str = 'dict',
+        skip_unsupported: bool = False,
+    ) -> 'AFXFeatureModule':
+        """
+        Build the module from an AFX config, as the NumPy path reads it.
+
+        Args:
+            config: Config dict, path to a config JSON, or a preset
+                ('speech' or 'speech@1', ...).
+            output: 'dict' or 'vector', as in the constructor.
+            skip_unsupported: Drop features without a torch implementation
+                with an AFXWarning naming them, instead of raising.
+
+        The torch-supported features keep their parameters. ``sample_rate``
+        (22050 if absent), ``aggregation`` ('mean' if absent) and
+        ``coverage`` are taken from the config; ``preserve_shape`` maps to
+        aggregation 'none'. Aggregations other than 'mean', 'std' and
+        'summary', and ``normalize``, have no torch equivalent and raise
+        ValueError, as do unsupported features unless ``skip_unsupported``.
+        """
+        from afx_audio.presets import list_presets, load_preset
+        from afx_audio.utils.config_loader import load_config, validate_config
+
+        if isinstance(config, dict):
+            config = validate_config(copy.deepcopy(config), require_sample_rate=False)
+        elif not os.path.isfile(config) and os.fspath(config).partition('@')[0] in list_presets():
+            config = load_preset(os.fspath(config))
+        else:
+            config = load_config(os.fspath(config))
+
+        features = config['features']
+        unsupported = [name for name in features if name not in _TORCH_FEATURES]
+        if unsupported and not skip_unsupported:
+            raise ValueError(
+                f'Feature(s) not available on the torch path: {unsupported}. Supported: {supported_features()}. '
+                f'Pass skip_unsupported=True to build the module without them.'
+            )
+        kept = {name: params for name, params in features.items() if name in _TORCH_FEATURES}
+        if not kept:
+            raise ValueError(f'No feature of this config is available on the torch path: {list(features)}')
+        aggregation = 'none' if config.get('preserve_shape') else config.get('aggregation', 'mean')
+        if aggregation not in ('none', 'mean', 'std', 'summary'):
+            raise ValueError(f"aggregation {aggregation!r} is not available on the torch path; "
+                             "use 'mean', 'std' or 'summary'")
+        if config.get('normalize') is not None:
+            raise ValueError(f"normalize {config['normalize']!r} is not available on the torch path; "
+                             'normalize the module output instead')
+
+        module = cls(kept, sample_rate=config.get('sample_rate', 22050), aggregation=aggregation,
+                     output=output, coverage=config.get('coverage', False))
+        if unsupported:
+            warnings.warn(f'Skipped feature(s) not available on the torch path: {unsupported}', AFXWarning,
+                          stacklevel=2)
+        return module
 
     # -- introspection ------------------------------------------------------
 
