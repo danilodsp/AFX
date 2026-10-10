@@ -1,9 +1,13 @@
 # librosa equivalence
 
-`tests/test_librosa_parity.py` compares these features with librosa at
-four framings (22.05 kHz with n_fft 2048 / hop 512, 16 kHz with 400 / 160
-and 512 / 128, centered and not). Agreement is to float32 precision or
-better.
+`tests/test_librosa_parity.py` compares these features with librosa.
+The spectral shape, mel, MFCC and chroma features run at four framings:
+22.05 kHz with n_fft 2048 / hop 512, centered and not, and 16 kHz with
+400 / 160 uncentered and 512 / 128 centered. `tonnetz` and
+`onset_strength` run centered at 22.05 kHz with 2048 / 512, 1024 / 256 and
+512 / 128. `zcr` and `rms_energy` run at 16 kHz with frame / hop of
+2048 / 512, 400 / 160, 512 / 512 and 401 / 100, centered and not.
+Agreement is to float32 precision or better.
 
 | AFX feature | librosa call |
 |---|---|

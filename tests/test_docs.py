@@ -41,3 +41,18 @@ def test_baselines_prose_quotes_the_table_std_range():
     stds = [float(s) for s in re.findall(r'± (\d\.\d+)', table)]
     prose = ' '.join(text.split('## Reading the numbers')[1].split())
     assert f'fold standard deviation is {min(stds):.3f} to {max(stds):.3f}' in prose
+
+
+def test_librosa_page_lists_every_parity_framing():
+    import ast
+
+    tree = ast.parse(_read('tests', 'test_librosa_parity.py'))
+    pairs = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Tuple) and all(isinstance(e, ast.Constant) for e in node.elts):
+            sizes = [e.value for e in node.elts if type(e.value) is int and 100 <= e.value < 8000]
+            if len(sizes) == 2:
+                pairs.add(tuple(sizes))
+    text = ' '.join(_read('docs', 'librosa.md').split())
+    assert len(pairs) >= 4
+    assert [p for p in sorted(pairs) if f'{p[0]} / {p[1]}' not in text] == []
