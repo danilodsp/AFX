@@ -20,19 +20,32 @@
 - Aggregation skips NaN frames: a statistic is NaN only when the feature is undefined on every frame.
 - Sample entropy uses the same N - m templates for both lengths (Richman and Moorman), which changes values slightly.
 - `extract_features_from_folder` infers the output format from the file extension (`save_format=None`), and rejects an unknown extension instead of writing a `.npy` file next to it. JSON output writes `null` for NaN.
-- `afx` prints one-line `afx: error:` messages with exit status 2 for usage and configuration errors, and exits with 1 when no features were extracted. `--aggregation` no longer offers `sliding_window`, which needs window sizes from a config file.
+- `afx` exits with status 2 and an `afx: error:` message for usage and configuration errors (argument errors print argparse's usage block first), and exits with 1 when no features were extracted. `--aggregation` no longer offers `sliding_window`, which needs window sizes from a config file.
 - `framewise_extractor` takes `frame_size`, `hop_length`, `center` and `return_metadata` as keyword-only arguments and no longer forwards them to the wrapped function.
 - `pitch` is NaN on unvoiced frames instead of 0, so pitch statistics cover voiced frames only and a clip with no voiced frame gives NaN `pitch_*`. `afx_audio.utils.pitch.yin` still returns 0.
-- Every framed feature defaults to `center=True` (librosa's convention) on the NumPy and torch paths, so features with the same `frame_size` and `hop_length` share frame count and frame times. Pass `center=False` for the previous framing of MFCC, GFCC, deltas, the spectral shape, time-domain, autocorrelation, THD, LPC, formant and chroma_cqt features. `pitch` and `hnr` gained `center`.
+- Every framed feature except `onset_strength`, which is always centered, defaults to `center=True` (librosa's convention) on the NumPy and torch paths, so features with the same `frame_size` and `hop_length` share frame count and frame times. Pass `center=False` for the previous framing of MFCC, GFCC, deltas, the spectral shape, time-domain, autocorrelation, THD, LPC, formant and chroma_cqt features. `pitch` and `hnr` gained `center`.
 - On an all-zero frame these features are NaN instead of 0 or 1: `crest_factor`, `energy_ratio`, `mobility`, `complexity` (any constant frame), `autocorr_snr`, `autocorr_peak_width`, `autocorr_decay_rate`, `spectral_entropy`, `spectral_skewness`, `spectral_slope`, `spectral_crest`, `spectral_decrease`. Features with a librosa equivalent keep librosa's value on silence. `feature_info(name)['undefined']` states each condition.
 - Every extractor returns float64, including for float32 input and for the counts `autocorr_zero_crossings` and `autocorr_peak_width`. Torch functions return the input tensor's dtype.
 - Presets are versioned files `afx_audio/presets/<name>@<version>.json` with a `"preset": {"name": ..., "version": ...}` block instead of the top-level `"name"`, and spell out every parameter. `speech` and `music` frame `rms_energy` like their other features (it was one value per clip), and the `speech` pitch and HNR search stops at 600 Hz.
 - `afx_audio.utils.shape_utils` and `afx_audio.utils.torch_utils` are removed; nothing used them.
+- `afx` writes `features.csv` when `--output` is not given (was a pickled `features.npy`), and `extract_features_from_folder` reads every extension of the formats the installed soundfile reads, case-insensitively (`afx_audio.batch_extractor.default_extensions()`), instead of wav, mp3, flac and ogg. `afx --ext wav,flac` restricts them.
+- `extract_features_from_folder` defaults to `verbose=False`; `afx` still prints progress unless `-q`.
+- eGeMAPS columns in tabular outputs, dataset statistics, `feature_names`/`flatten_features` and `AFXFeatureExtractor.get_feature_names_out` use openSMILE's names (`EGEMAPS_NAMES`, `EGEMAPS_LLD_NAMES`) instead of `egemaps_0`, ...; statistics are appended (`<name>_mean`) and several values per row get an index.
+- `hnr` searches lags up to `frame_size // 2`, as YIN does, so its effective lowest pitch is `max(fmin, 2 sr / frame_size)`; `speech@1` sets HNR `fmin` to 80 Hz accordingly.
+- Importing `afx_audio.torch` without PyTorch raises the install hint at import time.
 - `from afx_audio import *` no longer exports `AFXFeatureExtractor`, so it works without scikit-learn; use `from afx_audio.sklearn import AFXFeatureExtractor` or `afx.AFXFeatureExtractor`.
 - `AFXFeatureExtractor(features=[...])` orders output columns as `features`, and its `sample_rate` and `aggregation` default to None, meaning the config's values, instead of overriding a preset with 22050 Hz and `mean`.
 
 ### Fixed
 
+- `hnr` read white noise as up to +100 dB when `sr / fmin` was close to `frame_size`, and scored signals below about -80 dBFS as noise; it is now level-independent and its noise floor varies by under 2 dB between 16 and 96 kHz.
+- The gammatone filterbank (`gfcc`, NumPy and torch) used bin frequencies off by up to 20 Hz for odd `frame_size`.
+- `read_provenance` recognizes Parquet by content, so an output whose name does not match its format reads back, and `afx` no longer ends a successful run with a traceback in that case. Without pyarrow it names the `parquet` extra.
+- `AFXFeatureExtractor(normalize=None)` keeps the config's `normalize` instead of clearing it, and its `provenance_` lists custom features like the batch record.
+- `validate_config` stores an integral float `sample_rate` as an int, so `16000.0` and `16000` hash alike, and `preset_modified` ignores parameters written out at their default value.
+- A rerun to the same output removes `.errors.json`, `.stats.json` and stale `.provenance.json` sidecars it does not write, and parallel progress reports failed files as failed.
+- `AFXFeatureModule` output has the input's dtype for every feature: float64 input failed for the mel, MFCC, GFCC and chroma features. Its windows and filterbanks are kept in float64 and cast at use.
+- The YIN parity test passes with librosa 0.10.1, the declared minimum.
 - `plot_mfcc` and `plot_spectrogram` placed frame i at its start instead of at the frame time in `metadata['times']`.
 - Float32 input to the spectral and cepstral extractors went through a complex64 STFT; it is now computed in double precision.
 - `afx -j N` on Linux could print Python's "use of fork() may lead to deadlocks" warning. Batch workers never fork: forkserver on Linux, spawn on Windows and macOS, or the method set with `multiprocessing.set_start_method`. A custom feature defined in a notebook raises a ValueError before workers start instead of `BrokenProcessPool`, and registered features that the config does not use are not sent to workers.
@@ -64,6 +77,8 @@
 - `config_hash` hashes `afx_audio.provenance.computed_config(config)`: every default written out, labels and `flatten` dropped. A preset, its copy in a file and the config the scikit-learn transformer builds from it hash alike.
 - Versioned preset ids: `load_preset('speech@1')`, `afx --preset speech@1`, `AFXFeatureExtractor(config='speech@1')`, `list_presets(versions=True)`, `resolve_preset`. Provenance records carry `preset_id` and `preset_modified`, and a test pins the config hash of every released preset version.
 - `feature_info(name)['torch']`: the torch function and the rtol and atol of its float64 parity test against NumPy (also in `afx --describe` and `docs/features.md`). The parity tests read the same table and were tightened to rtol 1e-9.
+- `AFXFeatureModule.from_config(config, output=..., skip_unsupported=False)` builds the torch module from a config dict, JSON path or preset id.
+- The release workflow refuses a tag whose version has no dated heading in this changelog.
 - `afx.AFXWarning`, the category of every warning AFX emits, and `afx.AFXDeprecationWarning`.
 - `frame_size` and `center` for `plot_mfcc` and `plot_spectrogram`.
 - A `slow` pytest marker (`pytest -m "not slow"`).
