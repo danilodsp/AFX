@@ -82,7 +82,6 @@ def stft(
                 _STFT_CACHE.move_to_end(key)
                 return cached
 
-    # Center padding if requested
     if center:
         pad_width = frame_size // 2
         if pad_mode == 'reflect' and len(signal) <= pad_width:
@@ -91,7 +90,7 @@ def stft(
         else:
             signal = np.pad(signal, (pad_width, pad_width), mode=pad_mode)
 
-    # Pad the signal if it's shorter than one frame
+    # A signal shorter than one frame still gives one zero-padded frame
     if len(signal) < frame_size:
         signal = np.pad(signal, (0, frame_size - len(signal)), mode='constant')
 

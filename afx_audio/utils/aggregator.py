@@ -181,7 +181,6 @@ def aggregate_features(
         For ML pipelines, compute mean/std (or min/max) per feature across
         the whole dataset and pass them via ``norm_stats``.
     """
-    # Pooling features
     if method == 'mean':
         agg = mean_pooling(features)
     elif method == 'std':
@@ -205,11 +204,9 @@ def aggregate_features(
     else:
         raise ValueError(f'Unknown aggregation method: {method}')
 
-    # Flatten each feature if requested
     if flatten:
         agg = {k: v.flatten() for k, v in agg.items()}
 
-    # Normalize if requested
     if normalize is not None:
         norm_stats = norm_stats or {}
         if normalize == 'zscore':
