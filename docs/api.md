@@ -8,6 +8,8 @@
 
 ::: afx_audio.registry.register_feature
 
+::: afx_audio.registry.unregister_feature
+
 ::: afx_audio.batch_extractor.extract_features_from_folder
 
 ::: afx_audio.io.io.load_audio
@@ -20,15 +22,39 @@
 
 ::: afx_audio.presets.load_preset
 
+::: afx_audio.presets.resolve_preset
+
+::: afx_audio.presets.list_presets
+
+::: afx_audio.presets.preset_info
+
 ::: afx_audio.registry.feature_info
 
 ::: afx_audio.registry.list_features
 
 ::: afx_audio.utils.batch_utils.flatten_features
 
+::: afx_audio.utils.batch_utils.feature_names
+
 ## Aggregation
 
 ::: afx_audio.utils.aggregator.aggregate_features
+
+::: afx_audio.utils.aggregator.valid_fraction
+
+## eGeMAPS
+
+::: afx_audio.extractors.egemaps.egemaps
+
+## Provenance and dataset statistics
+
+::: afx_audio.provenance.config_hash
+
+::: afx_audio.provenance.read_provenance
+
+::: afx_audio.dataset_stats.load_stats
+
+::: afx_audio.sklearn.scaler_from_stats
 
 ## Extractors
 
