@@ -43,7 +43,7 @@ descriptors in unvoiced frames, jitter and shimmer in frames with fewer than
 two periods. openSMILE writes 0 there. Functionals over an empty set (for
 example any voiced statistic of a clip without voicing) are 0, as in
 openSMILE. Any sample rate from 8 kHz up works; 5 s of 16 kHz audio takes
-0.1 to 0.2 s.
+0.1 to 0.2 s, a minute about 1.3 s with a peak of 150 MB.
 
 ## Descriptors
 
