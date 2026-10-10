@@ -24,6 +24,12 @@ def test_star_import_without_sklearn():
     assert result.stdout.strip() == 'extract_all_features'
 
 
+def test_feature_info_does_not_import_torch():
+    result = _run("import sys, afx_audio\nafx_audio.feature_info('mfcc')\nprint('torch' in sys.modules)")
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == 'False'
+
+
 def test_lazy_name_without_sklearn_raises_install_hint():
     result = _run('import afx_audio\nafx_audio.AFXFeatureExtractor')
     assert result.returncode != 0

@@ -200,3 +200,35 @@ def test_sklearn_provenance(audio_folder):
     assert record['sample_rate'] == SR
     assert record['versions']['scikit-learn'] == sklearn.__version__
     assert record['afx_version'] == afx_audio.__version__
+
+
+def test_provenance_preset_id(audio_folder, tmp_path, capsys):
+    out = str(tmp_path / 'p.json')
+    extract_features_from_folder(str(audio_folder), afx_audio.load_preset('machinery@1'), out, verbose=False)
+    record = read_provenance(out)
+    assert (record['preset_id'], record['preset_modified']) == ('machinery@1', False)
+    assert record['config_hash'] == config_hash(afx_audio.load_preset('machinery@1'))
+
+    assert cli.main([str(audio_folder), '--preset', 'machinery@1', '--features', 'zcr', '-o', out]) == 0
+    assert capsys.readouterr().out.strip().splitlines()[-2:] == [
+        'preset machinery@1 (modified)', f"config hash {read_provenance(out)['config_hash']}"]
+    assert read_provenance(out)['preset_modified'] is True
+
+    extract_features_from_folder(str(audio_folder), CONFIG, out, verbose=False)
+    assert (read_provenance(out)['preset_id'], read_provenance(out)['preset_modified']) == (None, None)
+    # A preset block that is not a bundled preset is reported but cannot be compared
+    extract_features_from_folder(str(audio_folder), {**CONFIG, 'preset': {'name': 'lab', 'version': 3}}, out,
+                                 verbose=False)
+    assert (read_provenance(out)['preset_id'], read_provenance(out)['preset_modified']) == ('lab@3', None)
+
+
+def test_sklearn_provenance_preset_id(audio_folder):
+    pytest.importorskip('sklearn')
+    from afx_audio.sklearn import AFXFeatureExtractor
+
+    est = AFXFeatureExtractor(config='speech@1').fit([str(audio_folder / 'a.wav')])
+    assert (est.provenance_['preset_id'], est.provenance_['preset_modified']) == ('speech@1', False)
+    est = AFXFeatureExtractor(config='speech@1', aggregation='mean').fit([str(audio_folder / 'a.wav')])
+    assert est.provenance_['preset_modified'] is True
+    with pytest.raises(ValueError, match='Available'):
+        AFXFeatureExtractor(config='speech@7').fit([str(audio_folder / 'a.wav')])

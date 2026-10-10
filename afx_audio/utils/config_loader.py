@@ -6,6 +6,7 @@ import inspect
 import json
 import numbers
 import os
+import re
 from typing import Any
 
 VALID_AGGREGATIONS = (
@@ -17,8 +18,9 @@ CONFIG_KEYS = (
     'sample_rate', 'features', 'aggregation', 'aggregation_params', 'flatten', 'normalize', 'preserve_shape',
     'coverage',
     # descriptive fields of the presets
-    'name', 'title', 'description',
+    'name', 'title', 'description', 'preset',
 )
+PRESET_NAME = re.compile(r'[a-z][a-z0-9_]*')
 AGGREGATION_PARAMS = ('window_size', 'hop_length', 'sliding_agg', 'norm_stats')
 
 # Arguments every extractor takes that are not configurable per feature
@@ -88,7 +90,8 @@ def validate_config(config: dict[str, Any], require_sample_rate: bool = True) ->
     the extractor does not accept, non-positive frame sizes and counts, an
     unknown aggregation or normalize value, sliding_window aggregation
     without window_size and hop_length in aggregation_params, and a
-    non-boolean coverage or coverage with 'stack' or preserve_shape.
+    non-boolean coverage or coverage with 'stack' or preserve_shape, and
+    a preset block other than {"name": <lowercase name>, "version": <int >= 1>}.
     """
     from afx_audio.extract_all import FEATURE_MAP
 
@@ -153,7 +156,20 @@ def validate_config(config: dict[str, Any], require_sample_rate: bool = True) ->
             "coverage adds <feature>_valid_frac to aggregated output; it does not apply with aggregation 'stack' "
             'or preserve_shape. Use afx_audio.utils.aggregator.valid_fraction on per-frame arrays instead.'
         )
+    if 'preset' in config:
+        check_preset_block(config['preset'])
     return config
+
+
+def check_preset_block(block: Any) -> None:
+    """Raise ValueError unless ``block`` is {'name': <lowercase name>, 'version': <positive int>}."""
+    if not isinstance(block, dict) or set(block) != {'name', 'version'}:
+        raise ValueError(f'preset must be an object with exactly the keys name and version, got {block!r}')
+    name, version = block['name'], block['version']
+    if not isinstance(name, str) or not PRESET_NAME.fullmatch(name):
+        raise ValueError(f'preset name must be lowercase letters, digits and underscores, got {name!r}')
+    if isinstance(version, bool) or not isinstance(version, int) or version < 1:
+        raise ValueError(f'preset version must be a positive integer, got {version!r}')
 
 
 def load_config(config_path: str) -> dict[str, Any]:

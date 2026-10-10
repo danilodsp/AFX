@@ -248,7 +248,7 @@ def extract_features_from_folder(
           'parquet' requires pandas and pyarrow (``pip install "afx-audio[parquet]"``)
           and is the recommended format for dataset-scale extraction.
         - Every output records how it was made (afx-audio, numpy and scipy
-          versions, the validated config and its hash, sample rate and
+          versions, the validated config, its hash and preset id, sample rate and
           resampling, file hashes): in the parquet schema metadata under
           the key 'afx', otherwise in '<output_path>.provenance.json'.
           Read it with ``afx_audio.read_provenance``.

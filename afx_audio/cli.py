@@ -14,7 +14,7 @@ import warnings
 from afx_audio import __version__
 from afx_audio.batch_extractor import FORMATS, extract_features_from_folder
 from afx_audio.extract_all import FEATURE_MAP
-from afx_audio.presets import list_presets, load_preset
+from afx_audio.presets import list_presets, load_preset, preset_info
 from afx_audio.provenance import read_provenance
 from afx_audio.registry import feature_info, list_features
 from afx_audio.utils.config_loader import VALID_AGGREGATIONS, unknown_feature_error
@@ -37,7 +37,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument('input_folder', nargs='?', help='Folder with audio files (searched recursively)')
     source = parser.add_mutually_exclusive_group()
     source.add_argument('--config', default=None, help='Path to a config JSON (default: bundled afx_audio/config.json)')
-    source.add_argument('--preset', choices=list_presets(), help='Use a bundled domain preset instead of a config file')
+    source.add_argument('--preset', metavar='NAME[@VERSION]',
+                        help=f"Use a bundled preset instead of a config file ({', '.join(list_presets())}); "
+                             'NAME is the latest version, NAME@VERSION an exact one')
     parser.add_argument('--output', '-o', default='features.npy',
                         help='Output file; .npy, .json, .csv or .parquet sets the format (default: features.npy)')
     parser.add_argument('--format', choices=FORMATS, default=None,
@@ -63,7 +65,8 @@ def build_parser() -> argparse.ArgumentParser:
                         help='Print the available features with their group and units and exit')
     parser.add_argument('--describe', metavar='FEATURE',
                         help='Print the definition and parameters of a feature and exit')
-    parser.add_argument('--list-presets', action='store_true', help='Print the bundled presets and exit')
+    parser.add_argument('--list-presets', action='store_true',
+                        help='Print the bundled preset ids (name@version) with their titles and exit')
     parser.add_argument('--version', action='version', version=f'%(prog)s {__version__}')
     return parser
 
@@ -74,6 +77,12 @@ def _describe(name: str) -> None:
     print(info['summary'].replace('``', '`'))
     if info['undefined']:
         print(f"NaN for: {info['undefined']}")
+    torch_path = info['torch']
+    if torch_path:
+        print(f"Torch: {torch_path['function']}, equal to NumPy within rtol={torch_path['rtol']:g}, "
+              f"atol={torch_path['atol']:g} ({torch_path['dtype']})")
+    else:
+        print('Torch: none')
     for key, value in info['parameters'].items():
         print(f'  {key} = {value!r}')
 
@@ -91,7 +100,10 @@ def _run(args, parser) -> int:
         _describe(args.describe)
         return 0
     if args.list_presets:
-        print('\n'.join(list_presets()))
+        ids = list_presets(versions=True)
+        width = max(map(len, ids))
+        for pid in ids:
+            print(f"{pid:<{width}}  {preset_info(pid)['title']}")
         return 0
     if args.provenance:
         try:
@@ -105,7 +117,12 @@ def _run(args, parser) -> int:
     if not os.path.isdir(args.input_folder):
         parser.error(f'input folder not found: {args.input_folder}')
 
-    config: dict | str = load_preset(args.preset) if args.preset else (args.config or DEFAULT_CONFIG)
+    config: dict | str = args.config or DEFAULT_CONFIG
+    if args.preset:
+        try:
+            config = load_preset(args.preset)
+        except ValueError as e:
+            parser.error(str(e))
     feature_list = None
     if args.features is not None:
         feature_list = [f.strip() for f in args.features.split(',') if f.strip()]
@@ -145,7 +162,10 @@ def _run(args, parser) -> int:
         print('afx: no features were extracted', file=sys.stderr)
         return 1
     if not args.quiet:
-        print(f"config hash {read_provenance(args.output)['config_hash']}")
+        record = read_provenance(args.output)
+        if record['preset_id']:
+            print(f"preset {record['preset_id']}{' (modified)' if record['preset_modified'] else ''}")
+        print(f"config hash {record['config_hash']}")
     return 0
 
 

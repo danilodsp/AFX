@@ -13,6 +13,7 @@ from afx_audio.extractors import cepstral_features, frequency_domain, time_domai
 
 # afx_audio.methods re-exports the stft *function*; get the module explicitly
 np_stft_mod = importlib.import_module('afx_audio.methods.stft')
+from afx_audio.registry import TORCH_TOLERANCES
 from afx_audio.torch import AFXFeatureModule, supported_features
 from afx_audio.torch import functional as F_afx
 
@@ -34,6 +35,20 @@ def signal():
 
 def _t(x):
     return torch.as_tensor(x, dtype=torch.float64)
+
+
+def _tol(name):
+    """The tolerances feature_info(name)['torch'] states."""
+    _, rtol, atol = TORCH_TOLERANCES[name]
+    return {'rtol': rtol, 'atol': atol}
+
+
+def test_tolerance_table_covers_the_torch_path():
+    from afx_audio.torch.module import _TORCH_FEATURES
+
+    assert set(TORCH_TOLERANCES) == set(supported_features())
+    for name, (function, _, _) in TORCH_TOLERANCES.items():
+        assert _TORCH_FEATURES[name] is getattr(F_afx, function)
 
 
 # ---------------------------------------------------------------------------
@@ -64,7 +79,7 @@ def test_mfcc_parity(signal):
     out = F_afx.mfcc(_t(signal), SR, n_mfcc=13, frame_size=1024,
                      hop_length=256).numpy()
     assert out.shape == ref.shape
-    np.testing.assert_allclose(out, ref, rtol=1e-6, atol=1e-6)
+    np.testing.assert_allclose(out, ref, **_tol('mfcc'))
 
 
 def test_melspectrogram_parity(signal):
@@ -73,7 +88,7 @@ def test_melspectrogram_parity(signal):
     )['melspectrogram']
     out = F_afx.melspectrogram(_t(signal), SR, n_mels=64, frame_size=1024,
                                hop_length=256).numpy()
-    np.testing.assert_allclose(out, ref, rtol=1e-7, atol=1e-8)
+    np.testing.assert_allclose(out, ref, **_tol('melspectrogram'))
 
 
 @pytest.mark.parametrize('name,np_fn,torch_fn', [
@@ -94,7 +109,7 @@ def test_spectral_feature_parity(signal, name, np_fn, torch_fn):
     ref = np_fn(signal, SR, frame_size=1024, hop_length=256)[name]
     out = torch_fn(_t(signal), SR, frame_size=1024, hop_length=256).numpy()
     assert out.shape == ref.shape
-    np.testing.assert_allclose(out, ref, rtol=1e-6, atol=1e-8)
+    np.testing.assert_allclose(out, ref, **_tol(name))
 
 
 def test_zcr_parity(signal):
@@ -103,14 +118,13 @@ def test_zcr_parity(signal):
     )['zcr']
     out = F_afx.zero_crossing_rate(_t(signal), SR, frame_size=1024,
                                    hop_length=256).numpy()
-    np.testing.assert_allclose(out.ravel(), np.asarray(ref).ravel(),
-                               rtol=1e-8, atol=1e-8)
+    np.testing.assert_allclose(out.ravel(), np.asarray(ref).ravel(), **_tol('zcr'))
 
 
 def test_rms_parity(signal):
     ref = time_domain.extract_rms_energy(signal, SR)['rms_energy']
     out = F_afx.rms_energy(_t(signal), SR).numpy()
-    np.testing.assert_allclose(out, ref, rtol=1e-10)
+    np.testing.assert_allclose(out, ref, **_tol('rms_energy'))
 
 
 def test_dct_matrix_matches_scipy():
@@ -307,7 +321,7 @@ def test_module_matches_numpy_extractor(signal, name, params):
     out = module(_t(signal))[name].numpy()
     ref = afx_audio.FEATURE_MAP[name](signal, SR, **params)[name]
     assert out.shape == ref.shape
-    np.testing.assert_allclose(out, ref, rtol=1e-6, atol=1e-6 * max(1.0, np.abs(ref).max()))
+    np.testing.assert_allclose(out, ref, **_tol(name))
 
 
 @pytest.mark.parametrize('name', ['spectral_contrast', 'chroma_stft', 'gfcc', 'mfcc_delta', 'spectral_skewness'])

@@ -14,6 +14,8 @@ from typing import Any
 
 import numpy as np
 
+from afx_audio.presets import list_presets, load_preset, preset_id
+
 PROVENANCE_KEY = 'afx'
 SIDECAR_SUFFIX = '.provenance.json'
 
@@ -43,6 +45,24 @@ def config_hash(config: dict[str, Any]) -> str:
     if not isinstance(config, dict):
         raise TypeError(f'config must be a dict, got {type(config).__name__}')
     return hashlib.sha256(canonical_json(config).encode('utf-8')).hexdigest()[:12]
+
+
+def preset_record(config: dict[str, Any]) -> dict[str, Any]:
+    """
+    ``preset_id`` ('speech@1', None without a preset block) and ``preset_modified``.
+
+    ``preset_modified`` is True when a key the bundled preset sets
+    (sample_rate, features and their parameters, aggregation, ...) has a
+    different value in ``config``, None when the id is not a bundled
+    preset. Options the preset leaves unset (normalize, coverage, flatten)
+    are recorded in the config but do not count as a modification.
+    """
+    pid = preset_id(config)
+    modified = None
+    if pid is not None and pid in list_presets(versions=True):
+        preset = load_preset(pid)
+        modified = any(canonical_json(config.get(k)) != canonical_json(v) for k, v in preset.items())
+    return {'preset_id': pid, 'preset_modified': modified}
 
 
 def file_sha256(path: str, chunk_size: int = 1 << 20) -> str:
@@ -98,6 +118,7 @@ def build_provenance(
     return {
         'afx_version': _versions()['afx_audio'],
         'config_hash': config_hash(config),
+        **preset_record(config),
         'config': json.loads(canonical_json(config)),
         'sample_rate': target,
         'resampling': {

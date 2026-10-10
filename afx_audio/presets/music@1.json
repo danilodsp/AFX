@@ -1,5 +1,5 @@
 {
-  "name": "music",
+  "preset": {"name": "music", "version": 1},
   "title": "Music & MIR",
   "description": "Music information retrieval set for genre, instrument and key/harmony tasks. Chroma (STFT + CQT) and CQT capture pitch/harmony; spectral contrast and rolloff capture timbre; tonnetz adds tonal centroids, onset strength rhythm, and MFCCs round out the descriptor.",
   "sample_rate": 22050,

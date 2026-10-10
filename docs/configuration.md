@@ -129,10 +129,28 @@ polyphase filter, or the file's own rate with `sr=None`; `offset` and
 
 ## Presets
 
-`afx.list_presets()` returns `bioacoustics`, `machinery`, `music` and
-`speech`; `afx.load_preset(name)` returns a validated config and
-`afx.preset_info(name)` its description. The JSON files are in
-`afx_audio/presets/`; copy one as a starting point.
+`afx.list_presets()` returns `bioacoustics`, `egemaps`, `machinery`,
+`music` and `speech`; `afx.load_preset(name)` returns a validated config and
+`afx.preset_info(name)` its id, title, description, sample rate and
+features. The JSON files are in `afx_audio/presets/`; copy one as a
+starting point.
+
+Presets are versioned. `'speech'` loads the latest version and
+`'speech@1'` exactly version 1, here and in `afx --preset` and
+`AFXFeatureExtractor(config=...)`; `afx --list-presets` and
+`afx.list_presets(versions=True)` list every id. Version N is the file
+`speech@N.json` and carries `"preset": {"name": "speech", "version": N}`.
+A released version is never edited: `tests/test_presets.py` pins the
+`config_hash` of each one, and a change ships as the next version while
+the old file stays.
+
+Batch and sklearn provenance records report `preset_id` (`'speech@1'`) and
+`preset_modified`, True when an override changed a value the preset sets
+(sample rate, features, aggregation). To cite an extraction, give the
+package version, the preset id and the config hash from the record, for
+example "features: afx-audio 0.3.0, preset speech@1, config hash
+6a8de7dfed40". Parameters a preset leaves at their defaults follow the
+package version, which is why both are needed.
 
 | Preset | Sample rate | Contents |
 |---|---|---|

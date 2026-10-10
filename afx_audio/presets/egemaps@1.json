@@ -1,5 +1,5 @@
 {
-  "name": "egemaps",
+  "preset": {"name": "egemaps", "version": 1},
   "title": "eGeMAPS v02",
   "description": "The 88 functionals of the extended Geneva Minimalistic Acoustic Parameter Set (Eyben et al., 2016) for each clip, in the order of afx_audio.EGEMAPS_NAMES. Comparable with openSMILE's eGeMAPSv02 functionals; see docs/egemaps.md for the per-feature agreement.",
   "sample_rate": 16000,
