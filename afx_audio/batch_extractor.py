@@ -365,7 +365,7 @@ def _extract_folder(
                 file_info[fkey] = info
                 done += 1
                 if verbose:
-                    print(f'[{done}/{total}] Processed {fkey}')
+                    print(f'[{done}/{total}] ' + (f'Processed {fkey}' if err is None else f'Failed {fkey}: {err}'))
                 if err is not None:
                     errors[fkey] = err
                 else:
