@@ -98,6 +98,10 @@ agreement; the 40-file run above (154 columns) agreed to 2.2e-14 for the
 mean and 7.0e-14 for the variance. Values in `stats.json` that are NaN or
 infinite (a column with no non-NaN value) are written as `null`.
 
+A run without `dataset_stats` removes a `.stats.json` left by an earlier
+run to the same output, and a run with no failed file removes an old
+`.errors.json`, so the sidecars next to an output always describe it.
+
 `afx.load_stats(path)` takes the output or the `.stats.json` file and
 returns the record with numpy arrays plus `std`.
 

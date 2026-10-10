@@ -1,6 +1,7 @@
 """
 Batch extractor for processing folders of audio files.
 """
+import contextlib
 import copy
 import csv
 import json
@@ -18,12 +19,26 @@ from afx_audio._warnings import AFXWarning
 from afx_audio.dataset_stats import STATS_SUFFIX, DatasetStats, write_stats
 from afx_audio.extract_all import FEATURE_MAP, extract_all_features
 from afx_audio.io.io import load_audio
-from afx_audio.provenance import PROVENANCE_KEY, build_provenance, canonical_json, file_sha256, write_sidecar
+from afx_audio.provenance import (
+    PROVENANCE_KEY,
+    build_provenance,
+    canonical_json,
+    file_sha256,
+    sidecar_path,
+    write_sidecar,
+)
 from afx_audio.registry import custom_features, restore_custom_features
 from afx_audio.utils.batch_utils import flatten_features
 from afx_audio.utils.config_loader import load_config, unknown_feature_error, validate_config
 
 _DEFAULT_EXTS = ('.wav', '.mp3', '.flac', '.ogg')
+ERRORS_SUFFIX = '.errors.json'
+
+
+def _remove_stale(path: str) -> None:
+    """Drop a sidecar left by an earlier run to the same output, which would contradict this one."""
+    with contextlib.suppress(FileNotFoundError):
+        os.remove(path)
 
 
 def _flatten_to_columns(feats: dict[str, list]) -> dict[str, float]:
@@ -237,7 +252,10 @@ def extract_features_from_folder(
         The results dict, keyed by path relative to folder_path. Files that
         failed are collected under the 'errors' entry of the returned dict
         and written to '<output_path>.errors.json' (never mixed into the
-        main output).
+        main output). A sidecar this run does not write ('.errors.json'
+        with no failures, '.stats.json' without dataset_stats, and
+        '.provenance.json' for parquet) is removed if an earlier run to the
+        same path left one.
 
     Notes:
         - 'npy' saves a pickled dict; load it back with
@@ -367,11 +385,13 @@ def _extract_folder(
                 results[fkey] = feats
     file_info = {k: file_info[k] for k in keys if file_info.get(k)}
 
+    errors_path = f'{output_path}{ERRORS_SUFFIX}'
     if errors:
-        errors_path = f'{output_path}.errors.json'
         with open(errors_path, 'w', encoding='utf-8') as f:
             json.dump(errors, f, indent=2)
         warnings.warn(f'{len(errors)} file(s) failed; details in {errors_path}', AFXWarning, stacklevel=3)
+    else:
+        _remove_stale(errors_path)
 
     if total == 0:
         warnings.warn(
@@ -402,11 +422,15 @@ def _extract_folder(
         _write_csv(output_path, results)
     else:
         _write_parquet(output_path, results, provenance)
-    if save_format != 'parquet':
+    if save_format == 'parquet':
+        _remove_stale(sidecar_path(output_path))
+    else:
         write_sidecar(output_path, provenance)
     if dataset_stats:
         write_stats(f'{output_path}{STATS_SUFFIX}', _dataset_stats(results),
                     afx_version=provenance['afx_version'], config_hash=provenance['config_hash'])
+    else:
+        _remove_stale(f'{output_path}{STATS_SUFFIX}')
 
     out = dict(results)
     if errors:

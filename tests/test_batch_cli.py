@@ -269,3 +269,22 @@ def test_api_infers_format_and_keeps_the_exact_path(audio_folder, tmp_path):
     extract_features_from_folder(str(audio_folder), {'sample_rate': 16000, 'features': ['zcr']}, str(out_csv),
                                  verbose=False)
     assert out_csv.read_text().startswith('file,zcr')
+
+
+def test_rerun_removes_sidecars_it_does_not_write(audio_folder, small_config, tmp_path):
+    out = tmp_path / 'f.csv'
+    (audio_folder / 'broken.wav').write_bytes(b'not audio')
+    with pytest.warns(UserWarning, match='1 file'):
+        extract_features_from_folder(str(audio_folder), small_config, str(out), dataset_stats=True, verbose=False)
+    assert (tmp_path / 'f.csv.errors.json').exists() and (tmp_path / 'f.csv.stats.json').exists()
+
+    (audio_folder / 'broken.wav').unlink()
+    extract_features_from_folder(str(audio_folder), small_config, str(out), verbose=False)
+    assert not (tmp_path / 'f.csv.errors.json').exists()
+    assert not (tmp_path / 'f.csv.stats.json').exists()
+    assert (tmp_path / 'f.csv.provenance.json').exists()
+
+    # Parquet carries its record inside, so a sidecar from an earlier csv run under the same name goes
+    pytest.importorskip('pyarrow')
+    extract_features_from_folder(str(audio_folder), small_config, str(out), save_format='parquet', verbose=False)
+    assert not (tmp_path / 'f.csv.provenance.json').exists()
