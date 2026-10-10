@@ -1,5 +1,5 @@
 {
-  "name": "machinery",
+  "preset": {"name": "machinery", "version": 1},
   "title": "Machinery & Condition Monitoring",
   "description": "Vibration/acoustic condition-monitoring set for fault detection on rotating machinery (bearings, pumps, fans, valves). Emphasizes impulsiveness (crest factor, kurtosis), signal complexity (Hjorth mobility/complexity) and spectral shape shifts that flag anomalies.",
   "sample_rate": 16000,

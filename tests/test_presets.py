@@ -1,14 +1,28 @@
 """
 Tests for the AFX domain feature packs (``afx_audio.presets``).
 """
+import json
+import os
+
 import numpy as np
 import pytest
 
 import afx_audio
-from afx_audio import extract_all_features
-from afx_audio.presets import list_presets, load_preset, preset_info
+from afx_audio import config_hash, extract_all_features
+from afx_audio.presets import list_presets, load_preset, preset_id, preset_info, resolve_preset
+from afx_audio.utils.config_loader import validate_config
 
 EXPECTED = {'speech', 'bioacoustics', 'music', 'machinery'}
+
+# config_hash of every released preset version. A released version is never
+# edited: change a preset by adding name@<next>.json and a line here.
+FROZEN = {
+    'bioacoustics@1': '7b6f57be5fc9',
+    'egemaps@1': '47d2d6af7e38',
+    'machinery@1': 'fc7712bbcad8',
+    'music@1': '3eda6e0ad299',
+    'speech@1': '6a8de7dfed40',
+}
 
 
 def test_list_presets_contains_all_domains():
@@ -43,7 +57,52 @@ def test_preset_features_are_known_extractors(name):
 def test_preset_info_fields(name):
     info = preset_info(name)
     assert info['name'] == name
+    assert info['id'] == f"{name}@{info['version']}" == resolve_preset(name)
     assert info['title'] and info['description']
+    assert info['sample_rate'] == load_preset(name)['sample_rate']
+    assert info['features'] == list(load_preset(name)['features'])
+
+
+def test_released_presets_are_frozen():
+    """Fails on any edit to a released preset; add a new version instead."""
+    assert list_presets(versions=True) == sorted(FROZEN)
+    assert {pid: config_hash(load_preset(pid)) for pid in FROZEN} == FROZEN
+
+
+@pytest.mark.parametrize('pid', sorted(FROZEN))
+def test_preset_file_matches_its_id(pid):
+    path = os.path.join(os.path.dirname(afx_audio.presets.__file__), f'{pid}.json')
+    with open(path, encoding='utf-8') as f:
+        raw = json.load(f)
+    name, version = pid.split('@')
+    assert raw['preset'] == {'name': name, 'version': int(version)}
+    assert preset_id(load_preset(pid)) == pid
+
+
+def test_versioned_ids():
+    assert load_preset('speech@1') == load_preset('speech')
+    assert resolve_preset('speech') == 'speech@1'
+    assert 'speech@1' in list_presets(versions=True)
+    assert 'speech' in list_presets()
+    with pytest.raises(ValueError, match=r"Available: \['speech@1'\]"):
+        load_preset('speech@99')
+    with pytest.raises(ValueError, match='Unknown version'):
+        load_preset('speech@one')
+
+
+def test_latest_version_wins(monkeypatch):
+    monkeypatch.setattr(afx_audio.presets, '_versions', lambda: {'speech': [1, 2, 10]})
+    assert resolve_preset('speech') == 'speech@10'
+    assert resolve_preset('speech@2') == 'speech@2'
+
+
+@pytest.mark.parametrize('block', [
+    'speech@1', {'name': 'speech'}, {'name': 'Speech', 'version': 1}, {'name': 'speech', 'version': 0},
+    {'name': 'speech', 'version': True}, {'name': 'speech', 'version': 1, 'extra': 1},
+])
+def test_preset_block_is_validated(block):
+    with pytest.raises(ValueError, match='preset'):
+        validate_config({'sample_rate': 16000, 'features': ['zcr'], 'preset': block})
 
 
 def test_unknown_preset_raises():

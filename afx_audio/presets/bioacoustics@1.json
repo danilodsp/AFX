@@ -1,5 +1,5 @@
 {
-  "name": "bioacoustics",
+  "preset": {"name": "bioacoustics", "version": 1},
   "title": "Bioacoustics",
   "description": "Broadband set for animal sound and environmental audio classification (species ID, call detection). Higher sample rate to preserve high-frequency calls; mel/MFCC timbre plus spectral shape and flatness for tonal-vs-noisy discrimination.",
   "sample_rate": 32000,

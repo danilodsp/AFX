@@ -1,5 +1,5 @@
 {
-  "name": "speech",
+  "preset": {"name": "speech", "version": 1},
   "title": "Speech & Paralinguistics",
   "description": "Compact eGeMAPS-style acoustic set for speech and paralinguistic tasks (emotion, speaker traits, voice quality). Emphasizes MFCCs with dynamics, prosody (pitch, energy), formants F1-F3 and voice-quality measures (HNR, spectral contrast).",
   "sample_rate": 16000,
