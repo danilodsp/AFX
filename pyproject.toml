@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "afx-audio"
 version = "0.3.0"
-description = "Audio feature extraction for machine learning: 45 time, spectral, cepstral, harmonic and linear-prediction features with NumPy, PyTorch and scikit-learn front ends"
+description = "Audio feature extraction for machine learning: 47 time, spectral, cepstral, harmonic, linear-prediction and eGeMAPS v02 features with NumPy, PyTorch and scikit-learn front ends"
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]

@@ -106,3 +106,12 @@ def test_version_without_installed_metadata():
 def test_unknown_attribute_error_names_the_module():
     with pytest.raises(AttributeError, match="module 'afx_audio' has no attribute 'nope'"):
         afx_audio.nope  # noqa: B018
+
+
+def test_feature_counts_match_the_registry():
+    description = re.search(r'^description\s*=\s*"([^"]+)"', _read('pyproject.toml'), re.M).group(1)
+    readme = _read('README.md').split('\n## ')[0]
+    for text in (description, readme):
+        counts = re.findall(r'(?<![\w.])(\d+) (?=[^.]*?features)', text)
+        assert counts and all(int(n) == len(afx_audio.FEATURE_MAP) for n in counts), text
+    assert 'eGeMAPS' in description
