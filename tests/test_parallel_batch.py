@@ -155,3 +155,13 @@ def test_cli_jobs_from_a_threaded_process_do_not_warn_about_fork(audio_folder, t
     assert result.returncode == 0, result.stderr
     assert 'fork()' not in result.stderr
     assert len(out.read_text().splitlines()) == 5
+
+
+def test_parallel_progress_reports_failed_files(audio_folder, config_path, tmp_path, capsys):
+    (audio_folder / 'broken.wav').write_bytes(b'not audio')
+    with pytest.warns(UserWarning, match='1 file'):
+        extract_features_from_folder(str(audio_folder), config_path, str(tmp_path / 'f.json'), n_jobs=2,
+                                     verbose=True)
+    lines = capsys.readouterr().out.splitlines()
+    assert [line for line in lines if 'broken.wav' in line][0].split('] ', 1)[1].startswith('Failed broken.wav: ')
+    assert sum('] Processed ' in line for line in lines) == 4

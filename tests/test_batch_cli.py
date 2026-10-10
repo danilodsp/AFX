@@ -269,3 +269,70 @@ def test_api_infers_format_and_keeps_the_exact_path(audio_folder, tmp_path):
     extract_features_from_folder(str(audio_folder), {'sample_rate': 16000, 'features': ['zcr']}, str(out_csv),
                                  verbose=False)
     assert out_csv.read_text().startswith('file,zcr')
+
+
+def test_rerun_removes_sidecars_it_does_not_write(audio_folder, small_config, tmp_path):
+    out = tmp_path / 'f.csv'
+    (audio_folder / 'broken.wav').write_bytes(b'not audio')
+    with pytest.warns(UserWarning, match='1 file'):
+        extract_features_from_folder(str(audio_folder), small_config, str(out), dataset_stats=True, verbose=False)
+    assert (tmp_path / 'f.csv.errors.json').exists() and (tmp_path / 'f.csv.stats.json').exists()
+
+    (audio_folder / 'broken.wav').unlink()
+    extract_features_from_folder(str(audio_folder), small_config, str(out), verbose=False)
+    assert not (tmp_path / 'f.csv.errors.json').exists()
+    assert not (tmp_path / 'f.csv.stats.json').exists()
+    assert (tmp_path / 'f.csv.provenance.json').exists()
+
+    # Parquet carries its record inside, so a sidecar from an earlier csv run under the same name goes
+    pytest.importorskip('pyarrow')
+    extract_features_from_folder(str(audio_folder), small_config, str(out), save_format='parquet', verbose=False)
+    assert not (tmp_path / 'f.csv.provenance.json').exists()
+
+
+def test_library_call_is_silent_by_default(audio_folder, small_config, tmp_path, capsys):
+    extract_features_from_folder(str(audio_folder), small_config, str(tmp_path / 'f.json'))
+    extract_features_from_folder(str(audio_folder), small_config, str(tmp_path / 'f.json'), n_jobs=2)
+    assert capsys.readouterr().out == ''
+    assert cli.main([str(audio_folder), '--config', small_config, '-o', str(tmp_path / 'f.json')]) == 0
+    assert '[1/3] Processing' in capsys.readouterr().out
+
+
+def test_cli_default_output_is_csv(audio_folder, small_config, tmp_path, monkeypatch):
+    work = tmp_path / 'work'
+    work.mkdir()
+    monkeypatch.chdir(work)
+    assert cli.main([str(audio_folder), '--config', small_config, '-q']) == 0
+    assert set(pd.read_csv(work / 'features.csv', index_col='file').index) == {'root.wav', 'a/take1.wav', 'b/take1.wav'}
+    assert sorted(os.listdir(work)) == ['features.csv', 'features.csv.provenance.json']
+
+
+def test_default_extensions_cover_soundfile_formats_and_ext_restricts(tmp_path, capsys):
+    from afx_audio.batch_extractor import default_extensions
+
+    assert {'.wav', '.flac', '.ogg', '.aif', '.aiff', '.au', '.caf', '.w64'} <= set(default_extensions())
+    folder = tmp_path / 'ext'
+    folder.mkdir()
+    x = (0.1 * np.sin(np.arange(8000) / 5)).astype(np.float32)
+    sf.write(folder / 'a.WAV', x, 16000)
+    sf.write(folder / 'b.aiff', x, 16000)
+    sf.write(folder / 'c.FLAC', x, 16000)
+    sf.write(folder / 'd.wav', x, 16000)
+    (folder / 'notes.txt').write_text('not audio')
+    expected = {'a.WAV', 'b.aiff', 'c.FLAC', 'd.wav'}
+    if 'OPUS' in sf.available_subtypes('OGG'):
+        sf.write(folder / 'e.opus', x, 48000, format='OGG', subtype='OPUS')
+        expected.add('e.opus')
+
+    out = tmp_path / 'f.csv'
+    assert cli.main([str(folder), '--features', 'zcr', '-o', str(out), '-q']) == 0
+    assert set(pd.read_csv(out, index_col='file').index) == expected
+    assert cli.main([str(folder), '--features', 'zcr', '-o', str(out), '-q', '--ext', 'wav, .AIFF']) == 0
+    assert set(pd.read_csv(out, index_col='file').index) == {'a.WAV', 'b.aiff', 'd.wav'}
+    extract_features_from_folder(str(folder), {'sample_rate': 16000, 'features': ['zcr']}, str(out),
+                                 file_exts='FLAC')
+    assert set(pd.read_csv(out, index_col='file').index) == {'c.FLAC'}
+    with pytest.raises(SystemExit) as exc:
+        cli.main([str(folder), '--features', 'zcr', '-o', str(out), '--ext', ' , .'])
+    assert exc.value.code == 2
+    assert '--ext needs at least one extension' in capsys.readouterr().err

@@ -5,7 +5,11 @@
 Every file written by `extract_features_from_folder` (and the `afx` CLI)
 records how it was made. Parquet outputs carry the record in the schema
 metadata under the key `afx`. The npy, json and csv outputs get a sidecar
-`<output>.provenance.json`, so their own layouts are unchanged.
+`<output>.provenance.json`, so their own layouts are unchanged. The format
+written decides where the record goes, not the file name:
+`afx_audio.read_provenance` recognises parquet by its `PAR1` magic bytes,
+so `-o features.dat --format parquet` reads back like `features.parquet`.
+Reading parquet provenance needs pyarrow (`pip install "afx-audio[parquet]"`).
 
 ```python
 import afx_audio as afx
@@ -53,7 +57,8 @@ the values: every feature parameter merged over the extractor's defaults,
 and `sample_rate`, `aggregation`, `aggregation_params`, `normalize`,
 `preserve_shape` and `coverage` with their defaults filled in. It drops
 labels (`title`, `description`, the `preset` block) and `flatten`, which
-only changes the output layout. So a preset, the same preset saved to a
+only changes the output layout. A `sample_rate` of `16000.0` counts as
+`16000` (`validate_config` stores it as an int). So a preset, the same preset saved to a
 file, a features list relying on defaults and the config the scikit-learn
 transformer builds all hash alike, and two outputs with equal hashes were
 computed with the same parameters by the same AFX version.
@@ -93,6 +98,10 @@ and `numpy.nanvar` on the stacked matrix the tests require 1e-12 relative
 agreement; the 40-file run above (154 columns) agreed to 2.2e-14 for the
 mean and 7.0e-14 for the variance. Values in `stats.json` that are NaN or
 infinite (a column with no non-NaN value) are written as `null`.
+
+A run without `dataset_stats` removes a `.stats.json` left by an earlier
+run to the same output, and a run with no failed file removes an old
+`.errors.json`, so the sidecars next to an output always describe it.
 
 `afx.load_stats(path)` takes the output or the `.stats.json` file and
 returns the record with numpy arrays plus `std`.

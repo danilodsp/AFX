@@ -12,6 +12,8 @@
 
 ::: afx_audio.batch_extractor.extract_features_from_folder
 
+::: afx_audio.batch_extractor.default_extensions
+
 ::: afx_audio.io.io.load_audio
 
 ## Configuration

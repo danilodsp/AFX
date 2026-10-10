@@ -1,6 +1,7 @@
 """
 Batch extractor for processing folders of audio files.
 """
+import contextlib
 import copy
 import csv
 import json
@@ -18,12 +19,55 @@ from afx_audio._warnings import AFXWarning
 from afx_audio.dataset_stats import STATS_SUFFIX, DatasetStats, write_stats
 from afx_audio.extract_all import FEATURE_MAP, extract_all_features
 from afx_audio.io.io import load_audio
-from afx_audio.provenance import PROVENANCE_KEY, build_provenance, canonical_json, file_sha256, write_sidecar
+from afx_audio.provenance import (
+    PROVENANCE_KEY,
+    build_provenance,
+    canonical_json,
+    file_sha256,
+    sidecar_path,
+    write_sidecar,
+)
 from afx_audio.registry import custom_features, restore_custom_features
 from afx_audio.utils.batch_utils import flatten_features
 from afx_audio.utils.config_loader import load_config, unknown_feature_error, validate_config
 
-_DEFAULT_EXTS = ('.wav', '.mp3', '.flac', '.ogg')
+# Extensions per libsndfile major format. MAT4/MAT5 (.mat), HTK (.htk), IRCAM (.sf) and
+# headerless RAW are left out: in a dataset folder those extensions usually hold other data.
+_FORMAT_EXTENSIONS = {
+    'WAV': ('.wav',), 'WAVEX': ('.wav',), 'RF64': ('.rf64',), 'W64': ('.w64',),
+    'AIFF': ('.aif', '.aiff', '.aifc'), 'AU': ('.au', '.snd'), 'CAF': ('.caf',), 'FLAC': ('.flac',),
+    'OGG': ('.ogg', '.oga'), 'MP3': ('.mp3',), 'NIST': ('.sph', '.nist'), 'SD2': ('.sd2',),
+    'VOC': ('.voc',), 'PAF': ('.paf',), 'SVX': ('.8svx', '.svx'), 'AVR': ('.avr',), 'PVF': ('.pvf',),
+    'SDS': ('.sds',), 'WVE': ('.wve',), 'XI': ('.xi',),
+}
+
+
+def default_extensions() -> tuple[str, ...]:
+    """
+    File extensions read by default: those of every format the installed libsndfile reads.
+
+    For example .wav, .flac, .ogg, .oga, .opus, .mp3, .aif, .aiff, .au,
+    .caf, .w64 and .rf64; .mp3 needs libsndfile 1.1 or later and .opus a
+    build with Opus.
+    """
+    formats = sf.available_formats()
+    exts = {ext for fmt, fmt_exts in _FORMAT_EXTENSIONS.items() if fmt in formats for ext in fmt_exts}
+    if 'OGG' in formats and 'OPUS' in sf.available_subtypes('OGG'):
+        exts.add('.opus')
+    return tuple(sorted(exts))
+
+
+def _normalize_extensions(file_exts: Sequence[str]) -> tuple[str, ...]:
+    if isinstance(file_exts, str):
+        file_exts = [file_exts]
+    return tuple(dict.fromkeys('.' + ext.strip().lower().lstrip('.') for ext in file_exts))
+ERRORS_SUFFIX = '.errors.json'
+
+
+def _remove_stale(path: str) -> None:
+    """Drop a sidecar left by an earlier run to the same output, which would contradict this one."""
+    with contextlib.suppress(FileNotFoundError):
+        os.remove(path)
 
 
 def _flatten_to_columns(feats: dict[str, list]) -> dict[str, float]:
@@ -41,7 +85,7 @@ def _table(results: dict[str, Any]) -> tuple[list[str], list[str], list[dict[str
             'Files produced different numbers of values, so some cells are empty. With '
             "aggregation='stack' every clip must have the same length; use a pooling aggregation otherwise.",
             AFXWarning,
-            stacklevel=3,
+            stacklevel=5,  # _table < _write_csv/_write_parquet < _extract_folder < extract_features_from_folder
         )
     return list(results), columns, rows
 
@@ -185,7 +229,7 @@ def extract_features_from_folder(
     normalize: str | None = None,
     n_jobs: int | None = None,
     sample_rate: int | None = None,
-    verbose: bool = True,
+    verbose: bool = False,
     coverage: bool | None = None,
     hash_files: bool = True,
     dataset_stats: bool = False,
@@ -200,7 +244,10 @@ def extract_features_from_folder(
             copied, not modified.
         output_path: Path to save output (npy, json, csv, or parquet). Its
             folder must exist.
-        file_exts: File extensions to include (default: wav/mp3/flac/ogg)
+        file_exts: File extensions to include, with or without the dot,
+            matched case-insensitively. None takes ``default_extensions()``,
+            every format the installed soundfile reads (.wav, .flac, .ogg,
+            .opus, .mp3, .aiff, .au, .caf, .w64, ...).
         save_format: Output format ('npy', 'json', 'csv', 'parquet'); None
             infers it from the output_path extension.
         features: Optional list of feature names to extract. Names missing
@@ -223,7 +270,8 @@ def extract_features_from_folder(
             script (not a lambda, nor defined in a notebook).
         sample_rate: Override the config's sample_rate (audio is resampled
             to this rate on load).
-        verbose: Print per-file progress to stdout.
+        verbose: Print per-file progress to stdout. Off by default; the
+            ``afx`` command turns it on unless given ``--quiet``.
         coverage: Add a <feature>_valid_frac column per feature (fraction
             of frames with a finite value). None keeps the config's setting.
         hash_files: Record the sha256 of every audio file in the
@@ -237,7 +285,10 @@ def extract_features_from_folder(
         The results dict, keyed by path relative to folder_path. Files that
         failed are collected under the 'errors' entry of the returned dict
         and written to '<output_path>.errors.json' (never mixed into the
-        main output).
+        main output). A sidecar this run does not write ('.errors.json'
+        with no failures, '.stats.json' without dataset_stats, and
+        '.provenance.json' for parquet) is removed if an earlier run to the
+        same path left one.
 
     Notes:
         - 'npy' saves a pickled dict; load it back with
@@ -253,6 +304,32 @@ def extract_features_from_folder(
           the key 'afx', otherwise in '<output_path>.provenance.json'.
           Read it with ``afx_audio.read_provenance``.
     """
+    return _extract_folder(
+        folder_path, config_path, output_path, file_exts=file_exts, save_format=save_format, features=features,
+        aggregation=aggregation, flatten=flatten, normalize=normalize, n_jobs=n_jobs, sample_rate=sample_rate,
+        verbose=verbose, coverage=coverage, hash_files=hash_files, dataset_stats=dataset_stats,
+    )[0]
+
+
+def _extract_folder(
+    folder_path: str,
+    config_path: str | dict[str, Any],
+    output_path: str,
+    *,
+    file_exts: Sequence[str] | None,
+    save_format: str | None,
+    features: list[str] | None,
+    aggregation: str | None,
+    flatten: bool | None,
+    normalize: str | None,
+    n_jobs: int | None,
+    sample_rate: int | None,
+    verbose: bool,
+    coverage: bool | None,
+    hash_files: bool,
+    dataset_stats: bool,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """extract_features_from_folder, also returning the provenance record it wrote."""
     if isinstance(config_path, dict):
         config = validate_config(copy.deepcopy(config_path))
     else:
@@ -278,8 +355,7 @@ def extract_features_from_folder(
     save_format = _output_format(output_path, save_format)
     _check_output(output_path, save_format)
 
-    if file_exts is None:
-        file_exts = _DEFAULT_EXTS
+    file_exts = default_extensions() if file_exts is None else _normalize_extensions(file_exts)
 
     # Collect files first so we can show progress
     all_files = []
@@ -321,7 +397,7 @@ def extract_features_from_folder(
                 file_info[fkey] = info
                 done += 1
                 if verbose:
-                    print(f'[{done}/{total}] Processed {fkey}')
+                    print(f'[{done}/{total}] ' + (f'Processed {fkey}' if err is None else f'Failed {fkey}: {err}'))
                 if err is not None:
                     errors[fkey] = err
                 else:
@@ -341,17 +417,19 @@ def extract_features_from_folder(
                 results[fkey] = feats
     file_info = {k: file_info[k] for k in keys if file_info.get(k)}
 
+    errors_path = f'{output_path}{ERRORS_SUFFIX}'
     if errors:
-        errors_path = f'{output_path}.errors.json'
         with open(errors_path, 'w', encoding='utf-8') as f:
             json.dump(errors, f, indent=2)
-        warnings.warn(f'{len(errors)} file(s) failed; details in {errors_path}', AFXWarning, stacklevel=2)
+        warnings.warn(f'{len(errors)} file(s) failed; details in {errors_path}', AFXWarning, stacklevel=3)
+    else:
+        _remove_stale(errors_path)
 
     if total == 0:
         warnings.warn(
             f'no audio files with extensions {tuple(file_exts)} found under {folder_path}',
             AFXWarning,
-            stacklevel=2,
+            stacklevel=3,
         )
 
     provenance = build_provenance(
@@ -376,13 +454,17 @@ def extract_features_from_folder(
         _write_csv(output_path, results)
     else:
         _write_parquet(output_path, results, provenance)
-    if save_format != 'parquet':
+    if save_format == 'parquet':
+        _remove_stale(sidecar_path(output_path))
+    else:
         write_sidecar(output_path, provenance)
     if dataset_stats:
         write_stats(f'{output_path}{STATS_SUFFIX}', _dataset_stats(results),
                     afx_version=provenance['afx_version'], config_hash=provenance['config_hash'])
+    else:
+        _remove_stale(f'{output_path}{STATS_SUFFIX}')
 
     out = dict(results)
     if errors:
         out['errors'] = errors
-    return out
+    return out, provenance

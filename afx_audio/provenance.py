@@ -3,6 +3,7 @@ Provenance records for batch outputs: what produced a feature file.
 
 Parquet outputs carry the record in the schema metadata under the key
 ``afx``; every other format gets a ``<output>.provenance.json`` sidecar.
+The format written decides, not the output's file name.
 """
 import datetime
 import hashlib
@@ -15,9 +16,11 @@ from typing import Any
 import numpy as np
 
 from afx_audio.presets import list_presets, load_preset, preset_id
+from afx_audio.utils.config_loader import integral_rate
 
 PROVENANCE_KEY = 'afx'
 SIDECAR_SUFFIX = '.provenance.json'
+PARQUET_MAGIC = b'PAR1'
 
 
 def _json_default(value):
@@ -60,6 +63,8 @@ def computed_config(config: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(config, dict):
         raise TypeError(f'config must be a dict, got {type(config).__name__}')
     out = {k: v for k, v in config.items() if k not in _NOT_HASHED}
+    if 'sample_rate' in out:
+        out['sample_rate'] = integral_rate(out['sample_rate'])
     for key, default in _COMPUTE_DEFAULTS.items():
         if out.get(key) is None:
             out[key] = default
@@ -89,14 +94,18 @@ def preset_record(config: dict[str, Any]) -> dict[str, Any]:
     ``preset_modified`` is True when a key the bundled preset sets
     (sample_rate, features and their parameters, aggregation, ...) has a
     different value in ``config``, None when the id is not a bundled
-    preset. Options the preset leaves unset (normalize, coverage, flatten)
-    are recorded in the config but do not count as a modification.
+    preset. Both sides are compared through ``computed_config``, so it
+    agrees with ``config_hash``: a parameter written out at its default
+    value is not a modification. Options the preset leaves unset
+    (normalize, coverage) are recorded in the config but do not count as
+    a modification, and neither do labels or flatten.
     """
     pid = preset_id(config)
     modified = None
     if pid is not None and pid in list_presets(versions=True):
         preset = load_preset(pid)
-        modified = any(canonical_json(config.get(k)) != canonical_json(v) for k, v in preset.items())
+        mine, theirs = computed_config(config), computed_config(preset)
+        modified = any(canonical_json(mine[k]) != canonical_json(theirs[k]) for k in preset if k in theirs)
     return {'preset_id': pid, 'preset_modified': modified}
 
 
@@ -182,18 +191,33 @@ def write_sidecar(output_path: str, record: dict[str, Any]) -> str:
     return path
 
 
+def _is_parquet(path: str) -> bool:
+    """True when the file starts with the parquet magic bytes, whatever its name."""
+    try:
+        with open(path, 'rb') as f:
+            return f.read(4) == PARQUET_MAGIC
+    except OSError:
+        return False
+
+
 def read_provenance(path: str | os.PathLike) -> dict[str, Any]:
     """
     Provenance record of a batch output.
 
-    ``path`` is the output itself (parquet metadata or the sidecar next to
-    it is read) or the ``.provenance.json`` sidecar.
+    ``path`` is the output itself or its ``.provenance.json`` sidecar. A
+    parquet file, recognised by its content and not by its extension, is
+    read from its schema metadata; any other output from the sidecar next
+    to it. Reading parquet needs pyarrow (the ``parquet`` extra).
     """
     path = os.fspath(path)
     if path.endswith(SIDECAR_SUFFIX):
         sidecar = path
-    elif path.lower().endswith('.parquet'):
-        import pyarrow.parquet as pq
+    elif _is_parquet(path):
+        try:
+            import pyarrow.parquet as pq
+        except ImportError as e:
+            raise ImportError(f'Reading the provenance of the parquet file {path} requires pyarrow: '
+                              'pip install "afx-audio[parquet]"') from e
 
         metadata = pq.read_schema(path).metadata or {}
         raw = metadata.get(PROVENANCE_KEY.encode())

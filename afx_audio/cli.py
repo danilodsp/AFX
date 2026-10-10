@@ -12,7 +12,7 @@ import sys
 import warnings
 
 from afx_audio import __version__
-from afx_audio.batch_extractor import FORMATS, extract_features_from_folder
+from afx_audio.batch_extractor import FORMATS, _extract_folder, default_extensions
 from afx_audio.extract_all import FEATURE_MAP
 from afx_audio.presets import list_presets, load_preset, preset_info
 from afx_audio.provenance import read_provenance
@@ -40,11 +40,14 @@ def build_parser() -> argparse.ArgumentParser:
     source.add_argument('--preset', metavar='NAME[@VERSION]',
                         help=f"Use a bundled preset instead of a config file ({', '.join(list_presets())}); "
                              'NAME is the latest version, NAME@VERSION an exact one')
-    parser.add_argument('--output', '-o', default='features.npy',
-                        help='Output file; .npy, .json, .csv or .parquet sets the format (default: features.npy)')
+    parser.add_argument('--output', '-o', default='features.csv',
+                        help='Output file; .csv, .parquet, .json or .npy sets the format (default: features.csv)')
     parser.add_argument('--format', choices=FORMATS, default=None,
                         help='Output format, when the --output extension does not say it')
     parser.add_argument('--features', help='Comma-separated features to extract (default: all in the config)')
+    parser.add_argument('--ext', metavar='EXT[,EXT...]',
+                        help='Only read files with these extensions, comma-separated and case-insensitive '
+                             f"(default: every format soundfile reads, {' '.join(default_extensions())})")
     parser.add_argument('--aggregation', choices=_CLI_AGGREGATIONS, help='Aggregation method over frames')
     parser.add_argument('--normalize', choices=['zscore', 'minmax'], help='Per-file normalization method')
     parser.add_argument('--coverage', action='store_true',
@@ -129,16 +132,23 @@ def _run(args, parser) -> int:
         if not feature_list:
             parser.error('--features needs at least one feature name')
 
+    file_exts = None
+    if args.ext is not None:
+        file_exts = [e.strip() for e in args.ext.split(',') if e.strip().strip('.')]
+        if not file_exts:
+            parser.error('--ext needs at least one extension')
+
     if args.jobs != 1:
         # Forkserver workers then start with AFX imported instead of each importing it
         multiprocessing.set_forkserver_preload(['afx_audio.batch_extractor'])
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter('always')
         try:
-            results = extract_features_from_folder(
+            results, record = _extract_folder(
                 args.input_folder,
                 config,
                 args.output,
+                file_exts=file_exts,
                 save_format=args.format,
                 features=feature_list,
                 aggregation=args.aggregation,
@@ -162,7 +172,7 @@ def _run(args, parser) -> int:
         print('afx: no features were extracted', file=sys.stderr)
         return 1
     if not args.quiet:
-        record = read_provenance(args.output)
+        # The record of this run, not a re-read of the output that a name/format mismatch could break
         if record['preset_id']:
             print(f"preset {record['preset_id']}{' (modified)' if record['preset_modified'] else ''}")
         print(f"config hash {record['config_hash']}")

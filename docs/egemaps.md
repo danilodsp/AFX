@@ -35,8 +35,13 @@ afx.extract_features_from_folder('clips/', afx.load_preset('egemaps'), 'egemaps.
 ```
 
 or `afx clips/ --preset egemaps -o egemaps.parquet` on the command line.
-The output columns are `egemaps_0` to `egemaps_87` in the order of
-`afx.EGEMAPS_NAMES`.
+The csv and parquet columns, `get_feature_names_out()`, `afx.feature_names`
+and the dataset statistics all use the openSMILE names of
+`afx.EGEMAPS_NAMES` (`egemaps_lld` rows those of `afx.EGEMAPS_LLD_NAMES`).
+Under `summary` and `advanced_summary` the statistic follows the name
+(`loudness_sma3_amean_mean`, `loudness_sma3_amean_std`); with several
+values per row, as with `sliding_window`, the window index does
+(`Loudness_sma3_0`, `Loudness_sma3_1`, ...).
 
 The LLD array holds NaN where a descriptor is undefined: the 15 voice
 descriptors in unvoiced frames, jitter and shimmer in frames with fewer than

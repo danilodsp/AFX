@@ -4,6 +4,7 @@ Provenance records of batch outputs, config hashing and the sklearn provenance_ 
 import hashlib
 import json
 import os
+import sys
 
 import numpy as np
 import pandas as pd
@@ -190,6 +191,31 @@ def test_cli_prints_hash_and_provenance(audio_folder, tmp_path, capsys):
     assert printed['config_hash'] == record['config_hash']
 
 
+def test_provenance_follows_the_format_not_the_name(audio_folder, tmp_path, capsys):
+    # Parquet under another name: the record is in the metadata and the CLI run ends cleanly
+    dat = str(tmp_path / 'x.dat')
+    assert cli.main([str(audio_folder), '--features', 'zcr', '-o', dat, '--format', 'parquet']) == 0
+    assert not os.path.exists(dat + '.provenance.json')
+    record = read_provenance(dat)
+    assert record['format'] == 'parquet'
+    assert capsys.readouterr().out.strip().endswith(f"config hash {record['config_hash']}")
+
+    # Another format under a .parquet name: the record is in the sidecar
+    named = str(tmp_path / 'y.parquet')
+    assert cli.main([str(audio_folder), '--features', 'zcr', '-o', named, '--format', 'csv', '-q']) == 0
+    assert read_provenance(named)['format'] == 'csv'
+    assert cli.main(['--provenance', named]) == 0
+    assert json.loads(capsys.readouterr().out)['format'] == 'csv'
+
+
+def test_read_provenance_names_the_parquet_extra(tmp_path, monkeypatch):
+    path = tmp_path / 'f.parquet'
+    pd.DataFrame({'x': [1.0]}).to_parquet(path)
+    monkeypatch.setitem(sys.modules, 'pyarrow.parquet', None)
+    with pytest.raises(ImportError, match=r'afx-audio\[parquet\]'):
+        read_provenance(path)
+
+
 def test_cli_provenance_error(tmp_path, capsys):
     with pytest.raises(SystemExit) as exc:
         cli.main(['--provenance', os.fspath(tmp_path / 'missing.npy')])
@@ -242,3 +268,38 @@ def test_sklearn_provenance_preset_id(audio_folder):
     assert est.provenance_['preset_modified'] is True
     with pytest.raises(ValueError, match='Available'):
         AFXFeatureExtractor(config='speech@7').fit([str(audio_folder / 'a.wav')])
+
+
+def test_integral_float_sample_rate_is_the_same_config(audio_folder, tmp_path):
+    speech = afx_audio.load_preset('speech@1')
+    as_float = {**speech, 'sample_rate': 16000.0}
+    validated = afx_audio.validate_config(as_float)
+    assert type(validated['sample_rate']) is int and type(as_float['sample_rate']) is float
+    assert config_hash(as_float) == config_hash(speech)
+    assert afx_audio.provenance.preset_record(as_float) == {'preset_id': 'speech@1', 'preset_modified': False}
+
+    out = tmp_path / 'f.json'
+    extract_features_from_folder(str(audio_folder), as_float, str(out), features=['zcr'], verbose=False)
+    record = read_provenance(out)
+    assert record['sample_rate'] == 16000 and type(record['config']['sample_rate']) is int
+    assert record['config_hash'] == config_hash({**speech, 'features': {'zcr': speech['features']['zcr']}})
+
+
+def test_preset_modified_agrees_with_the_hash():
+    speech = afx_audio.load_preset('speech@1')
+    # center and threshold left at their defaults, which the preset writes out
+    shorter = {**speech, 'features': {**speech['features'], 'zcr': {'frame_size': 400, 'hop_length': 160}}}
+    assert config_hash(shorter) == config_hash(speech)
+    assert afx_audio.provenance.preset_record(shorter)['preset_modified'] is False
+    changed = {**speech, 'features': {**speech['features'], 'zcr': {'frame_size': 512, 'hop_length': 160}}}
+    assert config_hash(changed) != config_hash(speech)
+    assert afx_audio.provenance.preset_record(changed)['preset_modified'] is True
+
+
+def test_sklearn_float_sample_rate_keeps_the_preset_hash(audio_folder):
+    pytest.importorskip('sklearn')
+    from afx_audio.sklearn import AFXFeatureExtractor
+
+    est = AFXFeatureExtractor(config='speech@1', sample_rate=16000.0).fit([str(audio_folder / 'a.wav')])
+    assert est.provenance_['config_hash'] == config_hash(afx_audio.load_preset('speech@1'))
+    assert est.provenance_['preset_modified'] is False

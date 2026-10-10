@@ -209,3 +209,15 @@ def test_features_dict_and_preset_name():
         AFXFeatureExtractor(features={'mfcc': {'n_mfccs': 3}}).fit(x)
     ext = AFXFeatureExtractor(config='speech').fit(x)
     assert ext.config_['sample_rate'] == 16000 and ext.config_['aggregation'] == 'summary'
+
+
+def test_config_normalize_is_kept_unless_overridden(signals):
+    import afx_audio
+
+    config = {**CONFIG, 'normalize': 'zscore'}
+    est = AFXFeatureExtractor(config=config).fit(signals[:1])
+    assert est.config_['normalize'] == 'zscore'
+    reference = afx_audio.flatten_features(afx_audio.extract_all_features(signals[0], SR, config))[1]
+    np.testing.assert_allclose(est.transform(signals[:1])[0], reference)
+    assert est.provenance_['config_hash'] == afx_audio.config_hash(config)
+    assert AFXFeatureExtractor(config=config, normalize='minmax').fit(signals[:1]).config_['normalize'] == 'minmax'
