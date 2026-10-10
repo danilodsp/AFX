@@ -63,3 +63,13 @@
 ## PyTorch
 
 ::: afx_audio.torch.module.AFXFeatureModule
+
+## Warnings
+
+Every warning AFX emits is an `AFXWarning`, so
+`warnings.filterwarnings('ignore', category=afx.AFXWarning)` silences AFX
+without hiding NumPy or SciPy warnings.
+
+::: afx_audio._warnings.AFXWarning
+
+::: afx_audio._warnings.AFXDeprecationWarning

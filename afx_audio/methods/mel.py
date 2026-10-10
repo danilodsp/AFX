@@ -6,6 +6,8 @@ import warnings
 
 import numpy as np
 
+from afx_audio._warnings import AFXWarning
+
 # Slaney mel scale: linear below 1 kHz at 200/3 Hz per mel, logarithmic above
 _F_SP = 200.0 / 3
 _MIN_LOG_HZ = 1000.0
@@ -85,6 +87,7 @@ def mel_filterbank(
         warnings.warn(
             f'Empty filters in the mel filterbank (n_mels={n_mels}, n_fft={n_fft}, sr={sr}): some bands fall '
             'between FFT bins and stay zero. Use fewer mels or a larger n_fft.',
+            AFXWarning,
             stacklevel=2,
         )
     if norm == 'slaney':

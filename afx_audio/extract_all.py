@@ -8,6 +8,7 @@ from typing import Any, cast
 
 import numpy as np
 
+from ._warnings import AFXWarning
 from .extractors import cepstral_features, egemaps, frequency_domain, harmonic_features, linear_prediction, time_domain
 from .utils.aggregator import aggregate_features
 from .utils.config_loader import validate_config
@@ -111,6 +112,7 @@ def extract_all_features(
         warnings.warn(
             f"sr={sr} differs from the config's sample_rate={config['sample_rate']}. Frame sizes are in samples, "
             'so the analysis windows change length in time; resample with load_audio(path, sr=config["sample_rate"]).',
+            AFXWarning,
             stacklevel=2,
         )
 

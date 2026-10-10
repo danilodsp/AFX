@@ -12,6 +12,7 @@ from typing import Any
 import numpy as np
 import soundfile as sf
 
+from afx_audio._warnings import AFXWarning
 from afx_audio.dataset_stats import STATS_SUFFIX, DatasetStats, write_stats
 from afx_audio.extract_all import FEATURE_MAP, extract_all_features
 from afx_audio.io.io import load_audio
@@ -37,6 +38,7 @@ def _table(results: dict[str, Any]) -> tuple[list[str], list[str], list[dict[str
         warnings.warn(
             'Files produced different numbers of values, so some cells are empty. With '
             "aggregation='stack' every clip must have the same length; use a pooling aggregation otherwise.",
+            AFXWarning,
             stacklevel=3,
         )
     return list(results), columns, rows
@@ -309,11 +311,12 @@ def extract_features_from_folder(
         errors_path = f'{output_path}.errors.json'
         with open(errors_path, 'w', encoding='utf-8') as f:
             json.dump(errors, f, indent=2)
-        warnings.warn(f'{len(errors)} file(s) failed; details in {errors_path}', stacklevel=2)
+        warnings.warn(f'{len(errors)} file(s) failed; details in {errors_path}', AFXWarning, stacklevel=2)
 
     if total == 0:
         warnings.warn(
             f'no audio files with extensions {tuple(file_exts)} found under {folder_path}',
+            AFXWarning,
             stacklevel=2,
         )
 

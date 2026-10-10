@@ -57,6 +57,16 @@ file checks and strips notebook outputs.
 Cite the paper or standard the definition comes from in the docstring when the
 formula is not obvious.
 
+## Warnings and deprecations
+
+Warnings use `afx_audio.AFXWarning` as their category (pass it to
+`warnings.warn` with `stacklevel` pointing at the user's call), so users can
+filter AFX on its own. Before 1.0, breaking changes happen without a
+deprecation period and are listed in the changelog. From 1.0, a public name
+or parameter that is going away first warns with `AFXDeprecationWarning`
+(through `afx_audio._warnings.warn_deprecated`) for at least one minor
+release, and the warning names the replacement.
+
 ## Pull requests
 
 Keep each pull request to one change and include tests for it. Commit messages
