@@ -3,16 +3,21 @@ Tests for parallel batch extraction and parquet output in
 afx_audio.batch_extractor.
 """
 import json
+import multiprocessing
 import os
+import subprocess
+import sys
 
 import numpy as np
 import pandas as pd
 import pytest
 import soundfile as sf
 
+from afx_audio import batch_extractor
 from afx_audio.batch_extractor import extract_features_from_folder
 
 SR = 16000
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RNG = np.random.default_rng(7)
 
 
@@ -119,3 +124,33 @@ def test_subfolder_keys_preserved(audio_folder, config_path, tmp_path):
         str(audio_folder), config_path, out, save_format='json', n_jobs=2
     )
     assert any(k.startswith('sub') for k in res)
+
+
+@pytest.mark.parametrize(('chosen', 'expected'), [(None, None), ('fork', 'forkserver'), ('spawn', 'spawn')])
+def test_workers_never_fork(monkeypatch, chosen, expected):
+    methods = multiprocessing.get_all_start_methods()
+    if 'forkserver' not in methods:
+        pytest.skip('platform without forkserver')
+    monkeypatch.setattr(multiprocessing, 'get_start_method', lambda allow_none=False: chosen)
+    method = batch_extractor._mp_context().get_start_method()
+    assert method != 'fork'
+    assert method == (expected or ('forkserver' if methods[0] == 'fork' else methods[0]))
+
+
+def test_cli_jobs_from_a_threaded_process_do_not_warn_about_fork(audio_folder, tmp_path):
+    # A live thread at fork time is what makes Python 3.12+ warn and what can deadlock the child
+    code = (
+        'import sys, threading, time\n'
+        'threading.Thread(target=time.sleep, args=(60,), daemon=True).start()\n'
+        'from afx_audio.cli import main\n'
+        'sys.exit(main(sys.argv[1:]))\n'
+    )
+    out = tmp_path / 'features.csv'
+    env = {**os.environ, 'PYTHONPATH': os.pathsep.join(filter(None, [ROOT, os.environ.get('PYTHONPATH')]))}
+    result = subprocess.run(
+        [sys.executable, '-c', code, str(audio_folder), '-o', str(out), '-j', '2', '-q'],
+        capture_output=True, text=True, cwd=ROOT, env=env, timeout=120,
+    )
+    assert result.returncode == 0, result.stderr
+    assert 'fork()' not in result.stderr
+    assert len(out.read_text().splitlines()) == 5
