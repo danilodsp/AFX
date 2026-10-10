@@ -6,7 +6,7 @@ import pytest
 
 import afx_audio
 from afx_audio.extractors.egemaps import extract_egemaps, extract_egemaps_lld
-from tests.voice_synth import corpus, synthetic_voice
+from tests.voice_synth import VOWELS, corpus, synthetic_voice
 
 SR = 16000
 NAMES = list(afx_audio.EGEMAPS_NAMES)
@@ -109,6 +109,49 @@ def test_known_jitter_and_shimmer():
     assert afx_audio.egemaps(x, SR)['shimmerLocaldB_sma3nz_amean'] == pytest.approx(20 * np.log10(1.25), rel=0.1)
 
 
+def steady_voice(vowel, f0, jitter, shimmer, seed=3):
+    """1.5 s of a constant-F0 vowel at 40 dB SNR with unambiguous periods and amplitudes, and its realized values."""
+    return synthetic_voice(duration=2.0, f0=(f0, f0), contour='glide', jitter=jitter, shimmer=shimmer,
+                           formants=VOWELS[vowel][0], bandwidths=VOWELS[vowel][1], snr_db=40.0,
+                           voiced=((0.25, 1.75),), fricative_db=None, fixed_pulse=True, seed=seed, return_truth=True)
+
+
+@pytest.mark.parametrize('vowel, f0', [('a', 140.0), ('u', 120.0), ('a', 220.0), ('i', 240.0)])
+def test_random_jitter_matches_the_synthesis(vowel, f0):
+    x, truth = steady_voice(vowel, f0, 0.02, 0.1)
+    assert afx_audio.egemaps(x, SR)['jitterLocal_sma3nz_amean'] == pytest.approx(truth['jitter'], rel=0.1)
+    x, _ = steady_voice(vowel, f0, 0.0, 0.0)
+    assert afx_audio.egemaps(x, SR)['jitterLocal_sma3nz_amean'] < 0.0025
+
+
+# /i/ near 240 Hz is left out: F1 (270 Hz) sits on the first harmonic and shimmer reads up to 40 % high there
+@pytest.mark.parametrize('vowel, f0', [('a', 140.0), ('u', 120.0), ('a', 220.0)])
+def test_random_shimmer_matches_the_synthesis(vowel, f0):
+    x, truth = steady_voice(vowel, f0, 0.02, 0.1)
+    assert afx_audio.egemaps(x, SR)['shimmerLocaldB_sma3nz_amean'] == pytest.approx(truth['shimmer_db'], rel=0.15)
+    x, _ = steady_voice(vowel, f0, 0.0, 0.0)
+    assert afx_audio.egemaps(x, SR)['shimmerLocaldB_sma3nz_amean'] < 0.25
+
+
+@pytest.mark.slow
+def test_jitter_and_shimmer_track_the_synthesis_across_voices():
+    true, measured = [], []
+    for v, vowel in enumerate('aiu'):
+        for q, f0 in enumerate((120.0, 170.0, 240.0)):
+            for k, jitter in enumerate((0.0, 0.01, 0.02, 0.03)):
+                shimmer = (0.0, 0.05, 0.1, 0.15)[(k + v + q) % 4]
+                x, truth = steady_voice(vowel, f0, jitter, shimmer, seed=10 * k + v)
+                values = afx_audio.egemaps(x, SR)
+                true.append([truth['jitter'], truth['shimmer_db']])
+                measured.append([values['jitterLocal_sma3nz_amean'], values['shimmerLocaldB_sma3nz_amean']])
+    true, measured = np.array(true), np.array(measured)
+    for j, floor in ((0, 0.004), (1, 0.35)):
+        slope = np.polyfit(true[:, j], measured[:, j], 1)[0]
+        assert 0.85 < slope < 1.15
+        assert np.corrcoef(true[:, j], measured[:, j])[0, 1] > 0.95
+        assert measured[true[:, j] < 1e-9, j].max() < floor
+
+
 def test_hnr_increases_with_snr():
     hnr = [afx_audio.egemaps(synthetic_voice(sr=SR, snr_db=snr, jitter=0.002, fricative_db=None, seed=1), SR)
            ['HNRdBACF_sma3nz_amean'] for snr in (0, 10, 20, 40)]
@@ -160,7 +203,7 @@ CLOSE = [
     'F0semitoneFrom27.5Hz_sma3nz_amean', 'F0semitoneFrom27.5Hz_sma3nz_percentile50.0',
     'F0semitoneFrom27.5Hz_sma3nz_pctlrange0-2', 'loudness_sma3_amean', 'loudness_sma3_stddevNorm',
     'loudness_sma3_percentile80.0', 'spectralFlux_sma3_amean', 'mfcc1_sma3_amean', 'mfcc2_sma3_amean',
-    'mfcc3_sma3_amean', 'mfcc4_sma3_amean', 'jitterLocal_sma3nz_amean', 'HNRdBACF_sma3nz_amean',
+    'mfcc3_sma3_amean', 'mfcc4_sma3_amean', 'HNRdBACF_sma3nz_amean',
     'logRelF0-H1-H2_sma3nz_amean', 'alphaRatioV_sma3nz_amean', 'hammarbergIndexV_sma3nz_amean',
     'slopeV0-500_sma3nz_amean', 'slopeV500-1500_sma3nz_amean', 'spectralFluxV_sma3nz_amean',
     'mfcc1V_sma3nz_amean', 'alphaRatioUV_sma3nz_amean', 'hammarbergIndexUV_sma3nz_amean',
@@ -211,3 +254,14 @@ def test_spectral_llds_match_opensmile_frame_by_frame():
     for row in range(10):
         a, b = ours[row, 2:n], ref[LLD[row]].to_numpy()[2:n]
         assert np.corrcoef(a, b)[0, 1] > 0.995, LLD[row]
+
+
+@pytest.mark.slow
+def test_jitter_and_shimmer_closer_to_the_synthesis_than_opensmile(opensmile_pairs):
+    # openSMILE reads jitter low at high F0 and shimmer flat, so agreement with it is not the target here
+    ours, ref = opensmile_pairs
+    truth = np.array([[p['truth']['jitter'], p['truth']['shimmer_db']] for _, _, p in corpus(20)])
+    for j, name in enumerate(('jitterLocal_sma3nz_amean', 'shimmerLocaldB_sma3nz_amean')):
+        i = NAMES.index(name)
+        assert np.corrcoef(ours[:, i], ref[:, i])[0, 1] > 0.7
+        assert np.mean(np.abs(ours[:, i] - truth[:, j])) < np.mean(np.abs(ref[:, i] - truth[:, j]))

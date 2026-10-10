@@ -86,6 +86,17 @@ _MIN_VOICED_FRAMES = 3
 _FORMANT_MAX_BANDWIDTH = 1000.0
 # Scale of the compressed auditory spectrum sum that matches openSMILE's loudness units
 _LOUDNESS_GAIN = 0.0690
+# Period marking for jitter and shimmer: LPC residual from 50 ms Hamming frames, a matching window
+# from 0.2 periods before to 0.3 periods after each mark, the next mark searched within +-15 % of the
+# F0 period. The residual is smoothed by Hann kernels of 0.4 ms for matching and 0.9 ms for amplitudes.
+# These and the minimum correlations were chosen on synthetic vowels with known periods and checked
+# against openSMILE on LibriSpeech (benchmarks/validate_egemaps.py).
+_PERIOD_LPC_WINDOW = 0.050
+_PERIOD_BEFORE, _PERIOD_AFTER = 0.2, 0.3
+_PERIOD_SEARCH = 0.15
+_PERIOD_SMOOTH, _AMPLITUDE_SMOOTH = 0.0004, 0.0009
+_MIN_RESIDUAL_MATCH = 0.5
+_MIN_WAVEFORM_MATCH = 0.5
 
 
 def _next_pow2(n: int) -> int:
@@ -393,62 +404,130 @@ def _refine(f0: np.ndarray, mag: np.ndarray, freqs: np.ndarray) -> np.ndarray:
     return out
 
 
+def _hann(seconds: float, sr: float) -> np.ndarray:
+    """Unit-sum Hann kernel of odd length close to ``seconds``."""
+    n = 2 * int(round(0.5 * seconds * sr)) + 1
+    k = np.hanning(n + 2)[1:-1]
+    return k / k.sum()
+
+
+def _predictors(x: np.ndarray, sr: float, hop: int, j0: int, j1: int, order: int) -> np.ndarray:
+    """LPC polynomials of the 50 ms Hamming frames centred on hops j0 to j1 - 1, shape (j1 - j0, order + 1)."""
+    length = int(round(_PERIOD_LPC_WINDOW * sr))
+    first = j0 * hop + hop // 2 - length // 2
+    stop = (j1 - 1) * hop + hop // 2 - length // 2 + length
+    seg = x[max(first, 0):max(min(stop, len(x)), 0)]
+    seg = np.concatenate([np.zeros(max(0, -first)), seg, np.zeros(max(0, stop - max(first, len(x))))])
+    frames = np.lib.stride_tricks.sliding_window_view(seg, length)[::hop]
+    nfft = _next_pow2(2 * length)
+    window = _hamming(length)
+    r = np.empty((len(frames), order + 1))
+    # Blocks bound the memory of the spectra in long voiced stretches
+    for b in range(0, len(frames), _BLOCK):
+        spec = np.fft.rfft(frames[b:b + _BLOCK] * window, nfft)
+        r[b:b + _BLOCK] = np.fft.irfft(spec.real ** 2 + spec.imag ** 2, nfft)[:, :order + 1]
+    # A slight white-noise floor keeps the recursion stable on frames of nearly pure tones
+    r[:, 0] *= 1 + 1e-9
+    return levinson(r, order)[0]
+
+
+def _residual(x: np.ndarray, a: np.ndarray, lo: int, hi: int) -> np.ndarray:
+    """Prediction error e[n] = sum_k a_k x[n - k] for lo <= n < hi, with x = 0 outside the signal."""
+    s0 = lo - len(a) + 1
+    seg = x[max(s0, 0):max(min(hi, len(x)), 0)]
+    seg = np.concatenate([np.zeros(max(0, -s0)), seg, np.zeros(max(0, hi - max(s0, len(x))))])
+    return np.convolve(seg, a, mode='valid')
+
+
+def _smoothed_residual(x: np.ndarray, a: np.ndarray, lo: int, hi: int, *kernels: np.ndarray) -> list[np.ndarray]:
+    """The prediction error over [lo, hi) convolved with each centred, odd-length kernel."""
+    margin = max(len(k) for k in kernels) // 2
+    e = _residual(x, a, lo - margin, hi + margin)
+    return [np.convolve(e, k, mode='same')[margin:len(e) - margin] for k in kernels]
+
+
 def _periods(x: np.ndarray, sr: float, f0: np.ndarray, hop: int) -> tuple[np.ndarray, ...]:
     """
-    Glottal periods found by waveform matching within voiced stretches.
+    Glottal periods marked on the LPC residual within voiced stretches.
 
-    Starting at the largest sample of the first expected period, each next
-    period length is the lag within +-10 % of the F0 period that maximizes
-    the normalized cross-correlation of consecutive one-period segments,
-    refined by a parabola. A match below 0.5 ends the chain. Returns period
-    start positions (samples), lengths (samples), peak-to-peak amplitudes
-    and chain ids.
+    Formant ringing carries each pulse into the next periods, so matching
+    the waveform itself measures a blend of neighbouring period lengths and
+    reads jitter and shimmer low, most at high F0. Inverse filtering by an
+    order sr / 1000 + 2 predictor leaves the excitation, one short pulse
+    per glottal closure (Ananthapadmanabha and Yegnanarayana, 1979, IEEE
+    Trans. ASSP 27(4)). A chain starts at the largest residual sample of
+    the first expected period. Each next period length is the lag within
+    +-15 % of the F0 period that maximizes the normalized cross-correlation
+    of the smoothed residual around the current mark (0.2 periods before
+    to 0.3 after) with the same window one lag later, refined by a
+    parabola through the three correlations at the peak. Both windows are
+    inverse filtered with one predictor, so frame-to-frame changes of the
+    LPC fit do not enter the lag or the amplitude ratio. The chain ends
+    where that correlation, or the one of the raw waveform over one period
+    at the integer lag, is below 0.5.
+
+    Returns period start positions and lengths (samples), the amplitude
+    ratio A_{i+1} / A_i of each period to the next (RMS of the residual
+    windows) and chain ids.
     """
-    starts, lengths, amps, chains = [], [], [], []
+    starts: list[float] = []
+    lengths: list[float] = []
+    ratios: list[float] = []
+    chains: list[int] = []
+    order = int(sr / 1000) + 2
+    k_match, k_amp = _hann(_PERIOD_SMOOTH, sr), _hann(_AMPLITUDE_SMOOTH, sr)
+    long_ = int(round(_LONG * sr))
     edges = np.flatnonzero(np.diff(np.concatenate([[0], (f0 > 0).astype(np.int8), [0]])))
     chain = 0
     for first, stop in zip(edges[::2], edges[1::2], strict=True):
-        end = min(len(x), (stop - 1) * hop + int(round(_LONG * sr)))
-        centres = np.arange(first, stop) * hop + 0.5 * _LONG * sr
+        end = min(len(x), (stop - 1) * hop + long_)
+        j0, j1 = first, end // hop + 1
+        preds = _predictors(x, sr, hop, j0, j1, order)
+        centres = np.arange(first, stop) * hop + 0.5 * long_
+        mark: float | None = None
         p = float(first * hop)
-        new_chain = True
         while True:
-            t0 = sr / np.interp(p, centres, f0[first:stop])
+            t0 = sr / np.interp(p if mark is None else mark, centres, f0[first:stop])
             seg = int(round(t0))
-            lo, hi = int(np.floor(0.9 * t0)), int(np.ceil(1.1 * t0))
-            if new_chain:
-                if p + seg + hi + seg > end:
+            before, width = int(round(_PERIOD_BEFORE * t0)), int(round((_PERIOD_BEFORE + _PERIOD_AFTER) * t0))
+            lo, hi = int(np.floor((1 - _PERIOD_SEARCH) * t0)), int(np.ceil((1 + _PERIOD_SEARCH) * t0))
+            if mark is None:
+                i = int(p) + before
+                if i + seg + hi + seg > end:
                     break
-                p = float(int(p) + np.argmax(np.abs(x[int(p):int(p) + seg])))
-                new_chain = False
-            i = int(round(p))
+                a = preds[min(i // hop - j0, len(preds) - 1)]
+                mark = float(i + np.argmax(np.abs(_smoothed_residual(x, a, i, i + seg, k_match)[0])))
+            i = int(round(mark))
             if i + hi + seg > end:
                 break
-            ref = x[i:i + seg]
-            cand = np.lib.stride_tricks.sliding_window_view(x[i + lo:i + hi + seg], seg)
-            num = cand @ ref
-            den = np.sqrt(np.maximum((ref @ ref) * np.einsum('ij,ij->i', cand, cand), _TINY))
-            cc = num / den
+            a = preds[min(int(i + 0.5 * t0) // hop - j0, len(preds) - 1)]
+            match, amp = _smoothed_residual(x, a, i - before, i - before + hi + width, k_match, k_amp)
+            ref = match[:width]
+            cand = np.lib.stride_tricks.sliding_window_view(match[lo:], width)
+            energy = np.einsum('ij,ij->i', cand, cand)
+            cc = (cand @ ref) / np.sqrt(np.maximum((ref @ ref) * energy, _TINY))
             k = int(np.argmax(cc))
-            if cc[k] < 0.5:
+            w0 = x[i - before:i - before + seg]
+            w1 = x[i - before + lo + k:i - before + lo + k + seg]
+            wave_cc = (w0 @ w1) / np.sqrt(max((w0 @ w0) * (w1 @ w1), _TINY))
+            if cc[k] < _MIN_RESIDUAL_MATCH or wave_cc < _MIN_WAVEFORM_MATCH:
                 chain += 1
-                new_chain = True
-                p += t0
+                p = mark + t0
+                mark = None
                 continue
             shift = 0.0
             if 0 < k < len(cc) - 1:
                 curve = cc[k - 1] - 2 * cc[k] + cc[k + 1]
                 if curve < 0:
                     shift = 0.5 * (cc[k - 1] - cc[k + 1]) / curve
-            length = lo + k + shift
-            starts.append(p)
-            lengths.append(length)
-            period = x[i:i + int(round(length))]
-            amps.append(period.max() - period.min())
+            a0, a1 = amp[:width], amp[lo + k:lo + k + width]
+            starts.append(mark)
+            lengths.append(lo + k + shift)
+            ratios.append(float(np.sqrt((a1 @ a1) / max(a0 @ a0, _TINY))))
             chains.append(chain)
-            p += length
+            mark += lo + k + shift
         chain += 1
-    return np.array(starts), np.array(lengths), np.array(amps), np.array(chains)
+    return np.array(starts), np.array(lengths), np.array(ratios), np.array(chains)
 
 
 def _jitter_shimmer(x: np.ndarray, sr: float, f0: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -462,13 +541,12 @@ def _jitter_shimmer(x: np.ndarray, sr: float, f0: np.ndarray) -> tuple[np.ndarra
     hop = int(round(_HOP * sr))
     jitter = np.zeros(len(f0))
     shimmer = np.zeros(len(f0))
-    starts, lengths, amps, chains = _periods(x, sr, f0, hop)
+    starts, lengths, ratios, chains = _periods(x, sr, f0, hop)
     if len(starts) < 2:
         return jitter, shimmer
     pair = chains[1:] == chains[:-1]
     d_len = np.where(pair, np.abs(np.diff(lengths)), 0.0)
-    ratio = np.where(pair & (amps[1:] > 0) & (amps[:-1] > 0), amps[1:] / np.where(amps[:-1] > 0, amps[:-1], 1), 1.0)
-    d_amp = np.abs(20 * np.log10(np.maximum(ratio, _TINY)))
+    d_amp = np.where(pair, np.abs(20 * np.log10(np.maximum(ratios[:-1], _TINY))), 0.0)
     pair_len = np.where(pair, lengths[1:], 0.0)
     cums = [np.concatenate([[0.0], np.cumsum(v)]) for v in (d_len, d_amp, pair_len, pair.astype(float))]
     frame_lo = np.arange(len(f0)) * hop

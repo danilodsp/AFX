@@ -43,7 +43,7 @@ descriptors in unvoiced frames, jitter and shimmer in frames with fewer than
 two periods. openSMILE writes 0 there. Functionals over an empty set (for
 example any voiced statistic of a clip without voicing) are 0, as in
 openSMILE. Any sample rate from 8 kHz up works; 5 s of 16 kHz audio takes
-0.1 to 0.2 s, a minute about 1.3 s with a peak of 150 MB.
+0.15 to 0.25 s, a minute about 1.5 s with a peak of 150 MB.
 
 ## Descriptors
 
@@ -55,7 +55,7 @@ next power of two.
 | Descriptor | Computation |
 |---|---|
 | F0 (semitones above 27.5 Hz) | Subharmonic summation (Hermes, 1988) over 15 harmonics with compression 0.85 on a 48 points per octave log-frequency spectrum, 55 to 1000 Hz. A frame is voiced when its windowed RMS is at least 0.001 (full scale 1), the normalized cross-correlation at the period exceeds 0.3 and the SHS peak exceeds 8 times the SHS mean; gaps of up to 2 frames are bridged and voiced runs shorter than 3 frames dropped. Dynamic programming over the 6 best SHS candidates removes octave jumps, and the F0 is refined from the peaks of the first five harmonics. |
-| Jitter, shimmer (dB) | Periods are tracked through each voiced stretch by waveform matching (next period within ±10 % of the F0 period, correlation at least 0.5). Per frame, over the periods starting in its 60 ms: mean absolute difference of consecutive period lengths over the mean length, and mean absolute dB difference of consecutive peak-to-peak amplitudes. |
+| Jitter, shimmer (dB) | Periods are marked on the LPC residual (order sr / 1000 + 2, 50 ms Hamming frames every 10 ms), where each glottal closure leaves one short pulse instead of formant ringing that runs into the next periods. In each voiced stretch the next period length is the lag within ±15 % of the F0 period that maximizes the normalized cross-correlation of the residual (smoothed by a 0.4 ms Hann kernel) from 0.2 periods before to 0.3 periods after the current mark, refined by a parabola through the correlation peak. Both windows of a pair use one predictor. A chain of periods ends where that correlation, or the waveform correlation over one period at the integer lag, is below 0.5. The amplitude ratio of consecutive periods is the RMS ratio of the same residual windows, smoothed by a 0.9 ms Hann kernel. Per frame, over the periods starting in its 60 ms: mean absolute difference of consecutive period lengths over the mean length, and mean absolute dB amplitude ratio. |
 | HNR (dB) | 10 log10(r / (1 - r)), r the largest autocorrelation within ±10 % of the F0 period over the zero-lag value, with the autocorrelation taken from the windowed power spectrum. |
 | H1-H2, H1-A3, F1-F3 level | Harmonic levels h(k) are the largest magnitude within k F0 ± F0 / 2 in dB. Formant level i is h(k) - h(1) for the harmonic k closest to formant i. |
 | F1-F3 frequency and bandwidth | The power spectrum up to 5.5 kHz, read as that of an 11 kHz signal, gives the autocorrelation for an order 11 LPC fit. Roots between 50 and 5450 Hz with a bandwidth below 1 kHz are the candidates (Markel and Gray, 1976). |
@@ -102,7 +102,7 @@ output in these cases.
 | Formants | No bandwidth limit, so broad poles from the spectral tilt are often reported as F1 or F2 (bandwidths of 1 to 1.4 kHz are typical) | Candidates with a bandwidth of 1 kHz or more are discarded; see the accuracy table below |
 | Formant levels in unvoiced frames | A -201 dB placeholder that enters the `F*amplitudeLogRelF0` functionals, so their means mostly measure the unvoiced fraction | Voiced frames only, like every other voice descriptor |
 | F0 and voicing | SHS with a Viterbi smoother; the exact rules are not documented | SHS candidates, a voicing rule tuned to agree with openSMILE (91.5 % of frames on the LibriSpeech segments, 98.8 % on the synthetic corpus), dynamic programming, harmonic-peak refinement. Where both mark a frame voiced, the F0 differs by 0.04 (synthetic) and 0.07 (speech) semitones in the median. Pure tones from 60 Hz to 880 Hz come out within 0.03 semitones |
-| Jitter and shimmer | Period search by cross-correlation, details not documented | Own waveform-matching period tracker (above) |
+| Jitter and shimmer | Period search by cross-correlation of the waveform, details not documented. On the synthetic corpus its shimmer rises about half as fast as the synthesized shimmer (table below) | Periods and amplitudes from the LPC residual (above). On the synthetic corpus both are closer to the synthesis than openSMILE's, so the two tools differ there by about 20 % |
 | Peaks and slopes | Undocumented peak rules with odd edge cases (in one test a contour without a peak reported its rising slope per frame instead of per second) | The hysteresis rule above; fed with openSMILE's own F0 and loudness contours it reproduces openSMILE's slope statistics with r = 0.97 to 0.998 |
 | Clip ends | The functionals see 1 to 3 frames more or fewer than the LLD output | 1 + (N - 20 ms) / 10 ms frames for the spectral descriptors, 1 + (N - 60 ms) / 10 ms for the voice descriptors |
 
@@ -133,14 +133,15 @@ the clip means of H1-H2 still differ because openSMILE reports values near
 -120 dB in frames where it tracks F0 near 55 Hz. F0 slopes, jitter and
 shimmer mostly correlate (r of 0.5 to 0.99, except the spread of falling F0
 slopes) but differ by 10 to 50 %: they depend on frame-by-frame voicing and
-period decisions that are not documented. The formant frequencies,
+period decisions that are not documented. For jitter and shimmer the
+synthetic clips say which side is off (next section). The formant frequencies,
 bandwidths and levels do not agree, by design (previous section).
 
 <!-- agreement table start -->
 | Functional | r (synthetic) | rel. error (synthetic) | r (speech) | rel. error (speech) |
 |---|---:|---:|---:|---:|
 | `F0semitoneFrom27.5Hz_sma3nz_amean` | 1.000 | 0.1 % | 0.997 | 0.8 % |
-| `F0semitoneFrom27.5Hz_sma3nz_stddevNorm` | 0.995 | 1.8 % | 0.741 | 6.5 % |
+| `F0semitoneFrom27.5Hz_sma3nz_stddevNorm` | 0.995 | 1.8 % | 0.745 | 6.5 % |
 | `F0semitoneFrom27.5Hz_sma3nz_percentile20.0` | 0.999 | 0.1 % | 0.999 | 0.3 % |
 | `F0semitoneFrom27.5Hz_sma3nz_percentile50.0` | 1.000 | 0.1 % | 1.000 | 0.6 % |
 | `F0semitoneFrom27.5Hz_sma3nz_percentile80.0` | 1.000 | 0.2 % | 0.993 | 0.7 % |
@@ -169,63 +170,63 @@ bandwidths and levels do not agree, by design (previous section).
 | `mfcc3_sma3_stddevNorm` | 0.995 | 1.5 % | 1.000 | 1.0 % |
 | `mfcc4_sma3_amean` | 1.000 | 1.7 % | 1.000 | 1.9 % |
 | `mfcc4_sma3_stddevNorm` | 0.998 | 2.3 % | 0.958 | 2.2 % |
-| `jitterLocal_sma3nz_amean` | 0.919 | 10.7 % | 0.513 | 16.6 % |
-| `jitterLocal_sma3nz_stddevNorm` | 0.686 | 42.5 % | 0.444 | 41.6 % |
-| `shimmerLocaldB_sma3nz_amean` | 0.765 | 14.7 % | 0.544 | 22.2 % |
-| `shimmerLocaldB_sma3nz_stddevNorm` | 0.524 | 23.5 % | 0.633 | 9.1 % |
-| `HNRdBACF_sma3nz_amean` | 0.989 | 1.2 % | 0.940 | 10.6 % |
-| `HNRdBACF_sma3nz_stddevNorm` | 0.491 | 11.7 % | 0.632 | 41.8 % |
-| `logRelF0-H1-H2_sma3nz_amean` | 1.000 | 0.3 % | 0.464 | 7.2 % |
-| `logRelF0-H1-H2_sma3nz_stddevNorm` | 0.999 | 3.2 % | 0.294 | 17.7 % |
+| `jitterLocal_sma3nz_amean` | 0.850 | 23.4 % | 0.784 | 11.8 % |
+| `jitterLocal_sma3nz_stddevNorm` | 0.601 | 48.3 % | -0.259 | 31.8 % |
+| `shimmerLocaldB_sma3nz_amean` | 0.737 | 19.3 % | 0.638 | 16.7 % |
+| `shimmerLocaldB_sma3nz_stddevNorm` | 0.304 | 45.0 % | 0.421 | 13.1 % |
+| `HNRdBACF_sma3nz_amean` | 0.989 | 1.2 % | 0.941 | 10.6 % |
+| `HNRdBACF_sma3nz_stddevNorm` | 0.491 | 11.7 % | 0.633 | 41.8 % |
+| `logRelF0-H1-H2_sma3nz_amean` | 1.000 | 0.3 % | 0.464 | 7.1 % |
+| `logRelF0-H1-H2_sma3nz_stddevNorm` | 0.999 | 3.2 % | 0.294 | 17.9 % |
 | `logRelF0-H1-A3_sma3nz_amean` | 0.913 | 19.0 % | 0.879 | 9.7 % |
-| `logRelF0-H1-A3_sma3nz_stddevNorm` | 0.270 | 38.6 % | -0.529 | 45.2 % |
-| `F1frequency_sma3nz_amean` | 0.189 | 24.8 % | 0.572 | 36.7 % |
-| `F1frequency_sma3nz_stddevNorm` | -0.581 | 87.6 % | -0.513 | 70.8 % |
-| `F1bandwidth_sma3nz_amean` | 0.188 | 92.6 % | 0.437 | 84.7 % |
-| `F1bandwidth_sma3nz_stddevNorm` | -0.033 | 396.1 % | -0.169 | 240.1 % |
-| `F1amplitudeLogRelF0_sma3nz_amean` | 0.162 | 109.4 % | 0.034 | 93.9 % |
+| `logRelF0-H1-A3_sma3nz_stddevNorm` | 0.270 | 38.6 % | -0.530 | 45.2 % |
+| `F1frequency_sma3nz_amean` | 0.189 | 24.8 % | 0.576 | 36.7 % |
+| `F1frequency_sma3nz_stddevNorm` | -0.581 | 87.6 % | -0.488 | 70.8 % |
+| `F1bandwidth_sma3nz_amean` | 0.188 | 92.6 % | 0.440 | 84.7 % |
+| `F1bandwidth_sma3nz_stddevNorm` | -0.033 | 396.1 % | -0.140 | 240.1 % |
+| `F1amplitudeLogRelF0_sma3nz_amean` | 0.162 | 109.4 % | 0.035 | 93.9 % |
 | `F1amplitudeLogRelF0_sma3nz_stddevNorm` | 0.241 | 123.9 % | -0.214 | 26.4 % |
 | `F2frequency_sma3nz_amean` | -0.824 | 42.0 % | 0.756 | 12.8 % |
-| `F2frequency_sma3nz_stddevNorm` | 0.245 | 70.2 % | -0.544 | 106.0 % |
+| `F2frequency_sma3nz_stddevNorm` | 0.245 | 70.2 % | -0.547 | 106.0 % |
 | `F2bandwidth_sma3nz_amean` | -0.056 | 86.8 % | 0.219 | 66.2 % |
-| `F2bandwidth_sma3nz_stddevNorm` | 0.202 | 165.3 % | -0.284 | 65.6 % |
+| `F2bandwidth_sma3nz_stddevNorm` | 0.202 | 165.3 % | -0.285 | 65.6 % |
 | `F2amplitudeLogRelF0_sma3nz_amean` | 0.130 | 102.3 % | 0.058 | 76.1 % |
 | `F2amplitudeLogRelF0_sma3nz_stddevNorm` | -0.024 | 120.4 % | 0.201 | 48.2 % |
-| `F3frequency_sma3nz_amean` | -0.676 | 15.3 % | 0.101 | 9.6 % |
-| `F3frequency_sma3nz_stddevNorm` | -0.155 | 50.7 % | 0.088 | 80.5 % |
+| `F3frequency_sma3nz_amean` | -0.676 | 15.3 % | 0.102 | 9.6 % |
+| `F3frequency_sma3nz_stddevNorm` | -0.155 | 50.7 % | 0.098 | 80.5 % |
 | `F3bandwidth_sma3nz_amean` | 0.286 | 57.2 % | -0.092 | 60.6 % |
-| `F3bandwidth_sma3nz_stddevNorm` | 0.699 | 26.6 % | 0.070 | 44.5 % |
-| `F3amplitudeLogRelF0_sma3nz_amean` | 0.326 | 82.2 % | 0.170 | 68.2 % |
+| `F3bandwidth_sma3nz_stddevNorm` | 0.699 | 26.6 % | 0.075 | 44.5 % |
+| `F3amplitudeLogRelF0_sma3nz_amean` | 0.326 | 82.2 % | 0.169 | 68.2 % |
 | `F3amplitudeLogRelF0_sma3nz_stddevNorm` | 0.059 | 80.8 % | 0.243 | 60.8 % |
 | `alphaRatioV_sma3nz_amean` | 0.999 | 1.7 % | 0.968 | 3.9 % |
-| `alphaRatioV_sma3nz_stddevNorm` | 0.962 | 9.0 % | 0.836 | 6.7 % |
+| `alphaRatioV_sma3nz_stddevNorm` | 0.962 | 9.0 % | 0.837 | 6.7 % |
 | `hammarbergIndexV_sma3nz_amean` | 0.999 | 0.6 % | 0.986 | 1.2 % |
-| `hammarbergIndexV_sma3nz_stddevNorm` | 0.959 | 5.1 % | 0.939 | 4.7 % |
+| `hammarbergIndexV_sma3nz_stddevNorm` | 0.959 | 5.1 % | 0.940 | 4.7 % |
 | `slopeV0-500_sma3nz_amean` | 0.999 | 0.5 % | 0.998 | 6.2 % |
 | `slopeV0-500_sma3nz_stddevNorm` | 0.987 | 4.0 % | 0.981 | 6.4 % |
 | `slopeV500-1500_sma3nz_amean` | 0.999 | 1.4 % | 0.990 | 12.9 % |
-| `slopeV500-1500_sma3nz_stddevNorm` | 0.988 | 9.6 % | 0.926 | 11.2 % |
+| `slopeV500-1500_sma3nz_stddevNorm` | 0.988 | 9.6 % | 0.929 | 11.2 % |
 | `spectralFluxV_sma3nz_amean` | 1.000 | 0.8 % | 0.998 | 5.0 % |
 | `spectralFluxV_sma3nz_stddevNorm` | 0.965 | 2.1 % | 0.984 | 1.8 % |
-| `mfcc1V_sma3nz_amean` | 0.997 | 1.3 % | 0.992 | 2.3 % |
-| `mfcc1V_sma3nz_stddevNorm` | 0.817 | 12.9 % | 0.900 | 4.9 % |
-| `mfcc2V_sma3nz_amean` | 1.000 | 1.1 % | 0.990 | 14.4 % |
+| `mfcc1V_sma3nz_amean` | 0.997 | 1.3 % | 0.992 | 2.7 % |
+| `mfcc1V_sma3nz_stddevNorm` | 0.817 | 12.9 % | 0.901 | 4.3 % |
+| `mfcc2V_sma3nz_amean` | 1.000 | 1.1 % | 0.990 | 13.3 % |
 | `mfcc2V_sma3nz_stddevNorm` | 0.999 | 2.5 % | 0.650 | 19.0 % |
 | `mfcc3V_sma3nz_amean` | 1.000 | 0.9 % | 0.995 | 9.0 % |
 | `mfcc3V_sma3nz_stddevNorm` | 0.995 | 5.2 % | 0.961 | 7.5 % |
 | `mfcc4V_sma3nz_amean` | 1.000 | 0.6 % | 0.998 | 7.5 % |
-| `mfcc4V_sma3nz_stddevNorm` | 1.000 | 4.9 % | 0.732 | 8.8 % |
+| `mfcc4V_sma3nz_stddevNorm` | 1.000 | 4.9 % | 0.732 | 8.0 % |
 | `alphaRatioUV_sma3nz_amean` | 0.998 | 1.1 % | 0.857 | 21.5 % |
-| `hammarbergIndexUV_sma3nz_amean` | 0.998 | 8.2 % | 0.886 | 7.6 % |
+| `hammarbergIndexUV_sma3nz_amean` | 0.998 | 8.2 % | 0.885 | 7.6 % |
 | `slopeUV0-500_sma3nz_amean` | 0.998 | 0.5 % | 0.980 | 14.4 % |
 | `slopeUV500-1500_sma3nz_amean` | 0.998 | 1.1 % | 0.943 | 19.6 % |
 | `spectralFluxUV_sma3nz_amean` | 0.999 | 2.1 % | 0.964 | 13.7 % |
 | `loudnessPeaksPerSec` | 0.978 | 0.0 % | 1.000 | 0.0 % |
 | `VoicedSegmentsPerSec` | 1.000 | 0.2 % | 0.879 | 13.1 % |
-| `MeanVoicedSegmentLengthSec` | 1.000 | 1.4 % | 0.941 | 29.3 % |
-| `StddevVoicedSegmentLengthSec` | 1.000 | 0.0 % | 0.946 | 6.8 % |
-| `MeanUnvoicedSegmentLength` | 1.000 | 1.7 % | 0.926 | 10.5 % |
-| `StddevUnvoicedSegmentLength` | 1.000 | 1.3 % | 0.970 | 24.2 % |
+| `MeanVoicedSegmentLengthSec` | 1.000 | 1.4 % | 0.941 | 29.9 % |
+| `StddevVoicedSegmentLengthSec` | 1.000 | 0.0 % | 0.945 | 6.8 % |
+| `MeanUnvoicedSegmentLength` | 1.000 | 1.7 % | 0.927 | 10.5 % |
+| `StddevUnvoicedSegmentLength` | 1.000 | 1.3 % | 0.969 | 24.2 % |
 | `equivalentSoundLevel_dBp` | 1.000 | 0.0 % | 1.000 | 0.0 % |
 <!-- agreement table end -->
 
@@ -241,6 +242,28 @@ frequencies it was synthesized with (same run as above).
 | F2 | 0.998 | 38 Hz | -0.825 | 803 Hz |
 | F3 | 0.945 | 86 Hz | -0.642 | 483 Hz |
 <!-- formant truth table end -->
+
+## Jitter and shimmer accuracy
+
+Mean jitter and shimmer of each synthetic clip against the values realized
+by the synthesis (same run as above): the mean absolute difference of
+consecutive intervals between glottal closures over their mean, and the
+mean absolute dB ratio of consecutive pulse amplitudes. Slope is the
+regression of the measured on the realized value. On this corpus r stays
+below 0.95 for both tools: the voicing decision drops much of a vibrato at
+low F0, and the clips at 5 to 20 dB SNR read high. On steady vowels at 40
+dB SNR (`tests/test_egemaps.py`: /a/, /i/ and /u/ at 120 to 240 Hz, jitter
+up to 3 %, shimmer up to 1.5 dB) AFX follows the synthesis with slopes of
+0.93 (jitter) and 0.92 (shimmer) and r of 0.98 and 0.97, and reads at most
+0.33 % and 0.29 dB where both are 0. Shimmer of /i/ near 240 Hz, where F1
+lies on the first harmonic, reads up to 40 % high.
+
+<!-- jitter shimmer truth table start -->
+| Functional | AFX r | AFX slope | AFX mean abs. error | openSMILE r | openSMILE slope | openSMILE mean abs. error |
+|---|---:|---:|---:|---:|---:|---:|
+| `jitterLocal_sma3nz_amean` | 0.809 | 0.59 | 0.24 % | 0.764 | 0.82 | 0.48 % |
+| `shimmerLocaldB_sma3nz_amean` | 0.911 | 0.87 | 0.18 dB | 0.747 | 0.55 | 0.24 dB |
+<!-- jitter shimmer truth table end -->
 
 ## Reference
 
@@ -268,4 +291,7 @@ and Affective Computing", IEEE Transactions on Affective Computing 7(2),
 D. J. Hermes, "Measurement of pitch by subharmonic summation", JASA 83(1),
 257-264, 1988. H. Hermansky, "Perceptual linear predictive (PLP) analysis
 of speech", JASA 87(4), 1738-1752, 1990. J. D. Markel and A. H. Gray,
-Linear Prediction of Speech, Springer, 1976.
+Linear Prediction of Speech, Springer, 1976. T. V. Ananthapadmanabha and
+B. Yegnanarayana, "Epoch extraction from linear prediction residual for
+identification of closed glottis interval", IEEE Transactions on
+Acoustics, Speech, and Signal Processing 27(4), 309-319, 1979.

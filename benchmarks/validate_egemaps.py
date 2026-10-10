@@ -10,8 +10,8 @@ a second corpus (needs librosa and a network connection once). For every
 functional the script reports the Pearson correlation across clips and the
 median relative error |afx - opensmile| / |opensmile|, and for the
 synthetic clips the error of both implementations against the formant
-frequencies the clips were made with. --write-docs replaces the tables in
-docs/egemaps.md.
+frequencies, jitter and shimmer the clips were made with. --write-docs
+replaces the tables in docs/egemaps.md.
 """
 import argparse
 import os
@@ -91,6 +91,22 @@ def truth_table(names, ours, ref, clips):
     return '\n'.join(rows)
 
 
+def voice_quality_table(names, ours, ref, clips):
+    """Jitter and shimmer means of each implementation against the realized values of the synthetic clips."""
+    rows = ['| Functional | AFX r | AFX slope | AFX mean abs. error | openSMILE r | openSMILE slope '
+            '| openSMILE mean abs. error |', '|---|---:|---:|---:|---:|---:|---:|']
+    for key, name, scale, unit in (('jitter', 'jitterLocal_sma3nz_amean', 100, ' %'),
+                                   ('shimmer_db', 'shimmerLocaldB_sma3nz_amean', 1, ' dB')):
+        true = np.array([params['truth'][key] for _, _, params in clips]) * scale
+        i = names.index(name)
+        cells = []
+        for values in (ours[:, i] * scale, ref[:, i] * scale):
+            cells += [f'{np.corrcoef(values, true)[0, 1]:.3f}', f'{np.polyfit(true, values, 1)[0]:.2f}',
+                      f'{np.mean(np.abs(values - true)):.2f}{unit}']
+        rows.append(f'| `{name}` | ' + ' | '.join(cells) + ' |')
+    return '\n'.join(rows)
+
+
 def replace_block(doc, tag, text):
     start, end = f'<!-- {tag} start -->', f'<!-- {tag} end -->'
     head, rest = doc.split(start)
@@ -116,13 +132,16 @@ def main():
               f'r > 0.9 for {np.sum(r > 0.9)} / {len(names)} functionals, r > 0.7 for {np.sum(r > 0.7)}')
     agreement = agreement_table(names, results)
     truth = truth_table(names, *results['synthetic'], corpora['synthetic'])
+    voice_quality = voice_quality_table(names, *results['synthetic'], corpora['synthetic'])
     print(agreement)
     print(truth)
+    print(voice_quality)
     if args.write_docs:
         with open(DOC, encoding='utf-8') as f:
             doc = f.read()
         doc = replace_block(doc, 'agreement table', agreement)
         doc = replace_block(doc, 'formant truth table', truth)
+        doc = replace_block(doc, 'jitter shimmer truth table', voice_quality)
         with open(DOC, 'w', encoding='utf-8', newline='\n') as f:
             f.write(doc)
 
