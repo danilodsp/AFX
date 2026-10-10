@@ -268,3 +268,38 @@ def test_sklearn_provenance_preset_id(audio_folder):
     assert est.provenance_['preset_modified'] is True
     with pytest.raises(ValueError, match='Available'):
         AFXFeatureExtractor(config='speech@7').fit([str(audio_folder / 'a.wav')])
+
+
+def test_integral_float_sample_rate_is_the_same_config(audio_folder, tmp_path):
+    speech = afx_audio.load_preset('speech@1')
+    as_float = {**speech, 'sample_rate': 16000.0}
+    validated = afx_audio.validate_config(as_float)
+    assert type(validated['sample_rate']) is int and type(as_float['sample_rate']) is float
+    assert config_hash(as_float) == config_hash(speech)
+    assert afx_audio.provenance.preset_record(as_float) == {'preset_id': 'speech@1', 'preset_modified': False}
+
+    out = tmp_path / 'f.json'
+    extract_features_from_folder(str(audio_folder), as_float, str(out), features=['zcr'], verbose=False)
+    record = read_provenance(out)
+    assert record['sample_rate'] == 16000 and type(record['config']['sample_rate']) is int
+    assert record['config_hash'] == config_hash({**speech, 'features': {'zcr': speech['features']['zcr']}})
+
+
+def test_preset_modified_agrees_with_the_hash():
+    speech = afx_audio.load_preset('speech@1')
+    # center and threshold left at their defaults, which the preset writes out
+    shorter = {**speech, 'features': {**speech['features'], 'zcr': {'frame_size': 400, 'hop_length': 160}}}
+    assert config_hash(shorter) == config_hash(speech)
+    assert afx_audio.provenance.preset_record(shorter)['preset_modified'] is False
+    changed = {**speech, 'features': {**speech['features'], 'zcr': {'frame_size': 512, 'hop_length': 160}}}
+    assert config_hash(changed) != config_hash(speech)
+    assert afx_audio.provenance.preset_record(changed)['preset_modified'] is True
+
+
+def test_sklearn_float_sample_rate_keeps_the_preset_hash(audio_folder):
+    pytest.importorskip('sklearn')
+    from afx_audio.sklearn import AFXFeatureExtractor
+
+    est = AFXFeatureExtractor(config='speech@1', sample_rate=16000.0).fit([str(audio_folder / 'a.wav')])
+    assert est.provenance_['config_hash'] == config_hash(afx_audio.load_preset('speech@1'))
+    assert est.provenance_['preset_modified'] is False

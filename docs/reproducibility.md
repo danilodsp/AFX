@@ -57,7 +57,8 @@ the values: every feature parameter merged over the extractor's defaults,
 and `sample_rate`, `aggregation`, `aggregation_params`, `normalize`,
 `preserve_shape` and `coverage` with their defaults filled in. It drops
 labels (`title`, `description`, the `preset` block) and `flatten`, which
-only changes the output layout. So a preset, the same preset saved to a
+only changes the output layout. A `sample_rate` of `16000.0` counts as
+`16000` (`validate_config` stores it as an int). So a preset, the same preset saved to a
 file, a features list relying on defaults and the config the scikit-learn
 transformer builds all hash alike, and two outputs with equal hashes were
 computed with the same parameters by the same AFX version.

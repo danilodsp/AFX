@@ -165,7 +165,9 @@ the old file stays.
 
 Batch and sklearn provenance records report `preset_id` (`'speech@1'`) and
 `preset_modified`, True when an override changed a value the preset sets
-(sample rate, features, aggregation). To cite an extraction, give the
+(sample rate, features, aggregation). It compares the same defaults-filled
+config as the hash, so writing out a parameter at its default value is
+not a modification and leaves the hash unchanged. To cite an extraction, give the
 package version, the preset id and the config hash from the record, for
 example "features: afx-audio 0.3.0, preset speech@1, config hash
 2d57da580d18". Every preset file spells out all parameters of every

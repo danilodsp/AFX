@@ -16,6 +16,7 @@ from typing import Any
 import numpy as np
 
 from afx_audio.presets import list_presets, load_preset, preset_id
+from afx_audio.utils.config_loader import integral_rate
 
 PROVENANCE_KEY = 'afx'
 SIDECAR_SUFFIX = '.provenance.json'
@@ -62,6 +63,8 @@ def computed_config(config: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(config, dict):
         raise TypeError(f'config must be a dict, got {type(config).__name__}')
     out = {k: v for k, v in config.items() if k not in _NOT_HASHED}
+    if 'sample_rate' in out:
+        out['sample_rate'] = integral_rate(out['sample_rate'])
     for key, default in _COMPUTE_DEFAULTS.items():
         if out.get(key) is None:
             out[key] = default
@@ -91,14 +94,18 @@ def preset_record(config: dict[str, Any]) -> dict[str, Any]:
     ``preset_modified`` is True when a key the bundled preset sets
     (sample_rate, features and their parameters, aggregation, ...) has a
     different value in ``config``, None when the id is not a bundled
-    preset. Options the preset leaves unset (normalize, coverage, flatten)
-    are recorded in the config but do not count as a modification.
+    preset. Both sides are compared through ``computed_config``, so it
+    agrees with ``config_hash``: a parameter written out at its default
+    value is not a modification. Options the preset leaves unset
+    (normalize, coverage) are recorded in the config but do not count as
+    a modification, and neither do labels or flatten.
     """
     pid = preset_id(config)
     modified = None
     if pid is not None and pid in list_presets(versions=True):
         preset = load_preset(pid)
-        modified = any(canonical_json(config.get(k)) != canonical_json(v) for k, v in preset.items())
+        mine, theirs = computed_config(config), computed_config(preset)
+        modified = any(canonical_json(mine[k]) != canonical_json(theirs[k]) for k in preset if k in theirs)
     return {'preset_id': pid, 'preset_modified': modified}
 
 

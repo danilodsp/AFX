@@ -30,6 +30,13 @@ _POSITIVE_INT = ('frame_size', 'hop_length', 'n_fft', 'n_mfcc', 'n_mels', 'n_gfc
                  'n_bins', 'bins_per_octave', 'n_bands', 'max_lag', 'num_bins', 'n_harmonics', 'width')
 
 
+def integral_rate(value: Any) -> Any:
+    """16000.0 becomes 16000, so a rate read from JSON or given as a float hashes like the int."""
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    return value
+
+
 def feature_parameters(name: str) -> dict[str, Any]:
     """Configurable parameters of a feature and their defaults."""
     from afx_audio.extract_all import FEATURE_MAP
@@ -81,8 +88,9 @@ def validate_config(config: dict[str, Any], require_sample_rate: bool = True) ->
     Check a config dict and return it.
 
     ``features`` may be a list of names as a shorthand for default
-    parameters; the returned config is then a copy with the list expanded
-    to {name: {}}. Otherwise the config itself is returned.
+    parameters, and ``sample_rate`` a float with an integral value; the
+    returned config is then a copy with the list expanded to {name: {}}
+    and the rate an int. Otherwise the config itself is returned.
 
     Raises ValueError for unknown top-level keys, a missing (unless
     ``require_sample_rate`` is False) or non-positive sample_rate, a
@@ -109,6 +117,8 @@ def validate_config(config: dict[str, Any], require_sample_rate: bool = True) ->
         )
     elif config['sample_rate'] <= 0:
         raise ValueError(f"sample_rate must be positive, got {config['sample_rate']}")
+    elif integral_rate(config['sample_rate']) is not config['sample_rate']:
+        config = {**config, 'sample_rate': integral_rate(config['sample_rate'])}
     features = config.get('features')
     if isinstance(features, (list, tuple)):
         if not all(isinstance(n, str) for n in features):
