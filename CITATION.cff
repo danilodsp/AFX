@@ -1,10 +1,26 @@
 cff-version: 1.2.0
 message: If you use AFX in your research, please cite it as below.
 title: "AFX: Audio Feature Extraction for Machine Learning"
+abstract: >-
+  AFX extracts time-domain, spectral, cepstral, harmonic and linear-prediction
+  audio features from NumPy signals, with per-frame and aggregated outputs and
+  a parity test suite against librosa. The same features are exposed as a
+  scikit-learn transformer and as differentiable PyTorch functions.
 authors:
   - family-names: Pena
     given-names: Danilo
+    orcid: "https://orcid.org/0000-0003-2767-5764"
 type: software
 license: MIT
-repository-code: https://github.com/danilodsp/AFX
+repository-code: "https://github.com/danilodsp/AFX"
+url: "https://danilopena.com/AFX/"
 version: 0.3.0
+keywords:
+  - audio
+  - feature extraction
+  - signal processing
+  - MFCC
+  - spectral features
+  - machine learning
+  - scikit-learn
+  - PyTorch

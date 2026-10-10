@@ -84,10 +84,10 @@ afx = "afx_audio.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/danilodsp/AFX"
-Documentation = "https://danilodsp.github.io/AFX/"
-Changelog = "https://github.com/danilodsp/AFX/blob/main/CHANGELOG.md"
-Repository = "https://github.com/danilodsp/AFX"
+Documentation = "https://danilopena.com/AFX/"
+Source = "https://github.com/danilodsp/AFX"
 Issues = "https://github.com/danilodsp/AFX/issues"
+Changelog = "https://github.com/danilodsp/AFX/blob/main/CHANGELOG.md"
 
 [tool.setuptools.packages.find]
 include = ["afx_audio*"]
