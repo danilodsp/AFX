@@ -83,8 +83,10 @@ def extract_all_features(
             (default 'mean'), 'flatten' (default True), 'normalize'
             ('zscore', 'minmax' or None), 'aggregation_params' (extra
             keyword arguments for ``aggregate_features``, e.g. window_size
-            and hop_length for 'sliding_window'), and 'preserve_shape'
-            (True skips aggregation and returns per-frame arrays).
+            and hop_length for 'sliding_window'), 'preserve_shape'
+            (True skips aggregation and returns per-frame arrays) and
+            'coverage' (True adds '<name>_valid_frac', the fraction of
+            frames with a finite value, after each feature's statistics).
         return_metadata: If True, include per-feature metadata (frame times)
     Returns:
         Dict of feature names to np.ndarray, or a single stacked 1-D array
@@ -128,6 +130,7 @@ def extract_all_features(
         agg_kwargs['method'] = config.get('aggregation', 'mean')
         agg_kwargs['flatten'] = config.get('flatten', True)
         agg_kwargs['normalize'] = config.get('normalize', None)
+        agg_kwargs['coverage'] = config.get('coverage', False)
         features = aggregate_features(per_frame, **agg_kwargs)
 
     if return_metadata:

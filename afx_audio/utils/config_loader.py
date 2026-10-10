@@ -15,6 +15,7 @@ VALID_AGGREGATIONS = (
 VALID_NORMALIZATIONS = ('zscore', 'minmax', None)
 CONFIG_KEYS = (
     'sample_rate', 'features', 'aggregation', 'aggregation_params', 'flatten', 'normalize', 'preserve_shape',
+    'coverage',
     # descriptive fields of the presets
     'name', 'title', 'description',
 )
@@ -85,8 +86,9 @@ def validate_config(config: dict[str, Any], require_sample_rate: bool = True) ->
     ``require_sample_rate`` is False) or non-positive sample_rate, a
     missing features block, feature names with no extractor, parameters
     the extractor does not accept, non-positive frame sizes and counts, an
-    unknown aggregation or normalize value, and sliding_window aggregation
-    without window_size and hop_length in aggregation_params.
+    unknown aggregation or normalize value, sliding_window aggregation
+    without window_size and hop_length in aggregation_params, and a
+    non-boolean coverage or coverage with 'stack' or preserve_shape.
     """
     from afx_audio.extract_all import FEATURE_MAP
 
@@ -142,6 +144,14 @@ def validate_config(config: dict[str, Any], require_sample_rate: bool = True) ->
     if normalize not in VALID_NORMALIZATIONS:
         raise ValueError(
             f"Unknown normalize: {normalize!r}. Valid: 'zscore', 'minmax' or null"
+        )
+    coverage = config.get('coverage', False)
+    if not isinstance(coverage, bool):
+        raise ValueError(f'coverage must be true or false, got {coverage!r}')
+    if coverage and (aggregation == 'stack' or config.get('preserve_shape')):
+        raise ValueError(
+            "coverage adds <feature>_valid_frac to aggregated output; it does not apply with aggregation 'stack' "
+            'or preserve_shape. Use afx_audio.utils.aggregator.valid_fraction on per-frame arrays instead.'
         )
     return config
 

@@ -99,6 +99,10 @@ class AFXFeatureModule(nn.Module):
         output: 'dict' returns ``{name: tensor}``; 'vector' flattens and
             concatenates everything into a single (batch, dim) tensor
             (features in insertion order, see ``feature_names()``).
+        coverage: Add ``<name>_valid_frac`` after each aggregated feature,
+            the fraction of frames whose values are all finite (only
+            spectral_kurtosis has undefined frames here, on silence), as on
+            the NumPy path. Not differentiable; needs an aggregation.
 
     Example::
 
@@ -115,6 +119,7 @@ class AFXFeatureModule(nn.Module):
         sample_rate: int = 22050,
         aggregation: str = 'none',
         output: str = 'dict',
+        coverage: bool = False,
     ):
         super().__init__()
         if isinstance(features, (list, tuple)):
@@ -136,10 +141,13 @@ class AFXFeatureModule(nn.Module):
             )
         if output not in ('dict', 'vector'):
             raise ValueError("output must be 'dict' or 'vector'")
+        if coverage and aggregation == 'none':
+            raise ValueError("coverage needs aggregation 'mean', 'std' or 'mean_std'")
 
         self.sample_rate = sample_rate
         self.aggregation = aggregation
         self.output = output
+        self.coverage = coverage
         self._feature_params: dict[str, dict[str, Any]] = {}
 
         for name, params in features.items():
@@ -210,6 +218,8 @@ class AFXFeatureModule(nn.Module):
                 for stat in stats:
                     base = f'{name}_{stat}' if stat else name
                     names.extend([base] if n == 1 else [f'{base}_{i}' for i in range(n)])
+                if self.coverage:
+                    names.append(f'{name}_valid_frac')
         return names
 
     # -- forward ------------------------------------------------------------
@@ -281,6 +291,11 @@ class AFXFeatureModule(nn.Module):
             # Whole-clip rms_energy has a time axis of length 1, so it
             # aggregates to the same shape as the framed features.
             feats[name] = self._aggregate(t, name in _TWO_DIM)
+            if self.coverage:
+                valid = torch.isfinite(t)
+                if name in _TWO_DIM:
+                    valid = valid.all(dim=-2)
+                feats[f'{name}_valid_frac'] = valid.to(t.dtype).mean(dim=-1)
 
         if self.output == 'dict':
             return feats
@@ -297,5 +312,5 @@ class AFXFeatureModule(nn.Module):
         return (
             f'features={list(self._feature_params)}, '
             f'sample_rate={self.sample_rate}, '
-            f'aggregation={self.aggregation!r}, output={self.output!r}'
+            f'aggregation={self.aggregation!r}, output={self.output!r}, coverage={self.coverage}'
         )

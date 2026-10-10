@@ -10,6 +10,25 @@ import numpy as np
 from afx_audio.utils import minmax_normalize, stack_feature_vectors, zscore_normalize
 
 
+def valid_frame_mask(values: np.ndarray) -> np.ndarray:
+    """
+    True for each frame (last axis) on which every row of ``values`` is finite.
+
+    A multi-row feature (MFCC, formants) counts a frame as valid only when
+    all of its rows are, so the mask of formants is False wherever F3 is
+    missing even if F1 is defined. A single value gives a 0-d mask.
+    """
+    finite = np.isfinite(np.asarray(values, dtype=np.float64))
+    if finite.ndim <= 1:
+        return finite
+    return finite.reshape(-1, finite.shape[-1]).all(axis=0)
+
+
+def valid_fraction(values: np.ndarray) -> float:
+    """Fraction of frames on which every row of ``values`` is finite, see valid_frame_mask."""
+    return float(np.mean(valid_frame_mask(values)))
+
+
 def _moments(v: np.ndarray, which: tuple[str, ...]) -> dict[str, np.ndarray]:
     """
     NaN-ignoring statistics over the last axis, kept as a length-1 axis.
@@ -130,7 +149,8 @@ def aggregate_features(
     window_size: int | None = None,
     hop_length: int | None = None,
     norm_stats: dict[str, dict[str, float]] | None = None,
-    sliding_agg: str = 'mean'
+    sliding_agg: str = 'mean',
+    coverage: bool = False,
 ) -> dict[str, np.ndarray] | np.ndarray:
     """
     Aggregate features using the specified method, then optionally flatten and normalize each feature.
@@ -147,6 +167,10 @@ def aggregate_features(
             for 'minmax': {'min': {...}, 'max': {...}}.
         sliding_agg: Inner aggregation for method='sliding_window'
             ('mean', 'std', 'max', 'min').
+        coverage: Add ``<name>_valid_frac`` after each feature's statistics,
+            the fraction of frames they are based on (see valid_frame_mask).
+            One value per clip, or one per window with 'sliding_window'.
+            Never normalized. Not available with 'stack'.
     Returns:
         Dict of aggregated (and optionally flattened/normalized) features, or a stacked numpy array if method='stack'.
 
@@ -175,6 +199,8 @@ def aggregate_features(
             raise ValueError("window_size and hop_length must be specified for sliding_window method")
         agg = sliding_window_aggregation(features, window_size, hop_length, sliding_agg)
     elif method == 'stack':
+        if coverage:
+            raise ValueError("coverage needs a pooling aggregation; 'stack' keeps every frame")
         return stack_feature_vectors([features], flatten=True)[0]
     else:
         raise ValueError(f'Unknown aggregation method: {method}')
@@ -200,4 +226,22 @@ def aggregate_features(
             )
         else:
             raise ValueError(f'Unknown normalization method: {normalize}')
+    if coverage:
+        agg = _with_coverage(agg, features, method, window_size, hop_length)
     return agg
+
+
+def _with_coverage(agg, features, method, window_size, hop_length):
+    """Interleave <name>_valid_frac after the aggregated keys of each feature."""
+    stats = {'summary': ('mean', 'std'), 'advanced_summary': ('mean', 'std', 'skew', 'kurt')}.get(method)
+    out = {}
+    for name, values in features.items():
+        for key in [f'{name}_{s}' for s in stats] if stats else [name]:
+            out[key] = agg[key]
+        mask = valid_frame_mask(values).astype(np.float64)
+        if method == 'sliding_window':
+            frac = sliding_window_aggregation({name: mask}, window_size, hop_length)[name]
+        else:
+            frac = mask.mean()
+        out[f'{name}_valid_frac'] = np.atleast_1d(frac)
+    return out

@@ -133,6 +133,7 @@ def extract_features_from_folder(
     n_jobs: int | None = None,
     sample_rate: int | None = None,
     verbose: bool = True,
+    coverage: bool | None = None,
 ) -> dict[str, Any]:
     """
     Extract features from all audio files in a folder (recursively).
@@ -163,6 +164,8 @@ def extract_features_from_folder(
         sample_rate: Override the config's sample_rate (audio is resampled
             to this rate on load).
         verbose: Print per-file progress to stdout.
+        coverage: Add a <feature>_valid_frac column per feature (fraction
+            of frames with a finite value). None keeps the config's setting.
 
     Returns:
         The results dict, keyed by path relative to folder_path. Files that
@@ -198,6 +201,8 @@ def extract_features_from_folder(
         config['flatten'] = flatten
     if normalize is not None:
         config['normalize'] = normalize
+    if coverage is not None:
+        config['coverage'] = coverage
     config = validate_config(config)
     save_format = _output_format(output_path, save_format)
     _check_output(output_path, save_format)
