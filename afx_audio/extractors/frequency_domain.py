@@ -369,7 +369,7 @@ def extract_spectral_contrast(
     return_metadata: bool = False,
 ) -> dict[str, Any]:
     """
-    Spectral contrast (Jiang et al., 2002), shape (n_bands + 1, n_frames).
+    Spectral contrast (Jiang et al., 2002, Proc. IEEE ICME), shape (n_bands + 1, n_frames).
 
     The magnitude spectrum is split into octave bands starting at fmin
     (the first band is 0..fmin); in each band and frame, peak and valley
