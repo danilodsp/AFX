@@ -78,9 +78,9 @@ estimator but differ in how unvoiced frames are reported (see
 
 For the rows that are numerically equal to librosa, the two libraries are
 within about 35% of each other (`zcr` aside), because both are dominated
-by one real FFT over about 430 frames of 2048 samples. AFX additionally
-memoizes the mel and gammatone filterbanks across calls; librosa
-rebuilds its mel filterbank on every call.
+by one real FFT over about 430 frames of 2048 samples. AFX also memoizes
+the mel and gammatone filterbanks across calls; librosa rebuilds its mel
+filterbank on every call.
 
 `sample_entropy` is about half of the total. Its cost grows with the
 square of the frame length in the worst case (Richman and Moorman, 2000), and the
