@@ -14,6 +14,25 @@ def test_every_feature_is_described():
         assert info['units']
 
 
+def test_feature_info_torch_entry():
+    assert afx_audio.feature_info('mfcc')['torch'] == {
+        'function': 'afx_audio.torch.functional.mfcc', 'rtol': 1e-9, 'atol': 1e-9, 'dtype': 'float64'}
+    assert afx_audio.feature_info('zcr')['torch']['function'] == 'afx_audio.torch.functional.zero_crossing_rate'
+    assert afx_audio.feature_info('hnr')['torch'] is None
+
+
+def test_overridden_feature_has_no_torch_entry():
+    def mfcc(signal, sr):
+        return {'mfcc': np.zeros(1)}
+
+    afx_audio.register_feature('mfcc', mfcc, overwrite=True)
+    try:
+        assert afx_audio.feature_info('mfcc')['torch'] is None
+    finally:
+        afx_audio.unregister_feature('mfcc')
+    assert afx_audio.feature_info('mfcc')['torch'] is not None
+
+
 def test_groups_partition_features():
     grouped = [name for g in GROUPS for name in afx_audio.list_features(g)]
     assert sorted(grouped) == sorted(afx_audio.FEATURE_MAP)

@@ -84,6 +84,42 @@ _UNDEFINED = {
 }
 
 
+# Features with a torch implementation: name -> (function in
+# afx_audio.torch.functional, rtol, atol). tests/test_torch_features.py checks
+# the torch output against the NumPy extractor in float64 with
+# numpy.testing.assert_allclose at exactly these tolerances; atol is in the
+# feature's units, smaller for features whose values are far below 1.
+TORCH_TOLERANCES: dict[str, tuple[str, float, float]] = {
+    'melspectrogram': ('melspectrogram', 1e-9, 1e-9),
+    'mfcc': ('mfcc', 1e-9, 1e-9),
+    'mfcc_delta': ('mfcc', 1e-9, 1e-9),
+    'mfcc_delta_delta': ('mfcc', 1e-9, 1e-9),
+    'gfcc': ('gfcc', 1e-9, 1e-9),
+    'chroma_stft': ('chroma_stft', 1e-9, 1e-12),
+    'spectral_centroid': ('spectral_centroid', 1e-9, 1e-9),
+    'spectral_bandwidth': ('spectral_bandwidth', 1e-9, 1e-9),
+    'spectral_rolloff': ('spectral_rolloff', 1e-9, 1e-9),
+    'spectral_entropy': ('spectral_entropy', 1e-9, 1e-9),
+    'spectral_flatness': ('spectral_flatness', 1e-9, 1e-12),
+    'spectral_flux': ('spectral_flux', 1e-9, 1e-9),
+    'spectral_skewness': ('spectral_skewness', 1e-9, 1e-9),
+    'spectral_slope': ('spectral_slope', 1e-9, 1e-12),
+    'spectral_kurtosis': ('spectral_kurtosis', 1e-9, 1e-9),
+    'spectral_crest': ('spectral_crest', 1e-9, 1e-9),
+    'spectral_decrease': ('spectral_decrease', 1e-9, 1e-12),
+    'spectral_contrast': ('spectral_contrast', 1e-9, 1e-9),
+    'zcr': ('zero_crossing_rate', 1e-9, 1e-12),
+    'rms_energy': ('rms_energy', 1e-9, 1e-12),
+}
+
+
+def _torch_entry(name: str) -> dict[str, Any] | None:
+    if name not in TORCH_TOLERANCES:
+        return None
+    function, rtol, atol = TORCH_TOLERANCES[name]
+    return {'function': f'afx_audio.torch.functional.{function}', 'rtol': rtol, 'atol': atol, 'dtype': 'float64'}
+
+
 def list_features(group: str | None = None) -> list[str]:
     """Feature names, optionally only those of one group (see GROUPS)."""
     if group is not None and group not in GROUPS:
@@ -98,6 +134,9 @@ def feature_info(name: str) -> dict[str, Any]:
     ``rows`` is the size of the first axis of the per-frame output ('1'
     means the output is 1-D, one value per frame). ``undefined`` says when
     a frame is NaN, None if never (or unknown, for custom features).
+    ``torch`` is None without a torch implementation, else the
+    ``afx_audio.torch.functional`` function and the rtol and atol to which
+    its output is tested equal to the NumPy extractor in float64.
     """
     if name not in FEATURE_MAP:
         raise KeyError(f'Unknown feature: {name!r}. Available: {sorted(FEATURE_MAP)}')
@@ -114,6 +153,7 @@ def feature_info(name: str) -> dict[str, Any]:
         'summary': summary,
         'function': f'{func.__module__}.{func.__name__}',
         'undefined': None if group == 'custom' else _UNDEFINED.get(name),
+        'torch': None if group == 'custom' else _torch_entry(name),
     }
 
 
