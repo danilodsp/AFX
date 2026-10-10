@@ -203,6 +203,9 @@ def test_cli_describe(capsys):
     assert cli.main(['--describe', 'spectral_rolloff']) == 0
     out = capsys.readouterr().out
     assert 'roll_percent = 0.85' in out and 'Hz' in out
+    assert 'Torch: afx_audio.torch.functional.spectral_rolloff, equal to NumPy within rtol=1e-09' in out
+    assert cli.main(['--describe', 'hnr']) == 0
+    assert 'Torch: none' in capsys.readouterr().out
     with pytest.raises(SystemExit):
         cli.main(['--describe', 'nope'])
 

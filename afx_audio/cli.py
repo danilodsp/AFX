@@ -76,6 +76,12 @@ def _describe(name: str) -> None:
     print(info['summary'].replace('``', '`'))
     if info['undefined']:
         print(f"NaN for: {info['undefined']}")
+    torch_path = info['torch']
+    if torch_path:
+        print(f"Torch: {torch_path['function']}, equal to NumPy within rtol={torch_path['rtol']:g}, "
+              f"atol={torch_path['atol']:g} ({torch_path['dtype']})")
+    else:
+        print('Torch: none')
     for key, value in info['parameters'].items():
         print(f'  {key} = {value!r}')
 

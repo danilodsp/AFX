@@ -31,6 +31,12 @@ def render() -> str:
             lines.append(f"Units: {info['units']}. Rows: {info['rows']}. Function: `{info['function']}`.\n")
             if info['undefined']:
                 lines.append(f"NaN for: {info['undefined']}.\n")
+            torch_path = info['torch']
+            if torch_path:
+                lines.append(f"Torch: `{torch_path['function']}`, equal to NumPy within "
+                             f"rtol {torch_path['rtol']:g}, atol {torch_path['atol']:g} ({torch_path['dtype']}).\n")
+            else:
+                lines.append('Torch: none.\n')
             params = ', '.join(f'`{k}={v!r}`' for k, v in info['parameters'].items()) or 'none'
             lines.append(f'Parameters: {params}.\n')
     return '\n'.join(lines)

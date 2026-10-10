@@ -14,6 +14,8 @@ Zero-crossing rate: sign changes between consecutive samples divided by the fram
 
 Units: crossings per sample. Rows: 1. Function: `afx_audio.extractors.time_domain.extract_zero_crossing_rate`.
 
+Torch: `afx_audio.torch.functional.zero_crossing_rate`, equal to NumPy within rtol 1e-09, atol 1e-12 (float64).
+
 Parameters: `frame_size=2048`, `hop_length=512`, `center=False`, `threshold=1e-10`.
 
 ### `variance`
@@ -21,6 +23,8 @@ Parameters: `frame_size=2048`, `hop_length=512`, `center=False`, `threshold=1e-1
 Variance of the samples (population, ddof=0).
 
 Units: amplitude^2. Rows: 1. Function: `afx_audio.extractors.time_domain.extract_variance`.
+
+Torch: none.
 
 Parameters: `frame_size=None`, `hop_length=None`, `center=False`.
 
@@ -30,6 +34,8 @@ Shannon entropy (bits) of the amplitude histogram with ``num_bins`` equal-width 
 
 Units: bits. Rows: 1. Function: `afx_audio.extractors.time_domain.extract_entropy`.
 
+Torch: none.
+
 Parameters: `frame_size=None`, `hop_length=None`, `center=False`, `num_bins=100`.
 
 ### `crest_factor`
@@ -38,6 +44,8 @@ Peak amplitude over RMS. 0 for an all-zero frame.
 
 Units: ratio. Rows: 1. Function: `afx_audio.extractors.time_domain.extract_crest_factor`.
 
+Torch: none.
+
 Parameters: `frame_size=None`, `hop_length=None`, `center=False`.
 
 ### `rms_energy`
@@ -45,6 +53,8 @@ Parameters: `frame_size=None`, `hop_length=None`, `center=False`.
 Root mean square of the samples.
 
 Units: amplitude. Rows: 1. Function: `afx_audio.extractors.time_domain.extract_rms_energy`.
+
+Torch: `afx_audio.torch.functional.rms_energy`, equal to NumPy within rtol 1e-09, atol 1e-12 (float64).
 
 Parameters: `frame_size=None`, `hop_length=None`, `center=False`.
 
@@ -56,6 +66,8 @@ Units: dimensionless. Rows: 1. Function: `afx_audio.extractors.time_domain.extra
 
 NaN for: constant frame (zero variance), including digital silence.
 
+Torch: none.
+
 Parameters: `frame_size=None`, `hop_length=None`, `center=False`, `fisher=True`.
 
 ### `short_time_energy`
@@ -64,6 +76,8 @@ Sum of squared samples.
 
 Units: amplitude^2. Rows: 1. Function: `afx_audio.extractors.time_domain.extract_short_time_energy`.
 
+Torch: none.
+
 Parameters: `frame_size=None`, `hop_length=None`, `center=False`.
 
 ### `energy_ratio`
@@ -71,6 +85,8 @@ Parameters: `frame_size=None`, `hop_length=None`, `center=False`.
 Energy before ``split`` (fraction of the frame length) over energy after it.
 
 Units: ratio. Rows: 1. Function: `afx_audio.extractors.time_domain.extract_energy_ratio`.
+
+Torch: none.
 
 Parameters: `frame_size=None`, `hop_length=None`, `center=False`, `split=0.5`.
 
@@ -82,6 +98,8 @@ Units: nats. Rows: 1. Function: `afx_audio.extractors.time_domain.extract_sample
 
 NaN for: no template matches (A or B is 0), or fewer than m + 2 samples.
 
+Torch: none.
+
 Parameters: `frame_size=None`, `hop_length=None`, `center=False`, `m=2`, `r=0.2`, `max_samples=20000`.
 
 ### `mobility`
@@ -92,6 +110,8 @@ Units: ratio. Rows: 1. Function: `afx_audio.extractors.time_domain.extract_mobil
 
 NaN for: frame shorter than 2 samples.
 
+Torch: none.
+
 Parameters: `frame_size=None`, `hop_length=None`, `center=False`.
 
 ### `complexity`
@@ -101,6 +121,8 @@ RMS(x'') / RMS(x'), second- over first-difference RMS (the mobility of x').
 Units: ratio. Rows: 1. Function: `afx_audio.extractors.time_domain.extract_complexity`.
 
 NaN for: frame shorter than 3 samples.
+
+Torch: none.
 
 Parameters: `frame_size=None`, `hop_length=None`, `center=False`.
 
@@ -113,6 +135,8 @@ Variance of the raw autocorrelation over lags 0..max_lag-1.
 
 Units: amplitude^4. Rows: 1. Function: `afx_audio.extractors.time_domain.extract_autocorrelation_variance`.
 
+Torch: none.
+
 Parameters: `frame_size=None`, `hop_length=None`, `center=False`, `max_lag=100`.
 
 ### `autocorr_snr`
@@ -120,6 +144,8 @@ Parameters: `frame_size=None`, `hop_length=None`, `center=False`, `max_lag=100`.
 Peak over mean of the autocorrelation over lags 0..max_lag-1.
 
 Units: ratio. Rows: 1. Function: `afx_audio.extractors.time_domain.extract_autocorr_snr`.
+
+Torch: none.
 
 Parameters: `frame_size=None`, `hop_length=None`, `center=False`, `max_lag=100`.
 
@@ -129,6 +155,8 @@ Number of sign changes of the autocorrelation over lags 0..max_lag-1.
 
 Units: count. Rows: 1. Function: `afx_audio.extractors.time_domain.extract_autocorr_zero_crossings`.
 
+Torch: none.
+
 Parameters: `frame_size=None`, `hop_length=None`, `center=False`, `max_lag=100`.
 
 ### `autocorr_peak_width`
@@ -136,6 +164,8 @@ Parameters: `frame_size=None`, `hop_length=None`, `center=False`, `max_lag=100`.
 Lags from the first to the last autocorrelation value at or above half the peak, inclusive.
 
 Units: lags. Rows: 1. Function: `afx_audio.extractors.time_domain.extract_autocorr_peak_width`.
+
+Torch: none.
 
 Parameters: `frame_size=None`, `hop_length=None`, `center=False`, `max_lag=100`.
 
@@ -147,6 +177,8 @@ Units: log units per lag. Rows: 1. Function: `afx_audio.extractors.time_domain.e
 
 NaN for: fewer than 3 autocorrelation lags (max_lag or frame below 3).
 
+Torch: none.
+
 Parameters: `frame_size=None`, `hop_length=None`, `center=False`, `max_lag=100`.
 
 ### `autocorr_coeffs_deviation`
@@ -154,6 +186,8 @@ Parameters: `frame_size=None`, `hop_length=None`, `center=False`, `max_lag=100`.
 Standard deviation of the autocorrelation over lags 0..max_lag-1.
 
 Units: amplitude^2. Rows: 1. Function: `afx_audio.extractors.time_domain.extract_autocorr_coeffs_deviation`.
+
+Torch: none.
 
 Parameters: `frame_size=None`, `hop_length=None`, `center=False`, `max_lag=100`.
 
@@ -164,6 +198,8 @@ Largest autocorrelation value over lags 1..max_lag-1. NaN when only lag 0 exists
 Units: amplitude^2. Rows: 1. Function: `afx_audio.extractors.time_domain.extract_max_peak_autocorr_envelope`.
 
 NaN for: only lag 0 available (max_lag or frame of 1).
+
+Torch: none.
 
 Parameters: `frame_size=None`, `hop_length=None`, `center=False`, `max_lag=100`.
 
@@ -176,6 +212,8 @@ Magnitude-weighted mean frequency in Hz, as librosa.feature.spectral_centroid. 0
 
 Units: Hz. Rows: 1. Function: `afx_audio.extractors.frequency_domain.extract_spectral_centroid`.
 
+Torch: `afx_audio.torch.functional.spectral_centroid`, equal to NumPy within rtol 1e-09, atol 1e-09 (float64).
+
 Parameters: `frame_size=2048`, `hop_length=512`, `center=False`.
 
 ### `spectral_bandwidth`
@@ -183,6 +221,8 @@ Parameters: `frame_size=2048`, `hop_length=512`, `center=False`.
 Magnitude-weighted standard deviation of frequency around the centroid, in Hz (librosa, p=2).
 
 Units: Hz. Rows: 1. Function: `afx_audio.extractors.frequency_domain.extract_spectral_bandwidth`.
+
+Torch: `afx_audio.torch.functional.spectral_bandwidth`, equal to NumPy within rtol 1e-09, atol 1e-09 (float64).
 
 Parameters: `frame_size=2048`, `hop_length=512`, `center=False`.
 
@@ -192,6 +232,8 @@ Spectral rolloff: the lowest bin frequency at which the cumulative sum of |X|^po
 
 Units: Hz. Rows: 1. Function: `afx_audio.extractors.frequency_domain.extract_spectral_rolloff`.
 
+Torch: `afx_audio.torch.functional.spectral_rolloff`, equal to NumPy within rtol 1e-09, atol 1e-09 (float64).
+
 Parameters: `frame_size=2048`, `hop_length=512`, `roll_percent=0.85`, `center=False`, `power=1.0`.
 
 ### `spectral_contrast`
@@ -199,6 +241,8 @@ Parameters: `frame_size=2048`, `hop_length=512`, `roll_percent=0.85`, `center=Fa
 Spectral contrast (Jiang et al., 2002, Proc. IEEE ICME), shape (n_bands + 1, n_frames).
 
 Units: dB. Rows: n_bands + 1. Function: `afx_audio.extractors.frequency_domain.extract_spectral_contrast`.
+
+Torch: `afx_audio.torch.functional.spectral_contrast`, equal to NumPy within rtol 1e-09, atol 1e-09 (float64).
 
 Parameters: `frame_size=2048`, `hop_length=512`, `n_bands=6`, `fmin=200.0`, `quantile=0.02`, `center=True`.
 
@@ -208,6 +252,8 @@ Shannon entropy in bits of the magnitude spectrum normalized to sum 1.
 
 Units: bits. Rows: 1. Function: `afx_audio.extractors.frequency_domain.extract_spectral_entropy`.
 
+Torch: `afx_audio.torch.functional.spectral_entropy`, equal to NumPy within rtol 1e-09, atol 1e-09 (float64).
+
 Parameters: `frame_size=2048`, `hop_length=512`, `center=False`.
 
 ### `spectral_flatness`
@@ -215,6 +261,8 @@ Parameters: `frame_size=2048`, `hop_length=512`, `center=False`.
 Geometric over arithmetic mean of the power spectrum (Wiener entropy).
 
 Units: ratio. Rows: 1. Function: `afx_audio.extractors.frequency_domain.extract_spectral_flatness`.
+
+Torch: `afx_audio.torch.functional.spectral_flatness`, equal to NumPy within rtol 1e-09, atol 1e-12 (float64).
 
 Parameters: `frame_size=2048`, `hop_length=512`, `center=False`.
 
@@ -224,6 +272,8 @@ Euclidean distance between consecutive magnitude spectra, shape (n_frames - 1,).
 
 Units: magnitude. Rows: 1. Function: `afx_audio.extractors.frequency_domain.extract_spectral_flux`.
 
+Torch: `afx_audio.torch.functional.spectral_flux`, equal to NumPy within rtol 1e-09, atol 1e-09 (float64).
+
 Parameters: `frame_size=2048`, `hop_length=512`, `center=True`.
 
 ### `spectral_skewness`
@@ -232,6 +282,8 @@ Third standardized moment of frequency under the magnitude spectrum. 0 for a sil
 
 Units: dimensionless. Rows: 1. Function: `afx_audio.extractors.frequency_domain.extract_spectral_skewness`.
 
+Torch: `afx_audio.torch.functional.spectral_skewness`, equal to NumPy within rtol 1e-09, atol 1e-09 (float64).
+
 Parameters: `frame_size=2048`, `hop_length=512`, `center=False`.
 
 ### `spectral_slope`
@@ -239,6 +291,8 @@ Parameters: `frame_size=2048`, `hop_length=512`, `center=False`.
 Least-squares slope of 20 log10(|X| + 1e-10) against frequency, in dB per Hz.
 
 Units: dB per Hz. Rows: 1. Function: `afx_audio.extractors.frequency_domain.extract_spectral_slope`.
+
+Torch: `afx_audio.torch.functional.spectral_slope`, equal to NumPy within rtol 1e-09, atol 1e-12 (float64).
 
 Parameters: `frame_size=2048`, `hop_length=512`, `center=False`.
 
@@ -250,6 +304,8 @@ Units: dimensionless. Rows: 1. Function: `afx_audio.extractors.frequency_domain.
 
 NaN for: silent frame or zero spectral variance (single bin).
 
+Torch: `afx_audio.torch.functional.spectral_kurtosis`, equal to NumPy within rtol 1e-09, atol 1e-09 (float64).
+
 Parameters: `frame_size=2048`, `hop_length=512`, `center=False`, `fisher=True`.
 
 ### `spectral_crest`
@@ -258,6 +314,8 @@ Largest over mean magnitude of the spectrum, per frame.
 
 Units: ratio. Rows: 1. Function: `afx_audio.extractors.frequency_domain.extract_spectral_crest`.
 
+Torch: `afx_audio.torch.functional.spectral_crest`, equal to NumPy within rtol 1e-09, atol 1e-09 (float64).
+
 Parameters: `frame_size=2048`, `hop_length=512`, `center=False`.
 
 ### `spectral_decrease`
@@ -265,6 +323,8 @@ Parameters: `frame_size=2048`, `hop_length=512`, `center=False`.
 Spectral decrease (Peeters, 2004): sum_k (a_k - a_1) / (k - 1) / sum_k a_k over bins k = 2..K.
 
 Units: per bin. Rows: 1. Function: `afx_audio.extractors.frequency_domain.extract_spectral_decrease`.
+
+Torch: `afx_audio.torch.functional.spectral_decrease`, equal to NumPy within rtol 1e-09, atol 1e-12 (float64).
 
 Parameters: `frame_size=2048`, `hop_length=512`, `center=False`.
 
@@ -277,6 +337,8 @@ Chromagram from the STFT power spectrum, shape (12, n_frames), row 0 = C.
 
 Units: normalized energy. Rows: 12. Function: `afx_audio.extractors.cepstral_features.extract_chroma_stft`.
 
+Torch: `afx_audio.torch.functional.chroma_stft`, equal to NumPy within rtol 1e-09, atol 1e-12 (float64).
+
 Parameters: `frame_size=2048`, `hop_length=512`, `center=True`, `tuning=0.0`, `normalize=True`.
 
 ### `chroma_cqt`
@@ -284,6 +346,8 @@ Parameters: `frame_size=2048`, `hop_length=512`, `center=True`, `tuning=0.0`, `n
 Chromagram from the STFT-based CQT approximation, shape (12, n_frames).
 
 Units: normalized magnitude. Rows: 12. Function: `afx_audio.extractors.cepstral_features.extract_chroma_cqt`.
+
+Torch: none.
 
 Parameters: `frame_size=2048`, `hop_length=512`, `n_bins=84`, `bins_per_octave=12`, `fmin=32.70319566257483`, `center=False`.
 
@@ -293,6 +357,8 @@ Constant-Q magnitude approximated from the STFT, shape (n_bins, n_frames).
 
 Units: magnitude. Rows: n_bins. Function: `afx_audio.extractors.cepstral_features.extract_cqt`.
 
+Torch: none.
+
 Parameters: `hop_length=512`, `n_bins=84`, `bins_per_octave=12`, `fmin=None`, `frame_size=2048`, `center=True`, `n_fft=None`.
 
 ### `melspectrogram`
@@ -300,6 +366,8 @@ Parameters: `hop_length=512`, `n_bins=84`, `bins_per_octave=12`, `fmin=None`, `f
 Mel power spectrogram, shape (n_mels, n_frames).
 
 Units: power. Rows: n_mels. Function: `afx_audio.extractors.cepstral_features.extract_melspectrogram`.
+
+Torch: `afx_audio.torch.functional.melspectrogram`, equal to NumPy within rtol 1e-09, atol 1e-09 (float64).
 
 Parameters: `n_mels=128`, `frame_size=2048`, `hop_length=512`, `fmin=0.0`, `fmax=None`, `center=True`.
 
@@ -309,6 +377,8 @@ Tonal centroid features (Harte, Sandler and Gasser, 2006), shape (6, n_frames).
 
 Units: dimensionless. Rows: 6. Function: `afx_audio.extractors.cepstral_features.extract_tonnetz`.
 
+Torch: none.
+
 Parameters: `frame_size=2048`, `hop_length=512`, `center=True`, `tuning=0.0`.
 
 ### `onset_strength`
@@ -316,6 +386,8 @@ Parameters: `frame_size=2048`, `hop_length=512`, `center=True`, `tuning=0.0`.
 Spectral-flux onset strength, shape (n_frames,), as librosa.onset.onset_strength.
 
 Units: dB. Rows: 1. Function: `afx_audio.extractors.cepstral_features.extract_onset_strength`.
+
+Torch: none.
 
 Parameters: `frame_size=2048`, `hop_length=512`, `n_mels=128`, `fmin=0.0`, `fmax=None`, `lag=1`, `max_size=1`.
 
@@ -328,6 +400,8 @@ Mel-frequency cepstral coefficients, shape (n_mfcc, n_frames).
 
 Units: dB (DCT of log-mel). Rows: n_mfcc. Function: `afx_audio.extractors.cepstral_features.extract_mfcc`.
 
+Torch: `afx_audio.torch.functional.mfcc`, equal to NumPy within rtol 1e-09, atol 1e-09 (float64).
+
 Parameters: `n_mfcc=13`, `frame_size=2048`, `hop_length=512`, `n_mels=128`, `fmin=0.0`, `fmax=None`, `center=False`, `top_db=80.0`.
 
 ### `mfcc_delta`
@@ -335,6 +409,8 @@ Parameters: `n_mfcc=13`, `frame_size=2048`, `hop_length=512`, `n_mels=128`, `fmi
 MFCC deltas, shape (n_mfcc, n_frames), key 'mfcc_delta'.
 
 Units: dB per frame. Rows: n_mfcc. Function: `afx_audio.extractors.cepstral_features.extract_mfcc_delta`.
+
+Torch: `afx_audio.torch.functional.mfcc`, equal to NumPy within rtol 1e-09, atol 1e-09 (float64).
 
 Parameters: `n_mfcc=13`, `frame_size=2048`, `hop_length=512`, `n_mels=128`, `fmin=0.0`, `fmax=None`, `center=False`, `width=9`, `order=1`.
 
@@ -344,6 +420,8 @@ Second-order MFCC deltas (acceleration), see extract_mfcc_delta.
 
 Units: dB per frame^2. Rows: n_mfcc. Function: `afx_audio.extractors.cepstral_features.extract_mfcc_delta_delta`.
 
+Torch: `afx_audio.torch.functional.mfcc`, equal to NumPy within rtol 1e-09, atol 1e-09 (float64).
+
 Parameters: `n_mfcc=13`, `frame_size=2048`, `hop_length=512`, `n_mels=128`, `fmin=0.0`, `fmax=None`, `center=False`, `width=9`.
 
 ### `gfcc`
@@ -351,6 +429,8 @@ Parameters: `n_mfcc=13`, `frame_size=2048`, `hop_length=512`, `n_mels=128`, `fmi
 Gammatone frequency cepstral coefficients, shape (n_gfcc, n_frames).
 
 Units: dB (DCT of log-gammatone). Rows: n_gfcc. Function: `afx_audio.extractors.cepstral_features.extract_gfcc`.
+
+Torch: `afx_audio.torch.functional.gfcc`, equal to NumPy within rtol 1e-09, atol 1e-09 (float64).
 
 Parameters: `n_gfcc=13`, `frame_size=2048`, `hop_length=512`, `n_gammatone=64`, `fmin=50.0`, `fmax=None`, `center=False`.
 
@@ -365,6 +445,8 @@ Units: Hz (NaN = unvoiced). Rows: 1. Function: `afx_audio.extractors.harmonic_fe
 
 NaN for: unvoiced frames (no YIN dip below threshold and minimum not below 0.5) and f0 outside [fmin, fmax].
 
+Torch: none.
+
 Parameters: `frame_size=2048`, `hop_length=512`, `fmin=50.0`, `fmax=2000.0`, `threshold=0.1`.
 
 ### `thd`
@@ -375,6 +457,8 @@ Units: ratio. Rows: 1. Function: `afx_audio.extractors.harmonic_features.extract
 
 NaN for: zero-energy frame or fewer than 2 FFT bins.
 
+Torch: none.
+
 Parameters: `frame_size=None`, `hop_length=None`, `center=False`, `n_harmonics=4`.
 
 ### `hnr`
@@ -384,6 +468,8 @@ Harmonics-to-noise ratio in dB per frame, 10 log10(r / (1 - r)).
 Units: dB. Rows: 1. Function: `afx_audio.extractors.harmonic_features.extract_hnr`.
 
 NaN for: zero-energy frame; every frame when sr / fmax >= min(sr / fmin, frame_size - 1).
+
+Torch: none.
 
 Parameters: `frame_size=2048`, `hop_length=512`, `fmin=50.0`, `fmax=2000.0`.
 
@@ -398,6 +484,8 @@ Units: dimensionless. Rows: order. Function: `afx_audio.extractors.linear_predic
 
 NaN for: frame not longer than order.
 
+Torch: none.
+
 Parameters: `order=12`, `frame_size=None`, `hop_length=None`, `center=False`, `window='hamming'`, `pre_emphasis=0.0`.
 
 ### `formants`
@@ -407,6 +495,8 @@ Formant frequencies F1..Fn in Hz per frame from LPC roots, shape (n_formants, n_
 Units: Hz. Rows: n_formants. Function: `afx_audio.extractors.linear_prediction.extract_formants`.
 
 NaN for: fewer than n_formants LPC resonances above fmin and narrower than max_bandwidth (silence, noise, unvoiced sounds), or frame not longer than order.
+
+Torch: none.
 
 Parameters: `n_formants=3`, `frame_size=512`, `hop_length=128`, `center=False`, `order=None`, `pre_emphasis=0.97`, `fmin=90.0`, `max_bandwidth=400.0`.
 
@@ -421,6 +511,8 @@ Units: per row, see EGEMAPS_LLD_NAMES. Rows: 25. Function: `afx_audio.extractors
 
 NaN for: voice-dependent rows (F0, jitter, shimmer, HNR, formants, H1-H2, H1-A3) on unvoiced frames.
 
+Torch: none.
+
 Parameters: none.
 
 ### `egemaps`
@@ -430,5 +522,7 @@ The 88 eGeMAPS v02 functionals of the whole clip, shape (88, 1).
 Units: per row, see EGEMAPS_NAMES. Rows: 88. Function: `afx_audio.extractors.egemaps.extract_egemaps`.
 
 NaN for: statistics over voiced or unvoiced segments when the clip has none.
+
+Torch: none.
 
 Parameters: none.
