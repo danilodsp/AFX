@@ -36,7 +36,7 @@ except ImportError as e:
 from afx_audio.extract_all import FEATURE_MAP, extract_all_features
 from afx_audio.io.io import load_audio
 from afx_audio.presets import list_presets, load_preset
-from afx_audio.provenance import canonical_json, config_hash, environment_record
+from afx_audio.provenance import canonical_json, config_hash, environment_record, preset_record
 from afx_audio.registry import custom_features, restore_custom_features
 from afx_audio.utils.batch_utils import feature_names, features_to_vector
 from afx_audio.utils.config_loader import load_config, unknown_feature_error, validate_config
@@ -57,7 +57,7 @@ class AFXFeatureExtractor(BaseEstimator, TransformerMixin):
 
     Parameters:
         config: Config dict (``extract_all_features`` convention), path to
-            a config JSON, a preset name ('speech', ...), or None for the
+            a config JSON, a preset ('speech' or 'speech@1', ...), or None for the
             bundled default config.
         features: Feature names to extract, in output order (names missing
             from the config get default parameters), or a dict of names to
@@ -84,8 +84,9 @@ class AFXFeatureExtractor(BaseEstimator, TransformerMixin):
             become ``name_0, name_1, ...``).
         n_features_out_: Output dimensionality.
         provenance_: afx-audio, numpy, scipy and Python versions, the
-            resolved config and its ``afx_audio.config_hash``, the sample
-            rate and the fit time, as written next to batch outputs.
+            resolved config and its ``afx_audio.config_hash``, the preset
+            id, the sample rate and the fit time, as written next to batch
+            outputs.
     """
 
     def __init__(
@@ -113,7 +114,7 @@ class AFXFeatureExtractor(BaseEstimator, TransformerMixin):
             config = load_config(_DEFAULT_CONFIG)
         elif isinstance(self.config, dict):
             config = validate_config(copy.deepcopy(self.config), require_sample_rate=False)
-        elif not os.path.isfile(self.config) and self.config in list_presets():
+        elif not os.path.isfile(self.config) and self.config.partition('@')[0] in list_presets():
             config = load_preset(self.config)
         else:
             config = load_config(self.config)
@@ -185,6 +186,7 @@ class AFXFeatureExtractor(BaseEstimator, TransformerMixin):
         self.provenance_ = {
             'afx_version': environment['versions']['afx_audio'],
             'config_hash': config_hash(self.config_),
+            **preset_record(self.config_),
             'config': json.loads(canonical_json(self.config_)),
             'sample_rate': self.config_['sample_rate'],
             **environment,

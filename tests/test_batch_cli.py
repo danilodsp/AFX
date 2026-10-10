@@ -184,7 +184,14 @@ def test_cli_list_options(capsys):
     assert cli.main(['--list-features']) == 0
     assert 'mfcc' in capsys.readouterr().out.split()
     assert cli.main(['--list-presets']) == 0
-    assert 'speech' in capsys.readouterr().out.split()
+    assert 'speech@1' in capsys.readouterr().out.split()
+
+
+def test_cli_rejects_unknown_preset_version(audio_folder, capsys):
+    with pytest.raises(SystemExit) as exc:
+        cli.main([str(audio_folder), '--preset', 'speech@9'])
+    assert exc.value.code == 2
+    assert "Available: ['speech@1']" in capsys.readouterr().err
 
 
 def test_cli_rejects_missing_folder(tmp_path):
