@@ -22,6 +22,8 @@
 - `extract_features_from_folder` infers the output format from the file extension (`save_format=None`), and rejects an unknown extension instead of writing a `.npy` file next to it. JSON output writes `null` for NaN.
 - `afx` prints one-line `afx: error:` messages with exit status 2 for usage and configuration errors, and exits with 1 when no features were extracted. `--aggregation` no longer offers `sliding_window`, which needs window sizes from a config file.
 - `framewise_extractor` takes `frame_size`, `hop_length`, `center` and `return_metadata` as keyword-only arguments and no longer forwards them to the wrapped function.
+- `pitch` is NaN on unvoiced frames instead of 0, so pitch statistics cover voiced frames only and a clip with no voiced frame gives NaN `pitch_*`. `afx_audio.utils.pitch.yin` still returns 0.
+- `from afx_audio import *` no longer exports `AFXFeatureExtractor`, so it works without scikit-learn; use `from afx_audio.sklearn import AFXFeatureExtractor` or `afx.AFXFeatureExtractor`.
 - `AFXFeatureExtractor(features=[...])` orders output columns as `features`, and its `sample_rate` and `aggregation` default to None, meaning the config's values, instead of overriding a preset with 22050 Hz and `mean`.
 
 ### Fixed
@@ -43,6 +45,15 @@
 
 ### Added
 
+- eGeMAPS v02 (Eyben et al., 2016) under MIT: `afx.egemaps(signal, sr)` returns the 88 functionals with openSMILE's names and order, `FEATURE_MAP` gains `egemaps` (88 values per clip) and `egemaps_lld` (25 descriptors per 10 ms frame), and there is an `egemaps` preset. Agreement with openSMILE per functional is in `docs/egemaps.md`, written by `benchmarks/validate_egemaps.py`.
+- Provenance in batch outputs: config, `config_hash`, library versions, sample rate and resampling, and the sha256 of every input file. Parquet keeps it in the schema metadata key `afx`; other formats write `<output>.provenance.json`. `afx.config_hash`, `afx.read_provenance`, `AFXFeatureExtractor.provenance_`, `afx --provenance FILE` and `--no-hash`.
+- Dataset statistics: `extract_features_from_folder(dataset_stats=True)` and `afx --stats` write per-column count, mean, variance, min, max and NaN count to `<output>.stats.json` in one streaming pass (Welford, with Chan's merge for workers); `afx.load_stats` and `afx_audio.sklearn.scaler_from_stats` turn it into a fitted `StandardScaler`.
+- Coverage: `"coverage": true` (also `coverage=` on `extract_features_from_folder`, `AFXFeatureExtractor`, `AFXFeatureModule`, and `afx --coverage`) adds `<feature>_valid_frac`, the fraction of frames a feature's statistics are based on. `afx.valid_fraction`, `metadata['voiced']` from `extract_pitch`, and `feature_info(name)['undefined']`, which says when each feature is NaN.
+- Numbered notebooks `01_quickstart` to `07_domain_presets` that run on synthetic audio without a dataset, `notebooks/demo_data.py`, and `tests/test_notebooks.py` (runs them with `AFX_RUN_NOTEBOOKS=1`).
+- `benchmarks/bench_features.py --librosa --torch-batch N --markdown` and the `docs/benchmarks.md` page; `docs/reproducibility.md`; a JOSS paper draft in `paper/`.
+- `afx_audio.methods.lpc.levinson`.
+- `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`, issue and pull request templates, a pre-commit configuration, Dependabot, and coverage upload in CI.
+- The sdist contains the tests, examples, docs sources, benchmarks and `CITATION.cff`, and the test suite passes from it. Releases install the built sdist and wheel in clean environments and run the tests before publishing.
 - `center` for the time-domain, autocorrelation and THD extractors, giving the same frames and times as a centered STFT; centered `zcr` and `rms_energy` match librosa.
 - `afx.list_features(group)`, `afx.feature_info(name)` (group, units, rows, parameters, definition) and `afx --describe FEATURE`.
 - `tonnetz` and `onset_strength`, equal to librosa's `feature.tonnetz` (on chroma_stft) and `onset.onset_strength`.
@@ -67,6 +78,10 @@
 
 ### Changed
 
+- Documentation moved to https://danilopena.com/AFX/.
+- Workflow actions are pinned to commit SHAs, with read-only default permissions.
+- Extractor docstrings cite Davis and Mermelstein (MFCC), Brown (CQT bin layout), Boersma (HNR), Böck and Widmer (SuperFlux onset strength) and Shao and Wang (GFCC).
+- The demo notebooks were replaced by the numbered set; `feature_benchmark_validation.ipynb` is now `benchmark_validation.ipynb`.
 - Time-domain extractors, YIN, HNR, THD, chroma folding and sliding-window aggregation are vectorized over frames. On 10 s at 22.05 kHz: pitch 88 to 50 ms, hnr 77 to 45 ms, entropy 88 to 40 ms, autocorr_variance 66 to 20 ms, chroma_stft 48 to 21 ms.
 - Sample entropy checks the candidate template pairs found by sorting directly when there are few of them (frames up to about 1500 samples of noise-like audio) and keeps the KD-tree count otherwise; results are the same.
 - `import afx_audio as afx` takes about 0.4 s instead of 1.3 s (scipy submodules are imported where used).
