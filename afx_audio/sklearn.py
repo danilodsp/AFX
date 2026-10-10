@@ -67,10 +67,11 @@ class AFXFeatureExtractor(BaseEstimator, TransformerMixin):
         aggregation: Temporal aggregation per file ('mean', 'std',
             'summary', 'advanced_summary', 'skew', 'kurtosis', 'stack').
             None takes the config's aggregation ('mean' if it has none).
-        normalize: Per-sample normalization applied by AFX ('zscore',
-            'minmax', or None). Note this normalizes each sample's feature
-            vector independently; for train/test consistent scaling,
-            prefer ``normalize=None`` and a ``StandardScaler`` step in the
+        normalize: Per-sample normalization applied by AFX ('zscore' or
+            'minmax'). None takes the config's normalize (none if it has
+            none). This normalizes each sample's feature vector
+            independently; for train/test consistent scaling, leave it
+            unset in both and add a ``StandardScaler`` step to the
             pipeline.
         n_jobs: Parallel extraction over samples via joblib
             (None/1 = serial, -1 = all cores).
@@ -137,7 +138,8 @@ class AFXFeatureExtractor(BaseEstimator, TransformerMixin):
         config.setdefault('aggregation', 'mean')
         config['preserve_shape'] = False
         config['flatten'] = False  # flattening handled by features_to_vector
-        config['normalize'] = self.normalize
+        if self.normalize is not None:
+            config['normalize'] = self.normalize
         if self.coverage is not None:
             config['coverage'] = self.coverage
         return validate_config(config)
