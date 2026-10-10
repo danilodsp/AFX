@@ -117,7 +117,6 @@ def test_batch_stack_aggregation(audio_folder, small_config, tmp_path):
 
 
 def test_batch_errors_separated(audio_folder, small_config, tmp_path):
-    # Add a corrupt "wav"
     bad = audio_folder / 'broken.wav'
     bad.write_bytes(b'this is not audio')
     out = str(tmp_path / 'features.csv')
@@ -219,7 +218,7 @@ def test_cli_version(capsys):
     assert afx_audio.__version__ in capsys.readouterr().out
 
 
-def test_cli_errors_are_one_line_with_status_2(audio_folder, tmp_path, capsys):
+def test_cli_config_errors_are_one_line_with_status_2(audio_folder, tmp_path, capsys):
     cases = [
         (['--features', 'mfccs'], "Did you mean 'mfcc'"),
         (['--output', str(tmp_path / 'missing' / 'x.csv')], 'Output folder does not exist'),
@@ -232,6 +231,22 @@ def test_cli_errors_are_one_line_with_status_2(audio_folder, tmp_path, capsys):
         assert exc.value.code == 2
         err = capsys.readouterr().err
         assert err.startswith('afx: error:') and message in err and 'Traceback' not in err
+        assert err.count('\n') == 1
+
+
+def test_cli_argument_errors_print_usage_then_status_2(tmp_path, capsys):
+    cases = [
+        ([str(tmp_path / 'nope')], 'input folder not found'),
+        ([str(tmp_path), '--preset', 'nosuch'], 'nosuch'),
+        (['--describe', 'mfccs'], "Did you mean 'mfcc'"),
+    ]
+    for argv, message in cases:
+        with pytest.raises(SystemExit) as exc:
+            cli.main(argv)
+        assert exc.value.code == 2
+        err = capsys.readouterr().err
+        assert err.startswith('usage: afx')
+        assert err.splitlines()[-1].startswith('afx: error:') and message in err
 
 
 def test_cli_status_1_when_nothing_extracted(tmp_path, capsys):

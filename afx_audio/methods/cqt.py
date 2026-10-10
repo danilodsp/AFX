@@ -119,7 +119,6 @@ def cqt_approximation(
     """
     from afx_audio.methods.stft import magnitude_spectrogram, stft
 
-    # Set default minimum frequency (C1 note)
     if fmin is None:
         fmin = C1_HZ
 

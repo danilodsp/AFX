@@ -98,9 +98,8 @@ def chroma_from_stft(
     projection[chroma_bins, np.arange(n_freq - 1)] = 1.0
     chroma = projection @ magnitude_spec[1:, :]
 
-    # Optional L1 normalization per frame
     if normalize:
-        # Add small epsilon to avoid division by zero
+        # The epsilon leaves a silent frame at 0 instead of 0 / 0
         norms = np.sum(chroma, axis=0, keepdims=True) + 1e-10
         chroma = chroma / norms
 
@@ -153,7 +152,6 @@ def extract_chroma_from_cqt(
     projection[chroma_bins, np.arange(len(chroma_bins))] = 1.0
     chroma = projection @ cqt_magnitude
 
-    # L1 normalize each chroma vector (make each column sum to 1)
     norms = np.sum(chroma, axis=0, keepdims=True) + 1e-10
     chroma = chroma / norms
 

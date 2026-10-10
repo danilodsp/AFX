@@ -7,6 +7,7 @@ runs on synthetic audio.
 """
 import importlib.util
 import os
+import re
 import time
 from pathlib import Path
 
@@ -53,6 +54,31 @@ def test_stored_without_outputs(path):
         assert 'id' in cell
         if cell.cell_type == 'code':
             assert not cell.outputs and cell.execution_count is None, f'{path.name}: clear outputs before committing'
+            assert 'execution' not in cell.metadata, f'{path.name}: run nbstripout before committing'
+
+
+def _extras(names, table):
+    """`names` plus every extra they pull in through afx-audio[...] requirements."""
+    found = set(names)
+    for name in names:
+        for req in table.get(name, []):
+            for spec in re.findall(r'afx-audio\[([a-z,]+)\]', req):
+                found |= _extras(spec.split(','), table)
+    return found
+
+
+def test_install_line_covers_every_extra_the_notebooks_name():
+    tomllib = pytest.importorskip('tomllib')
+    with open(ROOT / 'pyproject.toml', 'rb') as f:
+        table = tomllib.load(f)['project']['optional-dependencies']
+    named = set()
+    for path in NOTEBOOKS.glob('*.ipynb'):
+        for spec in re.findall(r'afx-audio\[([a-z,]+)\]', path.read_text(encoding='utf-8')):
+            named |= set(spec.split(','))
+    missing = named - _extras(['notebooks'], table)
+    for page in (ROOT / 'docs' / 'notebooks.md', NOTEBOOKS / 'README.md'):
+        text = page.read_text(encoding='utf-8')
+        assert all(f'afx-audio[{extra}]' in text for extra in missing), f'{page.name} must name {sorted(missing)}'
 
 
 @pytest.mark.skipif(os.environ.get('AFX_RUN_NOTEBOOKS') != '1', reason='set AFX_RUN_NOTEBOOKS=1 to execute notebooks')

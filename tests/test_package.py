@@ -129,3 +129,12 @@ def test_core_import_without_torch():
     result = _run(_BLOCK_TORCH + 'import afx_audio\nprint(afx_audio.feature_info("mfcc")["torch"]["function"])')
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == 'afx_audio.torch.functional.mfcc'
+
+
+def test_feature_counts_match_the_registry():
+    description = re.search(r'^description\s*=\s*"([^"]+)"', _read('pyproject.toml'), re.M).group(1)
+    readme = _read('README.md').split('\n## ')[0]
+    for text in (description, readme):
+        counts = re.findall(r'(?<![\w.])(\d+) (?=[^.]*?features)', text)
+        assert counts and all(int(n) == len(afx_audio.FEATURE_MAP) for n in counts), text
+    assert 'eGeMAPS' in description

@@ -23,7 +23,6 @@ def test_load_config(tmp_path):
     assert 'zcr' in config['features']
 
 def test_load_audio(tmp_path):
-    # Generate a short sine wave and save as wav
     import soundfile as sf
     sr = 22050
     t = np.linspace(0, 1, sr, endpoint=False)

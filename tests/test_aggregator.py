@@ -15,13 +15,8 @@ def test_aggregate_features_flatten():
     assert agg['b'].shape == (2,)
 
 def test_aggregate_features_zscore():
-    # Create 2D features (channels x frames) to test mean pooling properly
     features = {'a': np.array([[1.0, 2.0, 3.0]]), 'b': np.array([[10.0, 20.0, 30.0]])}
     agg = aggregate_features(features, method='mean', flatten=True, normalize='zscore')
-    print('agg:', agg)
-    for v in agg.values():
-        print('mean:', np.mean(v), 'std:', np.std(v), 'value:', v)
-    # After mean pooling, each feature becomes a single value
     # Normalization is skipped for scalars, so the value should be the mean
     for k, v in agg.items():
         expected = np.mean(features[k])
@@ -30,7 +25,6 @@ def test_aggregate_features_zscore():
 def test_aggregate_features_minmax():
     features = {'a': np.array([1.0, 2.0, 3.0]), 'b': np.array([10.0, 20.0, 30.0])}
     agg = aggregate_features(features, method='mean', flatten=True, normalize='minmax')
-    # After mean pooling and flattening, each feature becomes a single value
     # Normalization is skipped for scalars, so the value should be the mean
     for k, v in agg.items():
         expected = np.mean(features[k])
@@ -39,10 +33,8 @@ def test_aggregate_features_minmax():
 def test_aggregate_features_stack():
     features = {'a': np.ones((2, 5)), 'b': np.arange(10).reshape(2, 5)}
     stacked = aggregate_features(features, method='stack')
-    # Should be a 1D vector of all features concatenated
     assert isinstance(stacked, np.ndarray)
     assert stacked.ndim == 1
-    # Length should match sum of flattened features
     expected_len = sum(np.prod(v.shape) for v in features.values())
     assert stacked.shape[0] == expected_len
 
@@ -70,25 +62,23 @@ def test_aggregate_features_kurtosis():
 
 def test_sliding_window_aggregation():
     """Test sliding window aggregation."""
-    features = {'test': np.random.rand(3, 50)}  # 3 features x 50 time frames
+    features = {'test': np.random.rand(3, 50)}
 
-    # Test with valid window size
     agg = aggregate_features(features, method='sliding_window',
                            window_size=10, hop_length=5, flatten=True)
     assert 'test' in agg
 
-    # Test with window larger than signal (should fall back to global)
+    # A window longer than the 50 frames falls back to one global value
     agg_large = aggregate_features(features, method='sliding_window',
                                  window_size=100, hop_length=50, flatten=True)
     assert 'test' in agg_large
-    assert agg_large['test'].shape == (3,)  # Should be global aggregation
+    assert agg_large['test'].shape == (3,)
 
 def test_sliding_window_parameters():
     """Test that sliding window requires proper parameters."""
     features = {'test': np.random.rand(3, 20)}
 
     try:
-        # Should raise error without window_size and hop_length
         aggregate_features(features, method='sliding_window')
         raise AssertionError("Should have raised ValueError")
     except ValueError as e:
@@ -115,11 +105,9 @@ def test_sliding_window_1d_array():
 def test_scalar_normalization_skipped():
     """Test that normalization is skipped for scalar features (single value)."""
     from afx_audio.utils.normalization import minmax_normalize, zscore_normalize
-    # Scalar features
     features = {'a': np.array([42.0]), 'b': np.array([0.5])}
     z_norm = zscore_normalize(features)
     minmax_norm = minmax_normalize(features)
-    # Should be unchanged
     assert np.allclose(z_norm['a'], features['a'])
     assert np.allclose(z_norm['b'], features['b'])
     assert np.allclose(minmax_norm['a'], features['a'])

@@ -63,10 +63,11 @@ of AST pretrained on AudioSet (Gong et al., 2021). These are linear and
 random-forest classifiers on clip-level statistics of hand-crafted features,
 with default hyperparameters and no augmentation; they exist to compare
 presets with each other and to show when a change to AFX moves them, not to
-compete with learned representations. The fold standard deviation is 0.015
-to 0.040, so differences under about 0.03 (`speech@1`, `machinery@1` and
-`bioacoustics@1` with the logistic regression; `speech@1` and `music@1` with
-the random forest) are not resolved by five folds. `egemaps@1` is lower,
+compete with learned representations. The fold standard deviation is 0.014
+to 0.040, so differences under about 0.03 are not resolved by five folds, for
+example `speech@1`, `machinery@1` and `bioacoustics@1` with the logistic
+regression, or `speech@1` against `music@1` and `bioacoustics@1` against
+`machinery@1` with the random forest. `egemaps@1` is lower,
 which fits a set of 88 functionals built around voiced speech (F0, jitter,
 shimmer, formants) applied to environmental sound. `config.json` aggregates
 with the mean only, so its 343 columns hold no within-clip spread; the

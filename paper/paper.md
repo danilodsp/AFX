@@ -196,8 +196,8 @@ scaling, time reversal), runs every feature on silence, constant,
 one-sample and very short input, checks that non-finite, empty, integer
 and multichannel input is rejected, and checks that every output is
 float64 and every warning is an `AFXWarning`.
-`tests/test_librosa_parity.py` compares 14 features with librosa at
-four framings and requires agreement to float32 precision. The PyTorch
+`tests/test_librosa_parity.py` compares 14 features with librosa, each at
+three to eight framings, and requires agreement to float32 precision. The PyTorch
 functions are compared with the NumPy path in float64 to a relative
 tolerance of $10^{-9}$ at two framings, batched and unbatched, with the
 tolerances read from the same table that `feature_info` reports, and

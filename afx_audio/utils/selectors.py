@@ -36,7 +36,6 @@ def pca_reducer(
     if not feature_keys:
         raise ValueError('No feature keys provided for PCA reduction.')
 
-    # Validate that all features share the same frame count before concatenating
     frame_counts = {}
     for k in feature_keys:
         arr = features[k]

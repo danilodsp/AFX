@@ -395,7 +395,7 @@ def extract_spectral_contrast(
 
     freq = np.fft.rfftfreq(frame_size, d=1.0 / sr)
 
-    # Calculate logarithmically spaced bands
+    # Octave band edges above a 0 Hz first edge, as in librosa.feature.spectral_contrast
     octa = np.zeros(n_bands + 2)
     octa[1:] = fmin * (2.0 ** np.arange(0, n_bands + 1))
 

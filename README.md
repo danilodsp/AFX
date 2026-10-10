@@ -60,7 +60,7 @@ Every feature is a function `extract_<name>(signal, sr, *, **params)` returning 
 | Linear prediction | `lpc`, `formants` |
 | Parameter set | `egemaps` (88 functionals per clip), `egemaps_lld` (25 descriptors per 10 ms frame) |
 
-Framed features take `frame_size`, `hop_length` and `center` (default True, as in librosa), so features with the same framing share frame count and frame times; time-domain features analyze the whole clip when the sizes are omitted. Spectral features use an STFT with a periodic Hann window and `n_fft = frame_size`. With `return_metadata=True` every extractor also returns the time of each frame's center.
+Framed features take `frame_size`, `hop_length` and `center` (default True, as in librosa; `onset_strength` is always centered and has no `center`), so features with the same framing share frame count and frame times; time-domain features analyze the whole clip when the sizes are omitted. Spectral features use an STFT with a periodic Hann window and `n_fft = frame_size`. With `return_metadata=True` every extractor also returns the time of each frame's center.
 
 ## Config
 

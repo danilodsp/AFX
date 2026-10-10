@@ -2,7 +2,9 @@
 Command-line interface for batch feature extraction.
 
 Exit status: 0 on success, 1 when no file was found or every file failed,
-2 for usage and configuration errors.
+2 for usage and configuration errors. Argument errors print argparse's usage
+block before the ``afx: error:`` line; errors raised while reading the config
+or extracting print that line alone.
 """
 import argparse
 import json

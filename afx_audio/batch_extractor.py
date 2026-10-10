@@ -337,7 +337,6 @@ def _extract_folder(
     if sample_rate is not None:
         config['sample_rate'] = sample_rate
 
-    # Override config options if requested
     if features is not None:
         for name in features:
             if name not in FEATURE_MAP:
