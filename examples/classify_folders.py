@@ -42,7 +42,7 @@ def labelled_files(root):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.strip().splitlines()[0])
     parser.add_argument('dataset')
-    parser.add_argument('--preset', default='speech', choices=afx.list_presets())
+    parser.add_argument('--preset', default='speech', help='Preset name or id, e.g. speech or speech@1')
     parser.add_argument('--folds', type=int, default=5)
     parser.add_argument('--jobs', type=int, default=1)
     args = parser.parse_args(argv)
@@ -50,7 +50,10 @@ def main(argv=None):
     paths, labels = labelled_files(args.dataset)
     if len(set(labels)) < 2:
         parser.error('need at least two class subfolders with audio files')
-    config = afx.load_preset(args.preset)
+    try:
+        config = afx.load_preset(args.preset)
+    except ValueError as e:
+        parser.error(str(e))
     model = make_pipeline(
         AFXFeatureExtractor(config=config, n_jobs=args.jobs),
         SimpleImputer(strategy='median'),
