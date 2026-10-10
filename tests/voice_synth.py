@@ -42,7 +42,9 @@ def synthetic_voice(
     fricative_db: float | None = -25.0,
     level: float = 0.3,
     seed: int = 0,
-) -> np.ndarray:
+    fixed_pulse: bool = False,
+    return_truth: bool = False,
+):
     """
     One synthetic utterance, peak ``level``, as float64.
 
@@ -53,13 +55,28 @@ def synthetic_voice(
     high-passed noise at that level relative to the voice peak in the
     unvoiced gaps (None for silence). White noise sets the SNR over the
     voiced samples.
+
+    Each pulse is shaped over its own period, so a short period also gives
+    a steeper, louder pulse. ``fixed_pulse`` shapes every pulse over the
+    nominal period instead: pulses differ only in amplitude, and closure
+    intervals equal the drawn periods.
+
+    With ``return_truth`` also returns the realized jitter (mean |T_i -
+    T_i-1| / mean T) and shimmer (mean |20 log10(A_i / A_i-1)| in dB) over
+    consecutive pulses of each voiced stretch. T is the interval between
+    glottal closures, 0.85 pulse lengths (open plus closing quotient)
+    after each pulse start. A is the drawn pulse amplitude without the
+    onset and offset envelope, which starts every stretch at 0 and would
+    dominate the dB differences.
     """
     rng = np.random.default_rng(seed)
+    d_period, d_amp, all_periods = [], [], []
     n = int(round(duration * sr))
     t = np.arange(n) / sr
     flow = np.zeros(n)
     for start, stop in voiced:
         pos = start
+        closures, amps = [], []
         while pos < stop:
             frac = (pos - start) / (stop - start)
             if contour == 'arch':
@@ -72,11 +89,18 @@ def synthetic_voice(
                 raise ValueError(f'unknown contour {contour!r}')
             period = (1 + jitter * rng.standard_normal()) / nominal
             amp = max(0.05, 1 + shimmer * rng.standard_normal())
+            shape = 1 / nominal if fixed_pulse else period
             i0 = int(np.ceil(pos * sr))
-            i1 = min(int(np.ceil((pos + period) * sr)), n)
+            i1 = min(int(np.ceil((pos + shape) * sr)), n)
             envelope = np.sin(np.pi * min(frac, 1.0)) ** 0.3
-            flow[i0:i1] += amp * envelope * rosenberg((t[i0:i1] - pos) / period)
+            flow[i0:i1] += amp * envelope * rosenberg((t[i0:i1] - pos) / shape)
+            closures.append(pos + 0.85 * shape)
+            amps.append(amp)
             pos += period
+        periods = np.diff(closures)
+        d_period += list(np.abs(np.diff(periods)))
+        d_amp += list(np.abs(20 * np.log10(np.divide(amps[1:], amps[:-1]))))
+        all_periods += list(periods)
     y = np.diff(flow, prepend=0.0)
     for fc, bw in zip(formants, bandwidths, strict=True):
         r = np.exp(-np.pi * bw / sr)
@@ -93,11 +117,19 @@ def synthetic_voice(
         y += np.where(is_voiced, 0.0, hiss)
     signal_power = np.mean(y[is_voiced] ** 2) if is_voiced.any() else level ** 2
     y += rng.standard_normal(n) * np.sqrt(signal_power / 10 ** (snr_db / 10))
-    return y
+    if not return_truth:
+        return y
+    truth = {'jitter': float(np.mean(d_period) / np.mean(all_periods)) if d_period else 0.0,
+             'shimmer_db': float(np.mean(d_amp)) if d_amp else 0.0}
+    return y, truth
 
 
 def corpus(n: int = 20, sr: int = 16000, seed: int = 0) -> list[tuple[str, np.ndarray, dict]]:
-    """``n`` (name, signal, parameters) with randomly drawn F0, contour, jitter, shimmer, vowel, SNR, timing, level."""
+    """
+    ``n`` (name, signal, parameters) with randomly drawn F0, contour, jitter, shimmer, vowel, SNR, timing, level.
+
+    parameters['truth'] holds the realized jitter and shimmer (see synthetic_voice).
+    """
     rng = np.random.default_rng(seed)
     out = []
     for k in range(n):
@@ -120,5 +152,6 @@ def corpus(n: int = 20, sr: int = 16000, seed: int = 0) -> list[tuple[str, np.nd
             'level': 10 ** (rng.uniform(-30, -6) / 20),
         }
         name = f'{k:02d}_{vowel}_{contour}_f{base:.0f}_j{params["jitter"]:.3f}_s{params["shimmer"]:.2f}'
-        out.append((name, synthetic_voice(sr=sr, duration=duration, seed=seed * 1000 + k, **params), params))
+        x, truth = synthetic_voice(sr=sr, duration=duration, seed=seed * 1000 + k, return_truth=True, **params)
+        out.append((name, x, {**params, 'truth': truth}))
     return out
