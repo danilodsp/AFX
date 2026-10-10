@@ -59,6 +59,7 @@ def mean_abs(signal, sr=None):
     return {'mean_abs': np.array([np.mean(np.abs(signal))])}
 
 
+@pytest.mark.slow
 def test_custom_features_reach_worker_processes(tmp_path):
     import soundfile as sf
 
@@ -74,6 +75,58 @@ def test_custom_features_reach_worker_processes(tmp_path):
         res = afx_audio.extract_features_from_folder(str(tmp_path), {'sample_rate': 8000, 'features': ['mean_abs']},
                                                str(tmp_path / 'out.json'), n_jobs=2, verbose=False)
         assert res['1.wav']['mean_abs'] == pytest.approx([0.2])
+    finally:
+        afx_audio.unregister_feature('mean_abs')
+
+
+def _write_clips(folder, n=2):
+    import soundfile as sf
+
+    for i in range(n):
+        sf.write(folder / f'{i}.wav', np.full(4000, 0.1 * (i + 1), dtype=np.float32), 8000, subtype='FLOAT')
+
+
+def test_interactive_feature_rejected_before_workers_start(tmp_path, monkeypatch):
+    import types
+
+    def notebook_feature(signal, sr):
+        return {'notebook_feature': np.array([1.0])}
+
+    _write_clips(tmp_path)
+    monkeypatch.setattr(notebook_feature, '__module__', '__main__')
+    monkeypatch.setitem(__import__('sys').modules, '__main__', types.ModuleType('__main__'))
+    afx_audio.register_feature('notebook_feature', notebook_feature)
+    config = {'sample_rate': 8000, 'features': ['notebook_feature']}
+    try:
+        with pytest.raises(ValueError, match='defined interactively.*n_jobs=1'):
+            afx_audio.extract_features_from_folder(str(tmp_path), config, str(tmp_path / 'out.json'),
+                                                   n_jobs=2, verbose=False)
+    finally:
+        afx_audio.unregister_feature('notebook_feature')
+
+
+def test_unused_unpicklable_registration_does_not_reach_workers(tmp_path):
+    _write_clips(tmp_path)
+    afx_audio.register_feature('unused', lambda signal, sr: {'unused': np.array([0.0])})
+    try:
+        res = afx_audio.extract_features_from_folder(str(tmp_path), {'sample_rate': 8000, 'features': ['zcr']},
+                                                     str(tmp_path / 'out.json'), n_jobs=2, verbose=False)
+        assert sorted(res) == ['0.wav', '1.wav']
+    finally:
+        afx_audio.unregister_feature('unused')
+
+
+def test_restore_in_a_worker_repeats_registrations_once():
+    from afx_audio.registry import custom_features, restore_custom_features
+
+    afx_audio.register_feature('mean_abs', mean_abs, units='amplitude')
+    shipped = custom_features()
+    afx_audio.unregister_feature('mean_abs')
+    try:
+        restore_custom_features(shipped)
+        assert afx_audio.feature_info('mean_abs')['units'] == 'amplitude'
+        restore_custom_features(shipped)
+        assert custom_features() == shipped
     finally:
         afx_audio.unregister_feature('mean_abs')
 

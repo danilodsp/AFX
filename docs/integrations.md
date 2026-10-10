@@ -64,10 +64,13 @@ constructor.
 recursively and writes one row per file as `npy` (a pickled dict), `json`,
 `csv` or `parquet` (extra `parquet`). Vector features expand to `name_0,
 name_1, ...` columns. `n_jobs` runs files in worker processes with output
-identical to a serial run. The workers use the platform's default start
-method (spawn on Windows and macOS, forkserver on Linux from Python 3.14),
+identical to a serial run. The workers never fork (fork deadlocks when the
+parent has threads): they start with forkserver on Linux and spawn on
+Windows and macOS, or with the method set by
+`multiprocessing.set_start_method`. Each worker imports the calling script,
 so a script calling it with `n_jobs > 1` must do so under
-`if __name__ == '__main__':`.
+`if __name__ == '__main__':`, and registered custom features must be
+importable (not defined in a notebook).
 
 ```bash
 afx dataset/ --preset speech --output features.parquet --jobs 8

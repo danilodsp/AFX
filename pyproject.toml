@@ -115,7 +115,6 @@ ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-filterwarnings = [
-    # fork() from the multi-threaded test process in the parallel batch tests
-    "ignore:This process .* is multi-threaded, use of fork:DeprecationWarning",
+markers = [
+    "slow: takes about 2 s or more; CI runs it, deselect locally with -m 'not slow'",
 ]

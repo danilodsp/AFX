@@ -6,6 +6,7 @@ Exit status: 0 on success, 1 when no file was found or every file failed,
 """
 import argparse
 import json
+import multiprocessing
 import os
 import sys
 import warnings
@@ -111,6 +112,9 @@ def _run(args, parser) -> int:
         if not feature_list:
             parser.error('--features needs at least one feature name')
 
+    if args.jobs != 1:
+        # Forkserver workers then start with AFX imported instead of each importing it
+        multiprocessing.set_forkserver_preload(['afx_audio.batch_extractor'])
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter('always')
         try:

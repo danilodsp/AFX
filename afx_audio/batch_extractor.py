@@ -4,7 +4,9 @@ Batch extractor for processing folders of audio files.
 import copy
 import csv
 import json
+import multiprocessing
 import os
+import sys
 import warnings
 from collections.abc import Sequence
 from typing import Any
@@ -12,6 +14,7 @@ from typing import Any
 import numpy as np
 import soundfile as sf
 
+from afx_audio._warnings import AFXWarning
 from afx_audio.dataset_stats import STATS_SUFFIX, DatasetStats, write_stats
 from afx_audio.extract_all import FEATURE_MAP, extract_all_features
 from afx_audio.io.io import load_audio
@@ -37,6 +40,7 @@ def _table(results: dict[str, Any]) -> tuple[list[str], list[str], list[dict[str
         warnings.warn(
             'Files produced different numbers of values, so some cells are empty. With '
             "aggregation='stack' every clip must have the same length; use a pooling aggregation otherwise.",
+            AFXWarning,
             stacklevel=3,
         )
     return list(results), columns, rows
@@ -112,6 +116,33 @@ def _dataset_stats(results: dict[str, Any]) -> dict[str, Any]:
     return stats.to_dict()
 
 
+def _mp_context() -> multiprocessing.context.BaseContext:
+    """
+    Start method for the worker processes: the one set with multiprocessing.set_start_method, else the
+    platform default, with forkserver in place of fork.
+
+    fork copies the parent with its locks but not its threads, so a lock held by another thread (an executor
+    feeder thread, a BLAS pool) deadlocks the child; Python 3.12+ warns about it and 3.14 dropped fork as the
+    Linux default.
+    """
+    methods = multiprocessing.get_all_start_methods()
+    method = multiprocessing.get_start_method(allow_none=True) or methods[0]
+    if method == 'fork' and 'forkserver' in methods:
+        method = 'forkserver'
+    return multiprocessing.get_context(method)
+
+
+def _check_importable(custom: dict) -> None:
+    """Workers find a custom feature by module and name, which fails for a function defined in a notebook or REPL."""
+    interactive = not getattr(sys.modules.get('__main__'), '__file__', None)
+    for name, (func, _, _) in custom.items():
+        if interactive and getattr(func, '__module__', None) == '__main__':
+            raise ValueError(
+                f'Custom feature {name!r} is defined interactively (notebook or REPL), so worker processes cannot '
+                'import it. Define it in a module and import it from there, or use n_jobs=1.'
+            )
+
+
 def _process_one_file(
     fpath: str, fkey: str, config: dict[str, Any], custom: dict | None = None, hash_file: bool = False
 ):
@@ -182,9 +213,14 @@ def extract_features_from_folder(
         n_jobs: Number of worker processes for parallel extraction.
             None or 1 = serial; 0 or negative = all available cores.
             Results are identical to serial extraction (same ordering).
-            Workers use the platform's default start method; with spawn
-            (Windows, macOS) and forkserver (Linux from Python 3.14) a
-            script must call this under ``if __name__ == '__main__':``.
+            Workers never fork: they start with forkserver where fork is
+            the default (Linux before Python 3.14), otherwise with the
+            method set by ``multiprocessing.set_start_method`` or the
+            platform default (spawn on Windows and macOS). Either way
+            each worker imports the calling script, so a script must call
+            this under ``if __name__ == '__main__':``, and a registered
+            custom feature must be a top-level function of a module or
+            script (not a lambda, nor defined in a notebook).
         sample_rate: Override the config's sample_rate (audio is resampled
             to this rate on load).
         verbose: Print per-file progress to stdout.
@@ -265,7 +301,6 @@ def extract_features_from_folder(
 
     if n_jobs is not None and n_jobs != 1 and total > 1:
         import concurrent.futures
-        import multiprocessing
 
         if n_jobs <= 0:
             n_jobs = multiprocessing.cpu_count()
@@ -273,8 +308,9 @@ def extract_features_from_folder(
         if verbose:
             print(f'Processing {total} file(s) with {n_jobs} workers')
         # Registered custom features do not exist in fresh worker processes
-        custom = custom_features()
-        with concurrent.futures.ProcessPoolExecutor(max_workers=n_jobs) as executor:
+        custom = {name: entry for name, entry in custom_features().items() if name in config['features']}
+        _check_importable(custom)
+        with concurrent.futures.ProcessPoolExecutor(max_workers=n_jobs, mp_context=_mp_context()) as executor:
             futures = {
                 executor.submit(_process_one_file, fpath, fkey, config, custom, hash_files): fkey
                 for fpath, fkey in zip(all_files, keys, strict=False)
@@ -309,11 +345,12 @@ def extract_features_from_folder(
         errors_path = f'{output_path}.errors.json'
         with open(errors_path, 'w', encoding='utf-8') as f:
             json.dump(errors, f, indent=2)
-        warnings.warn(f'{len(errors)} file(s) failed; details in {errors_path}', stacklevel=2)
+        warnings.warn(f'{len(errors)} file(s) failed; details in {errors_path}', AFXWarning, stacklevel=2)
 
     if total == 0:
         warnings.warn(
             f'no audio files with extensions {tuple(file_exts)} found under {folder_path}',
+            AFXWarning,
             stacklevel=2,
         )
 

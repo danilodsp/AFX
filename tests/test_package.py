@@ -82,3 +82,21 @@ def test_version_matches_citation():
     match = re.search(r'^version:\s*"?([^"\s]+)"?\s*$', _read('CITATION.cff'), re.M)
     assert match, 'no version in CITATION.cff'
     assert match.group(1) == _installed_version()
+
+
+def test_version_without_installed_metadata():
+    result = _run(
+        'import importlib.metadata as m\n'
+        'def missing(name):\n'
+        '    raise m.PackageNotFoundError(name)\n'
+        'm.version = missing\n'
+        'import afx_audio\n'
+        'print(afx_audio.__version__)'
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == '0.0.0'
+
+
+def test_unknown_attribute_error_names_the_module():
+    with pytest.raises(AttributeError, match="module 'afx_audio' has no attribute 'nope'"):
+        afx_audio.nope  # noqa: B018

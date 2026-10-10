@@ -30,7 +30,8 @@ mkdocs build --strict
 
 The torch tests are skipped when PyTorch is not installed and the librosa
 parity tests when librosa is not installed. To run the notebooks as tests, set
-`AFX_RUN_NOTEBOOKS=1`. `pre-commit run --all-files` runs ruff, mypy and the
+`AFX_RUN_NOTEBOOKS=1`. Tests that take about 2 s or more are marked `slow`;
+`python -m pytest -m "not slow"` skips them while iterating, CI runs them. `pre-commit run --all-files` runs ruff, mypy and the
 file checks and strips notebook outputs.
 
 ## Adding a feature
@@ -56,6 +57,16 @@ file checks and strips notebook outputs.
 
 Cite the paper or standard the definition comes from in the docstring when the
 formula is not obvious.
+
+## Warnings and deprecations
+
+Warnings use `afx_audio.AFXWarning` as their category (pass it to
+`warnings.warn` with `stacklevel` pointing at the user's call), so users can
+filter AFX on its own. Before 1.0, breaking changes happen without a
+deprecation period and are listed in the changelog. From 1.0, a public name
+or parameter that is going away first warns with `AFXDeprecationWarning`
+(through `afx_audio._warnings.warn_deprecated`) for at least one minor
+release, and the warning names the replacement.
 
 ## Pull requests
 

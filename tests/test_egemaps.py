@@ -181,6 +181,7 @@ def opensmile_pairs():
     return ours, ref
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize('name', CLOSE)
 def test_agreement_with_opensmile(opensmile_pairs, name):
     ours, ref = opensmile_pairs
@@ -188,6 +189,7 @@ def test_agreement_with_opensmile(opensmile_pairs, name):
     assert np.corrcoef(ours[:, i], ref[:, i])[0, 1] > 0.9
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize('name', ['loudness_sma3_amean', 'spectralFlux_sma3_amean', 'mfcc1_sma3_amean',
                                   'HNRdBACF_sma3nz_amean', 'logRelF0-H1-H2_sma3nz_amean',
                                   'F0semitoneFrom27.5Hz_sma3nz_amean', 'equivalentSoundLevel_dBp'])
@@ -197,6 +199,7 @@ def test_values_close_to_opensmile(opensmile_pairs, name):
     assert np.median(np.abs(ours[:, i] - ref[:, i]) / np.abs(ref[:, i])) < 0.02
 
 
+@pytest.mark.slow
 def test_spectral_llds_match_opensmile_frame_by_frame():
     opensmile = pytest.importorskip('opensmile')
     smile = opensmile.Smile(feature_set=opensmile.FeatureSet.eGeMAPSv02,

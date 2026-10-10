@@ -9,6 +9,7 @@ differentiable path. ``FEATURE_MAP`` lists every feature name.
 import importlib as _importlib
 import importlib.metadata as _metadata
 
+from ._warnings import AFXDeprecationWarning, AFXWarning
 from .batch_extractor import extract_features_from_folder
 from .dataset_stats import load_stats
 from .extract_all import FEATURE_MAP, extract_all_features, extract_segments
@@ -57,6 +58,8 @@ __all__ = [
     'egemaps',
     'EGEMAPS_NAMES',
     'EGEMAPS_LLD_NAMES',
+    'AFXWarning',
+    'AFXDeprecationWarning',
 ]
 
 # Names resolved on first access so `import afx_audio` stays light and works
