@@ -105,7 +105,9 @@ def extract_hnr(
     """
     Harmonics-to-noise ratio in dB per frame, 10 log10(r / (1 - r)).
 
-    r is the maximum over lags sr / fmax .. sr / fmin of the normalized
+    The dB mapping is that of Boersma (1993, Proc. Institute of Phonetic
+    Sciences 17); the correlation differs from his window-corrected
+    autocorrelation. r is the maximum over lags sr / fmax .. sr / fmin of the normalized
     cross-correlation of the two segments overlapping at each lag (the
     NCCF of Talkin, 1995, "A robust algorithm for pitch tracking"):
 

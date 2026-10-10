@@ -86,7 +86,8 @@ def extract_mfcc(
 
     Power spectrogram -> Slaney mel filterbank (n_mels bands, fmin..fmax,
     fmax defaults to sr / 2) -> 10 log10 clamped at 1e-10 and floored
-    ``top_db`` below the clip's maximum -> orthonormal DCT-II. This is
+    ``top_db`` below the clip's maximum -> orthonormal DCT-II (Davis and
+    Mermelstein, 1980, IEEE Trans. ASSP 28(4)). This is
     librosa.feature.mfcc with the same n_fft, hop_length and center.
     """
     mfcc = _compute_mfcc(signal, sr, n_mfcc, frame_size, hop_length, n_mels, fmin, fmax, center, top_db)
@@ -172,7 +173,10 @@ def extract_gfcc(
 
     The MFCC pipeline with the mel filterbank replaced by ``n_gammatone``
     4th-order gammatone magnitude responses on the ERB-rate scale
-    (Glasberg and Moore, 1990), each normalized to unit area.
+    (Glasberg and Moore, 1990), each normalized to unit area. Shao and
+    Wang (2008, Proc. ICASSP) filter in the time domain and compress with
+    a cube root; this variant works on the STFT and uses dB, so the values
+    are not interchangeable with theirs.
     """
     fmax = sr / 2.0 if fmax is None else fmax
     power = power_spectrogram(stft(signal, frame_size=frame_size, hop_length=hop_length, window='hann', center=center))
@@ -256,7 +260,9 @@ def extract_cqt(
     magnitudes between its neighbours. This is not a true constant-Q
     transform: the time resolution is that of the ``frame_size`` STFT at
     every frequency, and low bins narrower than the STFT bin spacing fall
-    back to the nearest STFT bin. ``n_fft`` is an alias for ``frame_size``.
+    back to the nearest STFT bin. Only the bin geometry follows Brown (1991,
+    J. Acoust. Soc. Am. 89(1)); the per-bin window length does not.
+    ``n_fft`` is an alias for ``frame_size``.
     """
     if n_fft is not None:
         frame_size = n_fft
@@ -301,7 +307,7 @@ def extract_tonnetz(
     return_metadata: bool = False,
 ) -> dict[str, Any]:
     """
-    Tonal centroid features (Harte et al., 2006), shape (6, n_frames).
+    Tonal centroid features (Harte, Sandler and Gasser, 2006), shape (6, n_frames).
 
     The L1-normalized chroma_stft is projected on the circles of fifths,
     minor thirds and major thirds (x and y of each), as
@@ -340,7 +346,8 @@ def extract_onset_strength(
     The centered mel power spectrogram in dB (ref 1, top_db 80) is
     differenced over ``lag`` frames against a ``max_size``-bin maximum
     filter of itself along frequency, negative changes are dropped and the
-    bands averaged. The envelope is shifted by lag + frame_size // (2 *
+    bands averaged. With max_size > 1 this is the SuperFlux vibrato
+    suppression of Böck and Widmer (2013, Proc. DAFx-13). The envelope is shifted by lag + frame_size // (2 *
     hop_length) frames so peaks line up with onsets in time, and trimmed
     to the number of mel frames.
     """

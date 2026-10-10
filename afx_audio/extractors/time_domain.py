@@ -327,7 +327,7 @@ def extract_sample_entropy(
     max_samples: int = 20000,
 ) -> dict[str, Any]:
     """
-    Sample entropy -ln(A/B) (Richman and Moorman, 2000).
+    Sample entropy -ln(A/B) (Richman and Moorman, 2000, Am. J. Physiol. 278(6)).
 
     B counts ordered pairs i != j of the first N - m templates of length m
     within Chebyshev distance r * std(signal), A the same for the N - m
