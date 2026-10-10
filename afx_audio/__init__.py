@@ -6,6 +6,7 @@ signal, ``extract_features_from_folder`` (or the ``afx`` CLI) for a dataset,
 ``AFXFeatureExtractor`` for scikit-learn pipelines and ``afx_audio.torch`` for the
 differentiable path. ``FEATURE_MAP`` lists every feature name.
 """
+import importlib as _importlib
 import importlib.metadata as _metadata
 
 from .batch_extractor import extract_features_from_folder
@@ -46,14 +47,21 @@ __all__ = [
     'clear_feature_cache',
     'get_cache_stats',
     'clear_stft_cache',
-    'AFXFeatureExtractor',
 ]
+
+# Names resolved on first access so `import afx_audio` stays light and works
+# without the optional dependencies. They stay out of __all__ so that
+# `from afx_audio import *` never imports scikit-learn.
+_LAZY = {
+    'AFXFeatureExtractor': 'afx_audio.sklearn',
+}
 
 
 def __getattr__(name):
-    # Lazy access so `import afx_audio` stays light: the sklearn transformer is
-    # only imported when actually requested.
-    if name == 'AFXFeatureExtractor':
-        from afx_audio.sklearn import AFXFeatureExtractor
-        return AFXFeatureExtractor
+    if name in _LAZY:
+        return getattr(_importlib.import_module(_LAZY[name]), name)
     raise AttributeError(f'module {__name__!r} has no attribute {name!r}')
+
+
+def __dir__():
+    return sorted(set(globals()) | set(_LAZY))

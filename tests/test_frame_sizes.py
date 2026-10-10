@@ -6,13 +6,23 @@ the wrapped functions, so any non-default frame size silently used the
 defaults (wrong FFT sizes, all-zero pitch, crashes for frame_size < 2048).
 These tests pin the fixed behavior.
 """
+import json
+import os
+
 import numpy as np
 import pytest
 
+import afx_audio
 from afx_audio.extract_all import FEATURE_MAP, extract_all_features
 from afx_audio.extractors import frequency_domain, harmonic_features, time_domain
 
 SR = 22050
+
+
+def _shipped_config():
+    # Resolve through the package so the test also runs against an installed wheel
+    with open(os.path.join(os.path.dirname(afx_audio.__file__), 'config.json')) as f:
+        return json.load(f)
 
 
 def _tone(freq=440.0, duration=1.0, sr=SR):
@@ -98,14 +108,7 @@ def test_hnr_discriminates_harmonic_from_noise():
 
 def test_extract_all_features_covers_default_config():
     """Every feature in the shipped config must be extracted (no silent skips)."""
-    import json
-    import os
-    config_path = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-        'afx_audio', 'config.json'
-    )
-    with open(config_path) as f:
-        config = json.load(f)
+    config = _shipped_config()
     config['preserve_shape'] = True
 
     signal = _tone(440.0, duration=0.5)
@@ -125,14 +128,7 @@ def test_extract_all_features_rejects_unknown_feature():
 
 
 def test_feature_map_covers_default_config():
-    import json
-    import os
-    config_path = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-        'afx_audio', 'config.json'
-    )
-    with open(config_path) as f:
-        config = json.load(f)
+    config = _shipped_config()
     missing = set(config['features']) - set(FEATURE_MAP)
     assert not missing, f'config features missing from FEATURE_MAP: {sorted(missing)}'
 

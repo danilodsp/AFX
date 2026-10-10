@@ -1,8 +1,15 @@
 include afx_audio/config.json
 include afx_audio/presets/*.json
+include afx_audio/py.typed
 include LICENSE
 include README.md
 include CHANGELOG.md
+include CITATION.cff
 include mkdocs.yml
 recursive-include docs *.md *.py
 recursive-include benchmarks *.py
+recursive-include examples *.py *.md
+recursive-include tests *.py
+# Notebooks are about 1 MB and only run under AFX_RUN_NOTEBOOKS=1 from a checkout
+prune notebooks
+global-exclude __pycache__ *.py[cod] .coverage *.csv *.parquet *.wav

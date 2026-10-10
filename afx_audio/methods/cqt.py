@@ -133,4 +133,3 @@ def cqt_approximation(
     cqt_magnitude = filterbank @ magnitude_spec
 
     return cqt_magnitude, cqt_frequencies
-
