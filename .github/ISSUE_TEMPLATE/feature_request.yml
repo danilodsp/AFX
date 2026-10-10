@@ -1,0 +1,22 @@
+name: Feature request
+description: A new feature, parameter or integration
+labels: [enhancement]
+body:
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: What you want AFX to compute or do, and the use case behind it.
+    validations:
+      required: true
+  - type: textarea
+    id: reference
+    attributes:
+      label: Reference
+      description: Paper, standard or existing implementation (librosa, openSMILE, essentia) that defines it, with the formula if you have it.
+  - type: checkboxes
+    id: contribute
+    attributes:
+      label: Contribution
+      options:
+        - label: I can open a pull request for this

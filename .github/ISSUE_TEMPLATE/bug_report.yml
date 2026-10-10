@@ -1,0 +1,38 @@
+name: Bug report
+description: Something raises, crashes or returns wrong values
+labels: [bug]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened
+      description: What you expected and what you got instead. For wrong values, say what you compared against (librosa, a paper, a hand calculation).
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Code to reproduce
+      description: The smallest script that shows the problem. Use a synthetic signal (np.random, a sine) if you can.
+      render: python
+    validations:
+      required: true
+  - type: textarea
+    id: traceback
+    attributes:
+      label: Traceback or output
+      render: text
+  - type: textarea
+    id: versions
+    attributes:
+      label: Versions
+      description: Output of the command below.
+      value: |
+        python -c "import sys, numpy, scipy, afx_audio; print(sys.version); print(afx_audio.__version__, numpy.__version__, scipy.__version__)"
+      render: text
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
