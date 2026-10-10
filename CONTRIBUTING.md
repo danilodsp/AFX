@@ -30,7 +30,8 @@ mkdocs build --strict
 
 The torch tests are skipped when PyTorch is not installed and the librosa
 parity tests when librosa is not installed. To run the notebooks as tests, set
-`AFX_RUN_NOTEBOOKS=1`. `pre-commit run --all-files` runs ruff, mypy and the
+`AFX_RUN_NOTEBOOKS=1`. Tests that take about 2 s or more are marked `slow`;
+`python -m pytest -m "not slow"` skips them while iterating, CI runs them. `pre-commit run --all-files` runs ruff, mypy and the
 file checks and strips notebook outputs.
 
 ## Adding a feature

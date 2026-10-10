@@ -115,3 +115,6 @@ ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "slow: takes about 2 s or more; CI runs it, deselect locally with -m 'not slow'",
+]

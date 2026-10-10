@@ -59,6 +59,7 @@ def mean_abs(signal, sr=None):
     return {'mean_abs': np.array([np.mean(np.abs(signal))])}
 
 
+@pytest.mark.slow
 def test_custom_features_reach_worker_processes(tmp_path):
     import soundfile as sf
 

@@ -137,6 +137,7 @@ def test_workers_never_fork(monkeypatch, chosen, expected):
     assert method == (expected or ('forkserver' if methods[0] == 'fork' else methods[0]))
 
 
+@pytest.mark.slow
 def test_cli_jobs_from_a_threaded_process_do_not_warn_about_fork(audio_folder, tmp_path):
     # A live thread at fork time is what makes Python 3.12+ warn and what can deadlock the child
     code = (

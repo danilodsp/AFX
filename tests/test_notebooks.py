@@ -54,6 +54,7 @@ def test_stored_without_outputs(path):
 
 
 @pytest.mark.skipif(os.environ.get('AFX_RUN_NOTEBOOKS') != '1', reason='set AFX_RUN_NOTEBOOKS=1 to execute notebooks')
+@pytest.mark.slow
 @pytest.mark.parametrize('name', sorted(BUDGET))
 def test_notebook_runs(name, monkeypatch):
     nbclient = pytest.importorskip('nbclient')

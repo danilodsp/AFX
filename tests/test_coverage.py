@@ -157,6 +157,7 @@ def test_metadata_reaches_extract_all_features():
     assert out['metadata']['pitch']['voiced'].sum() > 0
 
 
+@pytest.mark.slow
 def test_every_nan_producer_documents_when():
     rng = np.random.default_rng(0)
     signals = [np.zeros(SR), _half_silent(0.5), 0.1 * rng.standard_normal(SR)]
