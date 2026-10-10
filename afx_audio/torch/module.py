@@ -100,9 +100,9 @@ class AFXFeatureModule(nn.Module):
             concatenates everything into a single (batch, dim) tensor
             (features in insertion order, see ``feature_names()``).
         coverage: Add ``<name>_valid_frac`` after each aggregated feature,
-            the fraction of frames whose values are all finite (only
-            spectral_kurtosis has undefined frames here, on silence), as on
-            the NumPy path. Not differentiable; needs an aggregation.
+            the fraction of frames whose values are all finite (the
+            spectral moments, entropy, slope, crest and decrease are NaN on
+            silent frames), as on the NumPy path. Not differentiable; needs an aggregation.
 
     Example::
 

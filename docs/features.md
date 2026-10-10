@@ -34,9 +34,11 @@ Parameters: `frame_size=None`, `hop_length=None`, `center=True`, `num_bins=100`.
 
 ### `crest_factor`
 
-Peak amplitude over RMS. 0 for an all-zero frame.
+Peak amplitude over RMS. NaN for an all-zero frame.
 
 Units: ratio. Rows: 1. Function: `afx_audio.extractors.time_domain.extract_crest_factor`.
+
+NaN for: all-zero frame.
 
 Parameters: `frame_size=None`, `hop_length=None`, `center=True`.
 
@@ -68,9 +70,11 @@ Parameters: `frame_size=None`, `hop_length=None`, `center=True`.
 
 ### `energy_ratio`
 
-Energy before ``split`` (fraction of the frame length) over energy after it.
+Energy before ``split`` (fraction of the frame length) over energy after it plus 1e-10. NaN for silence.
 
 Units: ratio. Rows: 1. Function: `afx_audio.extractors.time_domain.extract_energy_ratio`.
+
+NaN for: all-zero frame.
 
 Parameters: `frame_size=None`, `hop_length=None`, `center=True`, `split=0.5`.
 
@@ -90,17 +94,17 @@ Hjorth mobility, RMS(x') / RMS(x) with x' the first difference.
 
 Units: ratio. Rows: 1. Function: `afx_audio.extractors.time_domain.extract_mobility`.
 
-NaN for: frame shorter than 2 samples.
+NaN for: all-zero frame, or frame shorter than 2 samples.
 
 Parameters: `frame_size=None`, `hop_length=None`, `center=True`.
 
 ### `complexity`
 
-RMS(x'') / RMS(x'), second- over first-difference RMS (the mobility of x').
+RMS(x'') / (RMS(x') + 1e-10), the mobility of x'. NaN for a constant frame, silence included.
 
 Units: ratio. Rows: 1. Function: `afx_audio.extractors.time_domain.extract_complexity`.
 
-NaN for: frame shorter than 3 samples.
+NaN for: constant frame (zero first difference), including digital silence, or frame shorter than 3 samples.
 
 Parameters: `frame_size=None`, `hop_length=None`, `center=True`.
 
@@ -117,9 +121,11 @@ Parameters: `frame_size=None`, `hop_length=None`, `center=True`, `max_lag=100`.
 
 ### `autocorr_snr`
 
-Peak over mean of the autocorrelation over lags 0..max_lag-1.
+Peak over mean (plus 1e-10) of the autocorrelation over lags 0..max_lag-1. NaN for an all-zero frame.
 
 Units: ratio. Rows: 1. Function: `afx_audio.extractors.time_domain.extract_autocorr_snr`.
+
+NaN for: all-zero frame.
 
 Parameters: `frame_size=None`, `hop_length=None`, `center=True`, `max_lag=100`.
 
@@ -137,15 +143,17 @@ Lags from the first to the last autocorrelation value at or above half the peak,
 
 Units: lags. Rows: 1. Function: `afx_audio.extractors.time_domain.extract_autocorr_peak_width`.
 
+NaN for: all-zero frame.
+
 Parameters: `frame_size=None`, `hop_length=None`, `center=True`, `max_lag=100`.
 
 ### `autocorr_decay_rate`
 
-Negative least-squares slope of log|acf| over lags 1..max_lag-1. NaN with fewer than 3 lags.
+Negative least-squares slope of log(|acf| + 1e-10) over lags 1..max_lag-1.
 
 Units: log units per lag. Rows: 1. Function: `afx_audio.extractors.time_domain.extract_autocorr_decay_rate`.
 
-NaN for: fewer than 3 autocorrelation lags (max_lag or frame below 3).
+NaN for: all-zero frame, or fewer than 3 autocorrelation lags (max_lag or frame below 3).
 
 Parameters: `frame_size=None`, `hop_length=None`, `center=True`, `max_lag=100`.
 
@@ -208,6 +216,8 @@ Shannon entropy in bits of the magnitude spectrum normalized to sum 1.
 
 Units: bits. Rows: 1. Function: `afx_audio.extractors.frequency_domain.extract_spectral_entropy`.
 
+NaN for: silent frame (magnitude sum at most 1e-10).
+
 Parameters: `frame_size=2048`, `hop_length=512`, `center=True`.
 
 ### `spectral_flatness`
@@ -228,9 +238,11 @@ Parameters: `frame_size=2048`, `hop_length=512`, `center=True`.
 
 ### `spectral_skewness`
 
-Third standardized moment of frequency under the magnitude spectrum. 0 for a silent or single-bin frame.
+Third standardized moment of frequency under the magnitude spectrum. NaN for a silent or single-bin frame.
 
 Units: dimensionless. Rows: 1. Function: `afx_audio.extractors.frequency_domain.extract_spectral_skewness`.
+
+NaN for: silent frame or zero spectral spread (single bin).
 
 Parameters: `frame_size=2048`, `hop_length=512`, `center=True`.
 
@@ -239,6 +251,8 @@ Parameters: `frame_size=2048`, `hop_length=512`, `center=True`.
 Least-squares slope of 20 log10(|X| + 1e-10) against frequency, in dB per Hz.
 
 Units: dB per Hz. Rows: 1. Function: `afx_audio.extractors.frequency_domain.extract_spectral_slope`.
+
+NaN for: silent frame, or a single-bin spectrum.
 
 Parameters: `frame_size=2048`, `hop_length=512`, `center=True`.
 
@@ -258,6 +272,8 @@ Largest over mean magnitude of the spectrum, per frame.
 
 Units: ratio. Rows: 1. Function: `afx_audio.extractors.frequency_domain.extract_spectral_crest`.
 
+NaN for: silent frame.
+
 Parameters: `frame_size=2048`, `hop_length=512`, `center=True`.
 
 ### `spectral_decrease`
@@ -265,6 +281,8 @@ Parameters: `frame_size=2048`, `hop_length=512`, `center=True`.
 Spectral decrease (Peeters, 2004): sum_k (a_k - a_1) / (k - 1) / sum_k a_k over bins k = 2..K.
 
 Units: per bin. Rows: 1. Function: `afx_audio.extractors.frequency_domain.extract_spectral_decrease`.
+
+NaN for: no magnitude above the DC bin (silence), or a single-bin spectrum.
 
 Parameters: `frame_size=2048`, `hop_length=512`, `center=True`.
 

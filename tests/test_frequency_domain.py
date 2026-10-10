@@ -85,5 +85,5 @@ def test_spectral_shape_extremes():
     assert np.median(ct) > 50 * np.median(cn)
     silent = np.zeros(4096)
     assert np.isnan(frequency_domain.extract_spectral_kurtosis(silent, sr)['spectral_kurtosis']).all()
-    assert (frequency_domain.extract_spectral_crest(silent, sr)['spectral_crest'] == 1).all()
-    assert (frequency_domain.extract_spectral_decrease(silent, sr)['spectral_decrease'] == 0).all()
+    assert np.isnan(frequency_domain.extract_spectral_crest(silent, sr)['spectral_crest']).all()
+    assert np.isnan(frequency_domain.extract_spectral_decrease(silent, sr)['spectral_decrease']).all()

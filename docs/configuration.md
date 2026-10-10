@@ -92,11 +92,18 @@ leave it `null` and scale in scikit-learn.
 ## Undefined frames and coverage
 
 A frame where a feature has no defined value is NaN: pitch on an unvoiced
-frame, HNR, THD and spectral kurtosis on a zero-energy frame, kurtosis on
-a constant frame, formants where fewer than `n_formants` resonances pass
-the bandwidth test. `afx.feature_info(name)['undefined']` states the
-condition for each feature (None for features that are always finite,
-which give 0 or a log floor on silence). Every statistic skips NaN
+frame, formants where fewer than `n_formants` resonances pass the
+bandwidth test, kurtosis on a constant frame (as in scipy), and on an
+all-zero frame every feature whose definition there is 0 / 0 or needs a
+normalized spectrum or autocorrelation: crest factor, energy ratio,
+mobility, complexity, autocorrelation SNR, peak width and decay rate,
+spectral entropy, skewness, kurtosis, slope, crest and decrease, THD and
+HNR. Features with a librosa counterpart keep librosa's value on
+silence instead (`zcr`, centroid, bandwidth and rolloff 0, flatness 1,
+MFCC at the log floor), and level features (RMS, energy, variance, mel
+power) are 0. `afx.feature_info(name)['undefined']` states the
+condition for each feature (None for features that are always finite).
+The torch path follows the same rules. Every statistic skips NaN
 frames, so `pitch_mean` is the mean f0 of the voiced frames; a statistic
 is NaN only when every frame is undefined, as for the pitch of silence
 or noise.

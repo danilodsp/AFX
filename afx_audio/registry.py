@@ -63,16 +63,30 @@ _INFO = {
 GROUPS = ('time', 'autocorrelation', 'spectral', 'spectrogram', 'cepstral', 'harmonic', 'linear prediction',
           'parameter set', 'custom')
 
-# When a built-in feature is NaN on a frame. Features not listed are finite
-# on every frame of valid input (silence gives 0 or the floor of a log).
+# When a built-in feature is NaN on a frame. A frame is NaN where the
+# definition has no value on it (0 / 0, or the log or normalized
+# distribution of a zero frame), unless librosa or scipy defines one: those
+# features keep the reference value on silence (zcr, centroid, bandwidth and
+# rolloff 0, flatness 1, MFCC the log floor). Level features (energy, RMS,
+# variance) are 0 on silence. Features not listed are finite on every frame
+# of valid input.
 _UNDEFINED = {
+    'crest_factor': 'all-zero frame',
     'kurtosis': 'constant frame (zero variance), including digital silence',
+    'energy_ratio': 'all-zero frame',
     'sample_entropy': 'no template matches (A or B is 0), or fewer than m + 2 samples',
-    'mobility': 'frame shorter than 2 samples',
-    'complexity': 'frame shorter than 3 samples',
-    'autocorr_decay_rate': 'fewer than 3 autocorrelation lags (max_lag or frame below 3)',
+    'mobility': 'all-zero frame, or frame shorter than 2 samples',
+    'complexity': 'constant frame (zero first difference), including digital silence, or frame shorter than 3 samples',
+    'autocorr_snr': 'all-zero frame',
+    'autocorr_peak_width': 'all-zero frame',
+    'autocorr_decay_rate': 'all-zero frame, or fewer than 3 autocorrelation lags (max_lag or frame below 3)',
     'max_peak_autocorr_envelope': 'only lag 0 available (max_lag or frame of 1)',
+    'spectral_entropy': 'silent frame (magnitude sum at most 1e-10)',
+    'spectral_skewness': 'silent frame or zero spectral spread (single bin)',
+    'spectral_slope': 'silent frame, or a single-bin spectrum',
     'spectral_kurtosis': 'silent frame or zero spectral variance (single bin)',
+    'spectral_crest': 'silent frame',
+    'spectral_decrease': 'no magnitude above the DC bin (silence), or a single-bin spectrum',
     'pitch': 'unvoiced frames (no YIN dip below threshold and minimum not below 0.5) and f0 outside [fmin, fmax]',
     'thd': 'zero-energy frame or fewer than 2 FFT bins',
     'hnr': 'zero-energy frame; every frame when sr / fmax >= min(sr / fmin, frame_size - 1)',
