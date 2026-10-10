@@ -75,6 +75,18 @@ use the imperative mood ("Add spectral spread", not "Added ..."), with a short
 first line and a body explaining why when it is not obvious. Changes that alter
 the numbers a feature returns go under "Breaking changes" in the changelog.
 
+## Releasing
+
+1. Set the new version in `pyproject.toml` and `CITATION.cff`.
+2. Change the changelog heading from `## X.Y.Z (unreleased)` to
+   `## X.Y.Z (YYYY-MM-DD)` with the release date, and commit.
+3. Tag the commit and push the tag:
+   `git tag vX.Y.Z && git push origin vX.Y.Z`.
+
+The release workflow stops unless the tag matches the `pyproject.toml`
+version and the changelog heading for it carries a date. It then builds the
+sdist and wheel, runs the tests from both, and publishes to PyPI.
+
 ## Reporting bugs
 
 Open an issue with the AFX, Python, NumPy and SciPy versions, the smallest

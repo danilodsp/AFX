@@ -56,3 +56,28 @@ def test_librosa_page_lists_every_parity_framing():
     text = ' '.join(_read('docs', 'librosa.md').split())
     assert len(pairs) >= 4
     assert [p for p in sorted(pairs) if f'{p[0]} / {p[1]}' not in text] == []
+
+
+def test_release_workflow_requires_a_dated_changelog_heading(tmp_path):
+    import shutil
+
+    import pytest
+
+    yaml = pytest.importorskip('yaml')
+    workflow = os.path.join(ROOT, '.github', 'workflows', 'release.yml')
+    if not os.path.exists(workflow) or shutil.which('bash') is None:
+        pytest.skip('needs the git checkout and bash')
+    with open(workflow, encoding='utf-8') as f:
+        steps = yaml.safe_load(f)['jobs']['build']['steps']
+    script = next(s['run'] for s in steps if s.get('name') == 'Check that the changelog heading dates the release')
+
+    def run(heading, tag='v0.3.0'):
+        (tmp_path / 'CHANGELOG.md').write_text(f'# Changelog\n\n{heading}\n\n- x\n\n## 0.2.0\n')
+        env = dict(os.environ, GITHUB_REF_NAME=tag)
+        return subprocess.run(['bash', '-c', script], cwd=tmp_path, env=env, capture_output=True).returncode
+
+    assert run('## 0.3.0 (2026-10-10)') == 0
+    assert run('## 0.3.0 (unreleased)') != 0
+    assert run('## 0.3.0') != 0
+    assert run('## 0.3.0 (2026-10-10)', tag='v0.3.1') != 0
+    assert run('## 0.310 (2026-10-10)') != 0
