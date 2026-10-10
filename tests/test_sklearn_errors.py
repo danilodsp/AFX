@@ -46,7 +46,7 @@ def test_config_from_a_file_matches_the_dict(tmp_path):
 def test_stack_keeps_every_frame_and_rejects_another_length():
     ext = AFXFeatureExtractor(config={**CONFIG, 'aggregation': 'stack'})
     out = ext.fit_transform(_signals(0.5, 0.5))
-    assert out.shape == (2, 1 + (SR // 2 - 256) // 128)
+    assert out.shape == (2, 1 + (SR // 2) // 128)
     with pytest.raises(ValueError, match='does not match fitted length.*pooling aggregation'):
         ext.transform(_signals(1.0))
 

@@ -26,19 +26,19 @@ def column(signal, sr=None):
 
 def test_scalar_results_stack_to_frames():
     x = np.repeat([1.0, 2.0, 3.0], 4)
-    out = frame_mean(x, SR, frame_size=4, hop_length=4)
+    out = frame_mean(x, SR, frame_size=4, hop_length=4, center=False)
     np.testing.assert_array_equal(out['frame_mean'], [1.0, 2.0, 3.0])
 
 
 def test_vector_results_stack_on_the_last_axis():
     x = np.arange(12, dtype=np.float64)
-    out = first_and_last(x, SR, frame_size=4, hop_length=4)
+    out = first_and_last(x, SR, frame_size=4, hop_length=4, center=False)
     np.testing.assert_array_equal(out['ends'], [[0, 4, 8], [3, 7, 11]])
 
 
 def test_trailing_singleton_axis_is_dropped():
     x = np.arange(12, dtype=np.float64)
-    out = column(x, SR, frame_size=4, hop_length=4)
+    out = column(x, SR, frame_size=4, hop_length=4, center=False)
     np.testing.assert_array_equal(out['column'], [[0, 4, 8], [3, 7, 11]])
 
 
@@ -49,9 +49,9 @@ def test_without_framing_the_whole_signal_is_one_frame():
 
 def test_metadata_times_follow_the_framing():
     x = np.zeros(16)
-    plain = frame_mean(x, SR, frame_size=4, hop_length=4, return_metadata=True)
+    plain = frame_mean(x, SR, frame_size=4, hop_length=4, center=False, return_metadata=True)
     np.testing.assert_allclose(plain['metadata']['times'], (np.arange(4) * 4 + 2) / SR)
-    centered = frame_mean(x, SR, frame_size=4, hop_length=4, center=True, return_metadata=True)
+    centered = frame_mean(x, SR, frame_size=4, hop_length=4, return_metadata=True)
     np.testing.assert_allclose(centered['metadata']['times'], np.arange(5) * 4 / SR)
 
 
@@ -74,5 +74,5 @@ def test_parameters_reach_the_wrapped_function():
     def scaled_peak(signal, sr=None, *, scale=1.0):
         return {'peak': scale * np.max(np.abs(signal))}
 
-    out = scaled_peak(np.array([0.0, -1.0, 0.5, 0.25]), SR, frame_size=2, hop_length=2, scale=3.0)
+    out = scaled_peak(np.array([0.0, -1.0, 0.5, 0.25]), SR, frame_size=2, hop_length=2, scale=3.0, center=False)
     np.testing.assert_array_equal(out['peak'], [3.0, 1.5])
