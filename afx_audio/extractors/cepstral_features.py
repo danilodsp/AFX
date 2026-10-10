@@ -79,7 +79,7 @@ def extract_mfcc(
     n_mels: int = 128,
     fmin: float = 0.0,
     fmax: float | None = None,
-    center: bool = False,
+    center: bool = True,
     top_db: float | None = 80.0,
     return_metadata: bool = False,
 ) -> dict[str, Any]:
@@ -117,7 +117,7 @@ def extract_mfcc_delta(
     n_mels: int = 128,
     fmin: float = 0.0,
     fmax: float | None = None,
-    center: bool = False,
+    center: bool = True,
     width: int = 9,
     order: int = 1,
     return_metadata: bool = False,
@@ -147,7 +147,7 @@ def extract_mfcc_delta_delta(
     n_mels: int = 128,
     fmin: float = 0.0,
     fmax: float | None = None,
-    center: bool = False,
+    center: bool = True,
     width: int = 9,
     return_metadata: bool = False,
 ) -> dict[str, Any]:
@@ -167,7 +167,7 @@ def extract_gfcc(
     n_gammatone: int = 64,
     fmin: float = 50.0,
     fmax: float | None = None,
-    center: bool = False,
+    center: bool = True,
     return_metadata: bool = False,
 ) -> dict[str, Any]:
     """
@@ -199,7 +199,7 @@ def extract_chroma_cqt(
     n_bins: int = 84,
     bins_per_octave: int = 12,
     fmin: float = C1_HZ,
-    center: bool = False,
+    center: bool = True,
     return_metadata: bool = False,
 ) -> dict[str, Any]:
     """

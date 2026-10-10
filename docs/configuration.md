@@ -30,28 +30,34 @@ the rate as an argument and only warns when it differs from the config's.
 
 ## Framing
 
+Every framed feature takes `center`, and it defaults to `True` for all
+of them (librosa's convention): the signal is first zero-padded by
+`frame_size // 2` on each side, so frame i is centred on sample
+`i * hop_length`. Features with the same `frame_size` and `hop_length`
+then have the same number of frames and the same frame times
+(`spectral_flux` has one value fewer, stamped with the later frame of
+each pair). `center=False` gives frames that start at sample 0 and
+leaves out the partly padded frames at the edges. `egemaps` and
+`egemaps_lld` keep openSMILE's framing.
+
 Time-domain, autocorrelation and THD features use frames of `frame_size`
 samples every `hop_length` samples; samples after the last full frame are
-dropped. With `center=True` the signal is first zero-padded by
-`frame_size // 2` on each side (`zcr` repeats the edge samples, as librosa
-does), which gives the same frames and times as a centered STFT with the
-same sizes. Leave both sizes out (the default for most of them) to get one
-value for the whole clip; an uncentered clip shorter than one frame is also
-analyzed as a single unpadded frame. `zcr` defaults to 2048/512.
+dropped. Centered frames are zero-padded (`zcr` repeats the edge samples,
+as librosa does), which gives the same frames and times as a centered
+STFT with the same sizes. Leave both sizes out (the default for most of
+them) to get one value for the whole clip; an uncentered clip shorter
+than one frame is also analyzed as a single unpadded frame. `zcr`
+defaults to 2048/512.
 
 Spectral, spectrogram and cepstral features use the STFT with a periodic
-Hann window and `n_fft = frame_size`. With `center=True` the signal is
-first zero-padded by `frame_size // 2` on each side, as librosa does
-(`spectral_flux` pads by reflection). `center` defaults to `False` for
-MFCC, GFCC, deltas and the spectral shape features, and to `True` for
-`melspectrogram`, `chroma_stft`, `cqt`, `spectral_contrast` and
-`spectral_flux`. Set it explicitly when frame counts must agree across
-features. The spectral shape features also accept `frame_size=None` for
-one periodic-Hann-windowed FFT of the whole clip.
+Hann window and `n_fft = frame_size`, zero-padded when centered as
+librosa does (`spectral_flux` pads by reflection). The spectral shape
+features also accept `frame_size=None` for one periodic-Hann-windowed
+FFT of the whole clip.
 
-`pitch` and `hnr` work on unpadded frames of the raw signal (`hnr` pads a
-clip shorter than one frame with zeros); `thd` frames like the
-time-domain features.
+`pitch` and `hnr` zero-pad centered frames the same way and otherwise
+work on unpadded frames of the raw signal (`hnr` pads a clip shorter
+than one frame with zeros); `thd` frames like the time-domain features.
 
 With `return_metadata=True` every extractor also returns
 `metadata['times']`, the time in seconds of each frame's center in the

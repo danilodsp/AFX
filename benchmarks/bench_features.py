@@ -68,9 +68,10 @@ def _librosa_calls(librosa):
             chroma=f.chroma_stft(y=y, sr=sr, tuning=0.0, **stft_kw(n, p)))),
         'onset_strength': ('onset.onset_strength', lambda y, sr, n, p: librosa.onset.onset_strength(
             y=y, sr=sr, n_fft=_param(n, p, 'frame_size'), hop_length=_param(n, p, 'hop_length'))),
-        'pitch': ('yin(center=False) *', lambda y, sr, n, p: librosa.yin(
+        'pitch': ('yin *', lambda y, sr, n, p: librosa.yin(
             y, fmin=_param(n, p, 'fmin'), fmax=_param(n, p, 'fmax'), sr=sr,
-            frame_length=_param(n, p, 'frame_size'), hop_length=_param(n, p, 'hop_length'), center=False)),
+            frame_length=_param(n, p, 'frame_size'), hop_length=_param(n, p, 'hop_length'),
+            center=_param(n, p, 'center'), pad_mode='constant')),
         # True constant-Q transforms, not the STFT approximation AFX computes
         'cqt': ('cqt *', lambda y, sr, n, p: np.abs(librosa.cqt(
             y, sr=sr, hop_length=_param(n, p, 'hop_length'), n_bins=_param(n, p, 'n_bins'),

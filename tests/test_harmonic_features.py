@@ -101,14 +101,14 @@ def test_hnr_consistency():
     # extract_hnr frames internally (no decorator), so call it directly
     direct_result = harmonic_features.extract_hnr(
         short_tone, sr=sr, frame_size=frame_size,
-        hop_length=hop_length, return_metadata=True
+        hop_length=hop_length, center=False, return_metadata=True
     )
 
     # Verify metadata structure and content for direct function call
     assert 'metadata' in direct_result
     assert 'times' in direct_result['metadata']
 
-    # One frame, centered on the middle of the signal (center=False framing)
+    # One uncentered frame, stamped at the middle of the signal
     times = direct_result['metadata']['times']
     expected_time = np.array([frame_size // 2 / sr])
     assert np.allclose(times, expected_time)

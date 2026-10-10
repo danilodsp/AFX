@@ -87,16 +87,17 @@ def test_whole_clip_and_framed_shapes(name):
     assert whole[name].shape == (1,)
     assert whole['metadata']['times'] == pytest.approx([0.5])
     framed = fn(signal, SR, frame_size=400, hop_length=160, return_metadata=True)
-    n_frames = 1 + (SR - 400) // 160
+    # Centered by default: SR // 160 hops plus the frame at sample 0
+    n_frames = 1 + SR // 160
     assert framed[name].shape == (n_frames,)
-    assert framed['metadata']['times'][0] == pytest.approx(200 / SR)
+    assert framed['metadata']['times'][0] == 0.0
 
 
 def test_framed_matches_per_frame_whole_clip():
     signal = np.random.default_rng(2).standard_normal(4000)
     for name in ['variance', 'entropy', 'crest_factor', 'kurtosis', 'mobility', 'autocorr_decay_rate', 'thd']:
         fn = afx_audio.FEATURE_MAP[name]
-        framed = fn(signal, SR, frame_size=512, hop_length=256)[name]
+        framed = fn(signal, SR, frame_size=512, hop_length=256, center=False)[name]
         expected = [fn(signal[i:i + 512], SR)[name][0] for i in range(0, 4000 - 512 + 1, 256)]
         np.testing.assert_allclose(framed, expected, rtol=1e-10, err_msg=name)
 

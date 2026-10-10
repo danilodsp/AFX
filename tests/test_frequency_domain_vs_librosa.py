@@ -55,11 +55,10 @@ def test_extract_spectral_centroid_against_librosa():
     assert 'metadata' in result_with_meta
     assert 'times' in result_with_meta['metadata']
 
-    # center=False: frame centers sit at i * hop + frame_size // 2
+    # Centered by default, as in librosa: frame i sits at i * hop
     times = result_with_meta['metadata']['times']
     expected_times = librosa.frames_to_time(
-        np.arange(len(centroid_custom) + start_idx), sr=sr,
-        hop_length=hop_length, n_fft=frame_size
+        np.arange(len(centroid_custom) + start_idx), sr=sr, hop_length=hop_length
     )[start_idx:]
     assert np.allclose(times[start_idx:min_length], expected_times)
 
@@ -111,11 +110,10 @@ def test_extract_spectral_bandwidth_against_librosa():
     assert 'metadata' in result_with_meta
     assert 'times' in result_with_meta['metadata']
 
-    # center=False: frame centers sit at i * hop + frame_size // 2
+    # Centered by default, as in librosa: frame i sits at i * hop
     times = result_with_meta['metadata']['times']
     expected_times = librosa.frames_to_time(
-        np.arange(len(bandwidth_custom) + start_idx), sr=sr,
-        hop_length=hop_length, n_fft=frame_size
+        np.arange(len(bandwidth_custom) + start_idx), sr=sr, hop_length=hop_length
     )[start_idx:]
     assert np.allclose(times[start_idx:min_length], expected_times)
 

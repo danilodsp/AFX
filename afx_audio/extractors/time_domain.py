@@ -4,9 +4,10 @@ Time-domain feature extractors.
 Every extractor takes ``frame_size``, ``hop_length`` and ``center``. With
 both sizes set the signal is cut into frames of ``frame_size`` samples
 every ``hop_length`` samples (trailing samples that do not fill a frame are
-dropped) and the result has shape (n_frames,). ``center=True`` first
-zero-pads frame_size // 2 samples on both sides, so frame i is centred on
-sample i * hop_length as in librosa and in the centered STFT. With either
+dropped) and the result has shape (n_frames,). ``center=True`` (the
+default) first zero-pads frame_size // 2 samples on both sides, so frame i
+is centred on sample i * hop_length as in librosa and in the centered STFT.
+With either
 size left as None, or an uncentered clip shorter than one frame, the whole
 signal is analyzed as a single unpadded frame and the result has shape (1,).
 
@@ -66,7 +67,7 @@ def extract_zero_crossing_rate(
     *,
     frame_size: int | None = 2048,
     hop_length: int | None = 512,
-    center: bool = False,
+    center: bool = True,
     threshold: float = 1e-10,
     return_metadata: bool = False,
 ) -> dict[str, Any]:
@@ -93,7 +94,7 @@ def extract_variance(
     *,
     frame_size: int | None = None,
     hop_length: int | None = None,
-    center: bool = False,
+    center: bool = True,
     return_metadata: bool = False,
 ) -> dict[str, Any]:
     """Variance of the samples (population, ddof=0)."""
@@ -133,7 +134,7 @@ def extract_entropy(
     *,
     frame_size: int | None = None,
     hop_length: int | None = None,
-    center: bool = False,
+    center: bool = True,
     num_bins: int = 100,
     return_metadata: bool = False,
 ) -> dict[str, Any]:
@@ -152,7 +153,7 @@ def extract_crest_factor(
     *,
     frame_size: int | None = None,
     hop_length: int | None = None,
-    center: bool = False,
+    center: bool = True,
     return_metadata: bool = False,
 ) -> dict[str, Any]:
     """Peak amplitude over RMS. 0 for an all-zero frame."""
@@ -169,7 +170,7 @@ def extract_kurtosis(
     *,
     frame_size: int | None = None,
     hop_length: int | None = None,
-    center: bool = False,
+    center: bool = True,
     fisher: bool = True,
     return_metadata: bool = False,
 ) -> dict[str, Any]:
@@ -198,7 +199,7 @@ def extract_short_time_energy(
     *,
     frame_size: int | None = None,
     hop_length: int | None = None,
-    center: bool = False,
+    center: bool = True,
     return_metadata: bool = False,
 ) -> dict[str, Any]:
     """Sum of squared samples."""
@@ -213,7 +214,7 @@ def extract_rms_energy(
     *,
     frame_size: int | None = None,
     hop_length: int | None = None,
-    center: bool = False,
+    center: bool = True,
     return_metadata: bool = False,
 ) -> dict[str, Any]:
     """Root mean square of the samples."""
@@ -228,7 +229,7 @@ def extract_energy_ratio(
     *,
     frame_size: int | None = None,
     hop_length: int | None = None,
-    center: bool = False,
+    center: bool = True,
     split: float = 0.5,
     return_metadata: bool = False,
 ) -> dict[str, Any]:
@@ -257,7 +258,7 @@ def extract_mobility(
     *,
     frame_size: int | None = None,
     hop_length: int | None = None,
-    center: bool = False,
+    center: bool = True,
     return_metadata: bool = False,
 ) -> dict[str, Any]:
     """
@@ -277,7 +278,7 @@ def extract_complexity(
     *,
     frame_size: int | None = None,
     hop_length: int | None = None,
-    center: bool = False,
+    center: bool = True,
     return_metadata: bool = False,
 ) -> dict[str, Any]:
     """RMS(x'') / RMS(x'), second- over first-difference RMS (the mobility of x')."""
@@ -371,7 +372,7 @@ def extract_autocorrelation_variance(
     *,
     frame_size: int | None = None,
     hop_length: int | None = None,
-    center: bool = False,
+    center: bool = True,
     max_lag: int = 100,
     return_metadata: bool = False,
 ) -> dict[str, Any]:
@@ -387,7 +388,7 @@ def extract_autocorr_snr(
     *,
     frame_size: int | None = None,
     hop_length: int | None = None,
-    center: bool = False,
+    center: bool = True,
     max_lag: int = 100,
     return_metadata: bool = False,
 ) -> dict[str, Any]:
@@ -404,7 +405,7 @@ def extract_autocorr_zero_crossings(
     *,
     frame_size: int | None = None,
     hop_length: int | None = None,
-    center: bool = False,
+    center: bool = True,
     max_lag: int = 100,
     return_metadata: bool = False,
 ) -> dict[str, Any]:
@@ -421,7 +422,7 @@ def extract_autocorr_peak_width(
     *,
     frame_size: int | None = None,
     hop_length: int | None = None,
-    center: bool = False,
+    center: bool = True,
     max_lag: int = 100,
     return_metadata: bool = False,
 ) -> dict[str, Any]:
@@ -441,7 +442,7 @@ def extract_autocorr_decay_rate(
     *,
     frame_size: int | None = None,
     hop_length: int | None = None,
-    center: bool = False,
+    center: bool = True,
     max_lag: int = 100,
     return_metadata: bool = False,
 ) -> dict[str, Any]:
@@ -464,7 +465,7 @@ def extract_autocorr_coeffs_deviation(
     *,
     frame_size: int | None = None,
     hop_length: int | None = None,
-    center: bool = False,
+    center: bool = True,
     max_lag: int = 100,
     return_metadata: bool = False,
 ) -> dict[str, Any]:
@@ -481,7 +482,7 @@ def extract_max_peak_autocorr_envelope(
     *,
     frame_size: int | None = None,
     hop_length: int | None = None,
-    center: bool = False,
+    center: bool = True,
     max_lag: int = 100,
     return_metadata: bool = False,
 ) -> dict[str, Any]:

@@ -94,7 +94,7 @@ def extract_spectral_centroid(
     *,
     frame_size: int | None = 2048,
     hop_length: int | None = 512,
-    center: bool = False,
+    center: bool = True,
     return_metadata: bool = False,
 ) -> dict[str, Any]:
     """Magnitude-weighted mean frequency in Hz, as librosa.feature.spectral_centroid. 0 for a silent frame."""
@@ -114,7 +114,7 @@ def extract_spectral_bandwidth(
     *,
     frame_size: int | None = 2048,
     hop_length: int | None = 512,
-    center: bool = False,
+    center: bool = True,
     return_metadata: bool = False,
 ) -> dict[str, Any]:
     """Magnitude-weighted standard deviation of frequency around the centroid, in Hz (librosa, p=2)."""
@@ -139,7 +139,7 @@ def extract_spectral_rolloff(
     frame_size: int | None = 2048,
     hop_length: int | None = 512,
     roll_percent: float = 0.85,
-    center: bool = False,
+    center: bool = True,
     power: float = 1.0,
     return_metadata: bool = False,
 ) -> dict[str, Any]:
@@ -168,7 +168,7 @@ def extract_spectral_skewness(
     *,
     frame_size: int | None = 2048,
     hop_length: int | None = 512,
-    center: bool = False,
+    center: bool = True,
     return_metadata: bool = False,
 ) -> dict[str, Any]:
     """Third standardized moment of frequency under the magnitude spectrum. 0 for a silent or single-bin frame."""
@@ -194,7 +194,7 @@ def extract_spectral_slope(
     *,
     frame_size: int | None = 2048,
     hop_length: int | None = 512,
-    center: bool = False,
+    center: bool = True,
     return_metadata: bool = False,
 ) -> dict[str, Any]:
     """Least-squares slope of 20 log10(|X| + 1e-10) against frequency, in dB per Hz."""
@@ -219,7 +219,7 @@ def extract_spectral_kurtosis(
     *,
     frame_size: int | None = 2048,
     hop_length: int | None = 512,
-    center: bool = False,
+    center: bool = True,
     fisher: bool = True,
     return_metadata: bool = False,
 ) -> dict[str, Any]:
@@ -255,7 +255,7 @@ def extract_spectral_crest(
     *,
     frame_size: int | None = 2048,
     hop_length: int | None = 512,
-    center: bool = False,
+    center: bool = True,
     return_metadata: bool = False,
 ) -> dict[str, Any]:
     """
@@ -279,7 +279,7 @@ def extract_spectral_decrease(
     *,
     frame_size: int | None = 2048,
     hop_length: int | None = 512,
-    center: bool = False,
+    center: bool = True,
     return_metadata: bool = False,
 ) -> dict[str, Any]:
     """
@@ -309,7 +309,7 @@ def extract_spectral_entropy(
     *,
     frame_size: int = 2048,
     hop_length: int = 512,
-    center: bool = False,
+    center: bool = True,
     return_metadata: bool = False,
 ) -> dict[str, Any]:
     """
@@ -336,7 +336,7 @@ def extract_spectral_flatness(
     *,
     frame_size: int = 2048,
     hop_length: int = 512,
-    center: bool = False,
+    center: bool = True,
     return_metadata: bool = False,
 ) -> dict[str, Any]:
     """

@@ -68,5 +68,5 @@ def test_extract_spectral_flatness_against_librosa():
     # Check that times computation is correct
     times = result_with_meta['metadata']['times']
     n_frames = len(times)
-    expected_times = (np.arange(n_frames) * hop_length + frame_size // 2) / sr
+    expected_times = np.arange(n_frames) * hop_length / sr
     assert np.allclose(times, expected_times)

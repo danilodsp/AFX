@@ -54,19 +54,20 @@ def test_spectral_kurtosis_crest_decrease_match_definitions():
     t = np.arange(sr) / sr
     x = np.sin(2 * np.pi * 700 * t) + 0.3 * rng.standard_normal(sr)
     mag = _mag(x)
+    framing = {'frame_size': 1024, 'hop_length': 256, 'center': False}
     f = np.fft.rfftfreq(1024, 1 / sr)[:, None]
     p = mag / mag.sum(0)
     mu = (f * p).sum(0)
     sd = np.sqrt((((f - mu) ** 2) * p).sum(0))
     kurt = (((f - mu) ** 4) * p).sum(0) / sd ** 4 - 3
-    got = frequency_domain.extract_spectral_kurtosis(x, sr, frame_size=1024, hop_length=256)['spectral_kurtosis']
+    got = frequency_domain.extract_spectral_kurtosis(x, sr, **framing)['spectral_kurtosis']
     np.testing.assert_allclose(got, kurt, rtol=1e-9)
-    crest = frequency_domain.extract_spectral_crest(x, sr, frame_size=1024, hop_length=256)['spectral_crest']
+    crest = frequency_domain.extract_spectral_crest(x, sr, **framing)['spectral_crest']
     np.testing.assert_allclose(crest, mag.max(0) / mag.mean(0), rtol=1e-9)
     # pyACA FeatureSpectralDecrease
     k = np.arange(1, mag.shape[0])[:, None]
     dec = ((mag[1:] - mag[0]) / k).sum(0) / mag[1:].sum(0)
-    got = frequency_domain.extract_spectral_decrease(x, sr, frame_size=1024, hop_length=256)['spectral_decrease']
+    got = frequency_domain.extract_spectral_decrease(x, sr, **framing)['spectral_decrease']
     np.testing.assert_allclose(got, dec, rtol=1e-9)
 
 

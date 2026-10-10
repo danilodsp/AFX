@@ -58,7 +58,7 @@ def test_formants_nan_on_silence_and_short_frames():
 def test_shapes_and_times():
     x = _vowel()
     out = afx_audio.FEATURE_MAP['lpc'](x, SR, order=10, frame_size=400, hop_length=160, return_metadata=True)
-    assert out['lpc'].shape == (10, 1 + (SR - 400) // 160)
-    assert out['metadata']['times'][0] == pytest.approx(200 / SR)
+    assert out['lpc'].shape == (10, 1 + SR // 160)
+    assert out['metadata']['times'][0] == 0.0
     out = afx_audio.FEATURE_MAP['formants'](x, SR, n_formants=4, return_metadata=True)
     assert out['formants'].shape[0] == 4 and len(out['metadata']['times']) == out['formants'].shape[1]

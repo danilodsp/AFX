@@ -114,6 +114,6 @@ def test_yin_close_to_librosa():
     f0 = 120 + 80 * t  # slow glide
     y = np.sin(2 * np.pi * np.cumsum(f0) / sr) + 0.01 * np.random.default_rng(1).standard_normal(len(t))
     ours = F['pitch'](y, sr, frame_size=2048, hop_length=512, fmin=60, fmax=800)['pitch']
-    ref = librosa.yin(y, fmin=60, fmax=800, sr=sr, frame_length=2048, hop_length=512, center=False)
+    ref = librosa.yin(y, fmin=60, fmax=800, sr=sr, frame_length=2048, hop_length=512, pad_mode='constant')
     assert ours.shape == ref.shape
     np.testing.assert_allclose(ours, ref, rtol=0.02)  # librosa 0.10 and 1.0 differ by about 1%

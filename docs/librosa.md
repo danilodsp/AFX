@@ -28,8 +28,8 @@ both sides, as `librosa.feature.zero_crossing_rate` does.
 
 ## Differences
 
-`pitch` agrees with `librosa.yin(center=False)` to within 2% on voiced
-frames (librosa 0.10 and 1.0 differ from each other by about 1%). AFX
+`pitch` agrees with `librosa.yin(pad_mode='constant')` to within 2% on
+voiced frames (librosa 0.10 and 1.0 differ from each other by about 1%). AFX
 returns NaN for frames without a clear periodicity dip, where librosa
 always reports its best lag, which can be anywhere in the range (about
 fmax on silence).
@@ -42,10 +42,6 @@ filterbank on detuned recordings.
 log-frequency filterbank. They have the time resolution of the STFT at
 every frequency and do not match `librosa.cqt`, which uses true
 constant-Q filters.
-
-`zcr` and the other time-domain features default to `center=False`, while
-librosa's `zero_crossing_rate` and `rms` default to `center=True`; pass the
-same value on both sides.
 
 `spectral_flux` is the Euclidean distance between consecutive magnitude
 spectra, not librosa's onset strength.

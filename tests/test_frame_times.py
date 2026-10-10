@@ -55,7 +55,7 @@ def test_center_true_and_false_share_one_axis(signal):
 
 
 def test_all_extractors_agree_on_times(signal):
-    """Extractors with the same framing report identical times."""
+    """Extractors with the same framing report identical times (centered by default)."""
     params = dict(frame_size=FRAME, hop_length=HOP, return_metadata=True)
     times = {
         'zcr': time_domain.extract_zero_crossing_rate(signal, SR, **params),
@@ -66,14 +66,12 @@ def test_all_extractors_agree_on_times(signal):
         'pitch': harmonic_features.extract_pitch(signal, SR, **params),
         'hnr': harmonic_features.extract_hnr(signal, SR, **params),
         'melspectrogram': cepstral_features.extract_melspectrogram(
-            signal, SR, center=False, **params),
+            signal, SR, **params),
         'chroma_stft': cepstral_features.extract_chroma_stft(
-            signal, SR, center=False, **params),
+            signal, SR, **params),
     }
     ref = times['zcr']['metadata']['times']
-    expected = librosa.frames_to_time(
-        np.arange(len(ref)), sr=SR, hop_length=HOP, n_fft=FRAME
-    )
+    expected = librosa.frames_to_time(np.arange(len(ref)), sr=SR, hop_length=HOP)
     assert np.allclose(ref, expected)
     for name, out in times.items():
         assert np.allclose(out['metadata']['times'], ref), name
@@ -99,11 +97,11 @@ def test_whole_signal_mode_reports_signal_midpoint(signal):
 
 
 def test_short_signal_framewise_is_not_zero_padded():
-    """A clip shorter than one frame is analyzed as-is (one frame)."""
+    """An uncentered clip shorter than one frame is analyzed as-is (one frame)."""
     rng = np.random.RandomState(0)
     clip = rng.randn(100)
     framed = time_domain.extract_variance(
-        clip, SR, frame_size=2048, hop_length=512, return_metadata=True
+        clip, SR, frame_size=2048, hop_length=512, center=False, return_metadata=True
     )
     whole = time_domain.extract_variance(clip, SR)
     assert framed['variance'].shape == (1,)

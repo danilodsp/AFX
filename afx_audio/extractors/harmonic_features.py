@@ -27,6 +27,7 @@ def extract_pitch(
     *,
     frame_size: int = 2048,
     hop_length: int = 512,
+    center: bool = True,
     fmin: float = 50.0,
     fmax: float = 2000.0,
     threshold: float = 0.1,
@@ -41,14 +42,18 @@ def extract_pitch(
     which returns 0 for these frames). With return_metadata=True,
     ``metadata['voiced']`` is the boolean voicing mask. The longest
     detectable period is frame_size // 2 samples, so fmin is effectively
-    max(fmin, 2 sr / frame_size). Shape (n_frames,), frames unpadded.
+    max(fmin, 2 sr / frame_size). ``center`` zero-pads frame_size // 2
+    samples on both sides first, as librosa.yin does. Shape (n_frames,).
     """
-    f0 = yin(validate_signal(signal), frame_length=frame_size, hop_length=hop_length, fmin=fmin, fmax=fmax, sr=sr,
+    signal = validate_signal(signal)
+    if center:
+        signal = np.pad(signal, frame_size // 2)
+    f0 = yin(signal, frame_length=frame_size, hop_length=hop_length, fmin=fmin, fmax=fmax, sr=sr,
              threshold=threshold)
     voiced = f0 > 0
     result: dict[str, Any] = {'pitch': np.where(voiced, f0, np.nan)}
     if return_metadata:
-        result['metadata'] = {'times': frame_times(len(f0), sr, hop_length, frame_size), 'voiced': voiced}
+        result['metadata'] = {'times': frame_times(len(f0), sr, hop_length, frame_size, center), 'voiced': voiced}
     return result
 
 
@@ -58,7 +63,7 @@ def extract_thd(
     *,
     frame_size: int | None = None,
     hop_length: int | None = None,
-    center: bool = False,
+    center: bool = True,
     n_harmonics: int = 4,
     return_metadata: bool = False,
 ) -> dict[str, Any]:
@@ -103,6 +108,7 @@ def extract_hnr(
     *,
     frame_size: int = 2048,
     hop_length: int = 512,
+    center: bool = True,
     fmin: float = 50.0,
     fmax: float = 2000.0,
     return_metadata: bool = False,
@@ -123,10 +129,13 @@ def extract_hnr(
     a pure tone with a 400-sample frame and a 160-sample period.
 
     r is clipped to (1e-10, 1 - 1e-10). NaN for silent frames (zero
-    energy); low-level noise still gives a finite, low HNR. A clip
+    energy); low-level noise still gives a finite, low HNR. ``center``
+    zero-pads frame_size // 2 samples on both sides first; a clip still
     shorter than one frame is zero-padded to one frame. Shape (n_frames,).
     """
     signal = validate_signal(signal).astype(np.float64, copy=False)
+    if center:
+        signal = np.pad(signal, frame_size // 2)
     n_samples = len(signal)
     n_frames = max(1, 1 + (n_samples - frame_size) // hop_length)
     if n_samples < frame_size:
@@ -152,5 +161,5 @@ def extract_hnr(
         hnr[voiced] = 10 * np.log10(r_max[voiced] / (1.0 - r_max[voiced]))
     result: dict[str, Any] = {'hnr': hnr}
     if return_metadata:
-        result['metadata'] = {'times': frame_times(n_frames, sr, hop_length, frame_size)}
+        result['metadata'] = {'times': frame_times(n_frames, sr, hop_length, frame_size, center)}
     return result
