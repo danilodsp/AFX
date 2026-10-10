@@ -174,7 +174,7 @@ config as the hash, so writing out a parameter at its default value is
 not a modification and leaves the hash unchanged. To cite an extraction, give the
 package version, the preset id and the config hash from the record, for
 example "features: afx-audio 0.3.0, preset speech@1, config hash
-2d57da580d18". Every preset file spells out all parameters of every
+71f5a1447dc2". Every preset file spells out all parameters of every
 feature, so a later change to a default does not change a released
 preset; the package version still pins the implementation.
 

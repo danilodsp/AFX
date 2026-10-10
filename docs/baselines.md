@@ -39,7 +39,7 @@ wall time for all 2000 clips including file hashing.
 <!-- results start -->
 | Config | Config hash | Sample rate | Columns | NaN columns | Extraction (s) | Logistic regression | Random forest |
 |---|---|---:|---:|---:|---:|---:|---:|
-| `speech@1` | `2d57da580d18` | 16000 | 154 | 2 (1%) | 259 | 0.577 ± 0.038 | 0.604 ± 0.015 |
+| `speech@1` | `71f5a1447dc2` | 16000 | 154 | 2 (1%) | 259 | 0.577 ± 0.038 | 0.604 ± 0.015 |
 | `bioacoustics@1` | `f2fbc8a2bb11` | 32000 | 194 | 0 (0%) | 134 | 0.548 ± 0.028 | 0.548 ± 0.034 |
 | `music@1` | `cef990b7ffe1` | 22050 | 114 | 0 (0%) | 270 | 0.617 ± 0.022 | 0.605 ± 0.027 |
 | `machinery@1` | `563073e5d310` | 16000 | 96 | 0 (0%) | 177 | 0.557 ± 0.026 | 0.546 ± 0.014 |

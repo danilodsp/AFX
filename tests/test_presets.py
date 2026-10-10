@@ -21,7 +21,7 @@ FROZEN = {
     'egemaps@1': 'cd530990145e',
     'machinery@1': '563073e5d310',
     'music@1': 'cef990b7ffe1',
-    'speech@1': '2d57da580d18',
+    'speech@1': '71f5a1447dc2',
 }
 
 
