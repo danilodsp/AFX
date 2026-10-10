@@ -86,8 +86,8 @@ class AFXFeatureExtractor(BaseEstimator, TransformerMixin):
         n_features_out_: Output dimensionality.
         provenance_: afx-audio, numpy, scipy and Python versions, the
             resolved config and its ``afx_audio.config_hash``, the preset
-            id, the sample rate and the fit time, as written next to batch
-            outputs.
+            id, the sample rate, the registered custom features the config
+            uses and the fit time, as written next to batch outputs.
     """
 
     def __init__(
@@ -191,6 +191,7 @@ class AFXFeatureExtractor(BaseEstimator, TransformerMixin):
             **preset_record(self.config_),
             'config': json.loads(canonical_json(self.config_)),
             'sample_rate': self.config_['sample_rate'],
+            'custom_features': sorted(name for name in custom_features() if name in self.config_['features']),
             **environment,
         }
         return self

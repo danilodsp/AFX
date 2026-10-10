@@ -149,3 +149,20 @@ def test_unregister_restores_an_overwritten_builtin():
     assert afx_audio.feature_info('zcr')['group'] == 'custom'
     afx_audio.unregister_feature('zcr')
     assert afx_audio.FEATURE_MAP['zcr'] is original and afx_audio.feature_info('zcr')['group'] == 'time'
+
+
+def test_sklearn_provenance_lists_custom_features(peak_feature, tmp_path):
+    pytest.importorskip('sklearn')
+    import soundfile as sf
+
+    from afx_audio.sklearn import AFXFeatureExtractor
+
+    config = {'sample_rate': 1600, 'features': {'peak_amplitude': {}, 'zcr': {'frame_size': 400, 'hop_length': 400}}}
+    x = np.sin(2 * np.pi * 5 * np.arange(1600) / 1600)
+    (tmp_path / 'audio').mkdir()
+    sf.write(tmp_path / 'audio' / 'a.wav', x, 1600)
+    afx_audio.extract_features_from_folder(str(tmp_path / 'audio'), config, str(tmp_path / 'f.json'))
+    batch = afx_audio.read_provenance(tmp_path / 'f.json')
+    est = AFXFeatureExtractor(config=config).fit([x])
+    assert est.provenance_['custom_features'] == batch['custom_features'] == ['peak_amplitude']
+    assert est.provenance_['config_hash'] == batch['config_hash']
