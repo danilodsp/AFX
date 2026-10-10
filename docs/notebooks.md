@@ -1,6 +1,6 @@
 # Notebooks
 
-The [`notebooks/`](https://github.com/danilodsp/AFX/tree/main/notebooks) folder holds a numbered tutorial set. Each notebook runs on synthesized audio when no dataset is configured, so a fresh clone needs only `pip install "afx-audio[notebooks]"`.
+The [`notebooks/`](https://github.com/danilodsp/AFX/tree/main/notebooks) folder holds a numbered tutorial set. Each notebook runs on synthesized audio when no dataset is configured, so a fresh clone needs only `pip install "afx-audio[notebooks]"`, plus `"afx-audio[torch]"` for 06.
 
 | Notebook | Covers |
 |---|---|
