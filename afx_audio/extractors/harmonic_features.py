@@ -128,6 +128,11 @@ def extract_hnr(
     estimate R(tau) / R(0) would cap r at (N - tau) / N, about 2 dB HNR for
     a pure tone with a 400-sample frame and a 160-sample period.
 
+    The longest lag searched is frame_size // 2, as in YIN, so every lag
+    keeps at least half the frame in the overlap and fmin is effectively
+    max(fmin, 2 sr / frame_size). Longer lags compare so few samples
+    that white noise reads as harmonic (r = 1 at a single-sample overlap).
+
     r does not depend on signal level; it is clipped to (1e-10, 1 - 1e-10),
     so HNR lies within +/-100 dB. NaN for silent frames (zero energy). ``center``
     zero-pads frame_size // 2 samples on both sides first; a clip still
@@ -144,9 +149,11 @@ def extract_hnr(
         frames = np.lib.stride_tricks.sliding_window_view(signal, frame_size)[::hop_length]
 
     # Restrict the peak search to plausible pitch lags. Over all lags,
-    # r(1) ~ 1 for any smooth signal and HNR would be meaningless.
+    # r(1) ~ 1 for any smooth signal and HNR would be meaningless. Lags past
+    # frame_size // 2 (the YIN bound) correlate fewer than half the samples,
+    # and at frame_size - 1 a single product gives |r| = 1 even for noise.
     lag_min = max(1, int(sr / fmax)) if fmax > 0 else 1
-    lag_max = min(int(sr / fmin) if fmin > 0 else frame_size - 1, frame_size - 1)
+    lag_max = min(int(sr / fmin), frame_size // 2) if fmin > 0 else frame_size // 2
 
     hnr = np.full(n_frames, np.nan)
     if lag_min < lag_max:

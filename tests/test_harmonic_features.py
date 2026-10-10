@@ -142,6 +142,20 @@ def test_hnr_tracks_snr():
         assert abs(np.median(hnr) - snr_db) < 3.0, (snr_db, np.median(hnr))
 
 
+def test_hnr_of_white_noise_does_not_depend_on_sample_rate():
+    """Lags up to frame_size - 1 left a few samples in the NCCF overlap, and
+    at 22050 Hz with a 400-sample frame and fmin 50 white noise read +100 dB.
+    With the search capped at frame_size // 2 noise stays low and its HNR
+    for a given frame_size moves little with sr."""
+    x = np.random.default_rng(0).standard_normal(96000)
+    for frame_size in (400, 2048):
+        hnr = [np.median(harmonic_features.extract_hnr(x, sr, frame_size=frame_size,
+                                                       hop_length=frame_size // 2)['hnr'])
+               for sr in (16000, 22050, 44100, 96000)]
+        assert max(hnr) < -5.0, (frame_size, hnr)
+        assert max(hnr) - min(hnr) < 2.0, (frame_size, hnr)
+
+
 def test_hnr_is_level_invariant_down_to_quiet_signals():
     """An absolute floor on the product of segment energies (amplitude^4)
     pulled r to 0 below about -80 dBFS and scored quiet tones as noise."""

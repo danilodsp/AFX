@@ -485,7 +485,7 @@ Harmonics-to-noise ratio in dB per frame, 10 log10(r / (1 - r)).
 
 Units: dB. Rows: 1. Function: `afx_audio.extractors.harmonic_features.extract_hnr`.
 
-NaN for: zero-energy frame; every frame when sr / fmax >= min(sr / fmin, frame_size - 1).
+NaN for: zero-energy frame; every frame when sr / fmax >= min(sr / fmin, frame_size // 2).
 
 Torch: none.
 
