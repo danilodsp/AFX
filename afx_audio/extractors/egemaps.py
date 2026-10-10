@@ -67,6 +67,7 @@ _HOP = 0.010
 _SHORT = 0.020
 _LONG = 0.060
 _TINY = 1e-30
+_BLOCK = 1000
 
 # Pitch search range and SHS settings of the eGeMAPSv02 configuration (Hermes, 1988)
 _F0_MIN, _F0_MAX = 55.0, 1000.0
@@ -341,12 +342,20 @@ def _pitch(x: np.ndarray, sr: float, n_frames: int) -> tuple[np.ndarray, np.ndar
     if n_frames == 0:
         return np.zeros(0), np.zeros((0, len(freqs))), freqs
     raw = _frames(x, length, hop, n_frames)
-    windowed = raw * _gauss(length)
-    mag = np.abs(np.fft.rfft(windowed, nfft))
-    cand_f, cand_v, ratio = _shs(mag, freqs)
-    period = sr / np.where(cand_f[:, 0] > 0, cand_f[:, 0], _F0_MAX)
-    nccf = _nccf_at(raw, np.floor(0.9 * period).astype(int), np.ceil(1.1 * period).astype(int))
-    rms = np.sqrt(np.mean(windowed ** 2, axis=1))
+    window = _gauss(length)
+    mag = np.empty((n_frames, len(freqs)))
+    cand_f = np.empty((n_frames, _SHS_CANDIDATES))
+    cand_v = np.empty((n_frames, _SHS_CANDIDATES))
+    ratio, nccf, rms = np.empty(n_frames), np.empty(n_frames), np.empty(n_frames)
+    # Blocks of frames bound the memory of the spline and autocorrelation arrays on long recordings
+    for b in range(0, n_frames, _BLOCK):
+        block = slice(b, b + _BLOCK)
+        windowed = raw[block] * window
+        mag[block] = np.abs(np.fft.rfft(windowed, nfft))
+        cand_f[block], cand_v[block], ratio[block] = _shs(mag[block], freqs)
+        period = sr / np.where(cand_f[block, 0] > 0, cand_f[block, 0], _F0_MAX)
+        nccf[block] = _nccf_at(raw[block], np.floor(0.9 * period).astype(int), np.ceil(1.1 * period).astype(int))
+        rms[block] = np.sqrt(np.mean(windowed ** 2, axis=1))
     voiced = (rms >= _VOICING_RMS) & (nccf > _VOICING_NCCF) & (ratio > _VOICING_SHS) & (cand_f[:, 0] > 0)
     voiced = _clean_runs(voiced, _MAX_GAP_FRAMES, _MIN_VOICED_FRAMES)
     return _refine(_track(cand_f, cand_v, voiced), mag, freqs), mag, freqs
