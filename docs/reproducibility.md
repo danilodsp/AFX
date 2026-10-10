@@ -20,6 +20,7 @@ record['file_sha256']   # {'a.wav': '9e1f...', ...}
 |---|---|
 | `afx_version` | afx-audio version that wrote the file |
 | `config_hash` | `afx.config_hash(config)`, 12 hex characters |
+| `preset_id`, `preset_modified` | `'speech@1'` when the config came from a preset (else `null`), and whether an override changed a value the preset sets (`null` for a preset that is not bundled) |
 | `config` | the validated config after `features`, `aggregation`, `sample_rate` and the other overrides |
 | `sample_rate` | rate every file was loaded at |
 | `resampling` | method (`scipy.signal.resample_poly`), whether `sample_rate` overrode the config, the count of files per native rate and how many were resampled |
