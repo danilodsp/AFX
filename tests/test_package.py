@@ -133,7 +133,8 @@ def test_core_import_without_torch():
 
 def test_feature_counts_match_the_registry():
     description = re.search(r'^description\s*=\s*"([^"]+)"', _read('pyproject.toml'), re.M).group(1)
-    readme = _read('README.md').split('\n## ')[0]
+    # The README lead also says how many features have torch implementations
+    readme = re.search(r'AFX computes [^.]*\.', _read('README.md')).group(0)
     for text in (description, readme):
         counts = re.findall(r'(?<![\w.])(\d+) (?=[^.]*?features)', text)
         assert counts and all(int(n) == len(afx_audio.FEATURE_MAP) for n in counts), text
