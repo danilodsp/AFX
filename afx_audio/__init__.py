@@ -9,11 +9,13 @@ differentiable path. ``FEATURE_MAP`` lists every feature name.
 import importlib.metadata as _metadata
 
 from .batch_extractor import extract_features_from_folder
+from .dataset_stats import load_stats
 from .extract_all import FEATURE_MAP, extract_all_features, extract_segments
 from .extractors.cepstral_features import clear_feature_cache, get_cache_stats
 from .io.io import load_audio
 from .methods.stft import clear_stft_cache
 from .presets import list_presets, load_preset, preset_info
+from .provenance import config_hash, read_provenance
 from .registry import feature_info, list_features, register_feature, unregister_feature
 from .utils.aggregator import aggregate_features
 from .utils.batch_utils import feature_names, flatten_features
@@ -47,6 +49,9 @@ __all__ = [
     'get_cache_stats',
     'clear_stft_cache',
     'AFXFeatureExtractor',
+    'config_hash',
+    'read_provenance',
+    'load_stats',
 ]
 
 

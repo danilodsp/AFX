@@ -5,6 +5,7 @@ Exit status: 0 on success, 1 when no file was found or every file failed,
 2 for usage and configuration errors.
 """
 import argparse
+import json
 import os
 import sys
 import warnings
@@ -13,6 +14,7 @@ from afx_audio import __version__
 from afx_audio.batch_extractor import FORMATS, extract_features_from_folder
 from afx_audio.extract_all import FEATURE_MAP
 from afx_audio.presets import list_presets, load_preset
+from afx_audio.provenance import read_provenance
 from afx_audio.registry import feature_info, list_features
 from afx_audio.utils.config_loader import VALID_AGGREGATIONS, unknown_feature_error
 
@@ -46,7 +48,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument('--sample-rate', type=int, help='Resample audio to this rate (overrides the config)')
     parser.add_argument('--jobs', '-j', type=int, default=1,
                         help='Number of parallel worker processes (0 = all cores, default 1 = serial)')
-    parser.add_argument('--quiet', '-q', action='store_true', help='Suppress per-file progress output')
+    parser.add_argument('--quiet', '-q', action='store_true',
+                        help='Suppress per-file progress output and the closing config hash')
+    parser.add_argument('--stats', action='store_true',
+                        help='Also write per-column dataset statistics to OUTPUT.stats.json')
+    parser.add_argument('--no-hash', action='store_true',
+                        help='Do not record sha256 hashes of the audio files in the provenance record')
+    parser.add_argument('--provenance', metavar='FILE',
+                        help='Print the provenance record of an output written by afx and exit')
     parser.add_argument('--list-features', action='store_true',
                         help='Print the available features with their group and units and exit')
     parser.add_argument('--describe', metavar='FEATURE',
@@ -79,6 +88,13 @@ def _run(args, parser) -> int:
     if args.list_presets:
         print('\n'.join(list_presets()))
         return 0
+    if args.provenance:
+        try:
+            record = read_provenance(args.provenance)
+        except (ValueError, OSError, ImportError) as e:
+            parser.exit(2, f'afx: error: {e}\n')
+        print(json.dumps(record, indent=2))
+        return 0
     if args.input_folder is None:
         parser.error('input_folder is required')
     if not os.path.isdir(args.input_folder):
@@ -106,6 +122,8 @@ def _run(args, parser) -> int:
                 n_jobs=args.jobs,
                 sample_rate=args.sample_rate,
                 verbose=not args.quiet,
+                hash_files=not args.no_hash,
+                dataset_stats=args.stats,
             )
         except (ValueError, OSError, ImportError) as e:
             parser.exit(2, f'afx: error: {e}\n')
@@ -117,6 +135,8 @@ def _run(args, parser) -> int:
     if n_ok == 0:
         print('afx: no features were extracted', file=sys.stderr)
         return 1
+    if not args.quiet:
+        print(f"config hash {read_provenance(args.output)['config_hash']}")
     return 0
 
 

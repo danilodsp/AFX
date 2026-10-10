@@ -10,9 +10,12 @@ from collections.abc import Sequence
 from typing import Any
 
 import numpy as np
+import soundfile as sf
 
+from afx_audio.dataset_stats import STATS_SUFFIX, DatasetStats, write_stats
 from afx_audio.extract_all import FEATURE_MAP, extract_all_features
 from afx_audio.io.io import load_audio
+from afx_audio.provenance import PROVENANCE_KEY, build_provenance, canonical_json, file_sha256, write_sidecar
 from afx_audio.registry import custom_features, restore_custom_features
 from afx_audio.utils.batch_utils import flatten_features
 from afx_audio.utils.config_loader import load_config, unknown_feature_error, validate_config
@@ -89,35 +92,54 @@ def _write_csv(path: str, results: dict[str, Any]) -> None:
             writer.writerow([key, *(repr(row[c]) if c in row else '' for c in columns)])
 
 
-def _write_parquet(path: str, results: dict[str, Any]) -> None:
+def _write_parquet(path: str, results: dict[str, Any], provenance: dict[str, Any]) -> None:
     import pandas as pd
+    import pyarrow as pa
+    import pyarrow.parquet as pq
 
     keys, columns, rows = _table(results)
     df = pd.DataFrame(rows, index=pd.Index(keys, name='file'), columns=columns)
-    df.to_parquet(path)
+    table = pa.Table.from_pandas(df)
+    metadata = {**(table.schema.metadata or {}), PROVENANCE_KEY.encode(): canonical_json(provenance).encode()}
+    pq.write_table(table.replace_schema_metadata(metadata), path)
+
+
+def _dataset_stats(results: dict[str, Any]) -> dict[str, Any]:
+    """Statistics over the same flattened columns as the csv and parquet outputs, rows in key order."""
+    stats = DatasetStats()
+    for feats in results.values():
+        stats.update(*flatten_features(feats))
+    return stats.to_dict()
 
 
 def _process_one_file(
-    fpath: str, fkey: str, config: dict[str, Any], custom: dict | None = None
+    fpath: str, fkey: str, config: dict[str, Any], custom: dict | None = None, hash_file: bool = False
 ):
     """
     Worker: load one audio file and extract features.
 
     Module-level (picklable) so it can run in a worker process. Returns
-    (fkey, feats_as_lists, error_message) with exactly one of the last two
-    set to None.
+    (fkey, feats_as_lists, error_message, file_info) with exactly one of
+    feats and error set to None; file_info holds the native sample rate
+    and, with hash_file, the sha256 of the file bytes, for every file that
+    loaded.
     """
     if custom:
         restore_custom_features(custom)
+    info: dict[str, Any] = {}
     try:
         signal, sr = load_audio(fpath, sr=config['sample_rate'])
+        info['native_sr'] = sf.info(fpath).samplerate
+        if hash_file:
+            # Hashed in the worker so it overlaps with other files' extraction
+            info['sha256'] = file_sha256(fpath)
         feats = extract_all_features(signal, sr, config)
         if isinstance(feats, np.ndarray):
             # aggregation='stack' returns a single stacked vector
-            return fkey, {'stack': feats.tolist()}, None
-        return fkey, {k: np.asarray(v).tolist() for k, v in feats.items()}, None
+            return fkey, {'stack': feats.tolist()}, None, info
+        return fkey, {k: np.asarray(v).tolist() for k, v in feats.items()}, None, info
     except Exception as e:
-        return fkey, None, str(e)
+        return fkey, None, str(e), info
 
 
 def extract_features_from_folder(
@@ -133,6 +155,8 @@ def extract_features_from_folder(
     n_jobs: int | None = None,
     sample_rate: int | None = None,
     verbose: bool = True,
+    hash_files: bool = True,
+    dataset_stats: bool = False,
 ) -> dict[str, Any]:
     """
     Extract features from all audio files in a folder (recursively).
@@ -163,6 +187,12 @@ def extract_features_from_folder(
         sample_rate: Override the config's sample_rate (audio is resampled
             to this rate on load).
         verbose: Print per-file progress to stdout.
+        hash_files: Record the sha256 of every audio file in the
+            provenance record. Costs one extra read per file.
+        dataset_stats: Also write per-column count, mean, variance
+            (ddof=0), min, max and NaN count over the flattened feature
+            vectors to '<output_path>.stats.json'; see
+            ``afx_audio.load_stats``.
 
     Returns:
         The results dict, keyed by path relative to folder_path. Files that
@@ -178,6 +208,11 @@ def extract_features_from_folder(
           vector features are expanded to ``name_0, name_1, ...`` columns.
           'parquet' requires pandas and pyarrow (``pip install "afx-audio[parquet]"``)
           and is the recommended format for dataset-scale extraction.
+        - Every output records how it was made (afx-audio, numpy and scipy
+          versions, the validated config and its hash, sample rate and
+          resampling, file hashes): in the parquet schema metadata under
+          the key 'afx', otherwise in '<output_path>.provenance.json'.
+          Read it with ``afx_audio.read_provenance``.
     """
     if isinstance(config_path, dict):
         config = validate_config(copy.deepcopy(config_path))
@@ -215,6 +250,7 @@ def extract_features_from_folder(
 
     results: dict[str, Any] = {}
     errors: dict[str, str] = {}
+    file_info: dict[str, dict[str, Any]] = {}
     total = len(all_files)
 
     # Key by path relative to the root folder so same-named files in
@@ -235,12 +271,13 @@ def extract_features_from_folder(
         custom = custom_features()
         with concurrent.futures.ProcessPoolExecutor(max_workers=n_jobs) as executor:
             futures = {
-                executor.submit(_process_one_file, fpath, fkey, config, custom): fkey
+                executor.submit(_process_one_file, fpath, fkey, config, custom, hash_files): fkey
                 for fpath, fkey in zip(all_files, keys, strict=False)
             }
             done = 0
             for future in concurrent.futures.as_completed(futures):
-                fkey, feats, err = future.result()
+                fkey, feats, err, info = future.result()
+                file_info[fkey] = info
                 done += 1
                 if verbose:
                     print(f'[{done}/{total}] Processed {fkey}')
@@ -255,11 +292,13 @@ def extract_features_from_folder(
         for idx, (fpath, fkey) in enumerate(zip(all_files, keys, strict=False), 1):
             if verbose:
                 print(f'[{idx}/{total}] Processing {fkey}')
-            fkey, feats, err = _process_one_file(fpath, fkey, config)
+            fkey, feats, err, info = _process_one_file(fpath, fkey, config, hash_file=hash_files)
+            file_info[fkey] = info
             if err is not None:
                 errors[fkey] = err
             else:
                 results[fkey] = feats
+    file_info = {k: file_info[k] for k in keys if file_info.get(k)}
 
     if errors:
         errors_path = f'{output_path}.errors.json'
@@ -273,6 +312,17 @@ def extract_features_from_folder(
             stacklevel=2,
         )
 
+    provenance = build_provenance(
+        config,
+        output_format=save_format,
+        native_rates={k: v['native_sr'] for k, v in file_info.items()},
+        file_hashes={k: v['sha256'] for k, v in file_info.items()} if hash_files else None,
+        sample_rate_overridden=sample_rate is not None,
+        n_files=total,
+        n_errors=len(errors),
+        custom_features=sorted(name for name in custom_features() if name in config['features']),
+    )
+
     if save_format == 'npy':
         # A file object, so numpy does not append .npy to other extensions
         with open(output_path, 'wb') as f:
@@ -283,7 +333,12 @@ def extract_features_from_folder(
     elif save_format == 'csv':
         _write_csv(output_path, results)
     else:
-        _write_parquet(output_path, results)
+        _write_parquet(output_path, results, provenance)
+    if save_format != 'parquet':
+        write_sidecar(output_path, provenance)
+    if dataset_stats:
+        write_stats(f'{output_path}{STATS_SUFFIX}', _dataset_stats(results),
+                    afx_version=provenance['afx_version'], config_hash=provenance['config_hash'])
 
     out = dict(results)
     if errors:
