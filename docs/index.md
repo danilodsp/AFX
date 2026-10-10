@@ -1,8 +1,9 @@
 # AFX
 
 AFX turns audio clips into fixed-length feature vectors for machine
-learning. It implements 45 time-domain, autocorrelation, spectral,
-spectrogram, cepstral, harmonic and linear-prediction features with NumPy and SciPy, selects
+learning. It implements 47 time-domain, autocorrelation, spectral,
+spectrogram, cepstral, harmonic and linear-prediction features and the
+eGeMAPS v02 parameter set with NumPy and SciPy, selects
 and parameterizes them from a JSON config, and aggregates the per-frame
 values into one vector per clip. The same config drives a scikit-learn
 transformer, a parallel batch extractor with a CLI, and (for 20 features)
@@ -23,7 +24,7 @@ The import name is `afx_audio` (`import afx_audio as afx`). Extras: `sklearn`, `
 ```python
 import afx_audio as afx
 
-config = afx.load_preset('speech')
+config = afx.load_preset('speech@1')
 signal, sr = afx.load_audio('clip.wav', sr=config['sample_rate'])
 features = afx.extract_all_features(signal, sr, config)
 names, vector = afx.flatten_features(features)
@@ -50,11 +51,15 @@ afx dataset/ --preset speech --output features.parquet --jobs 8
 ```
 
 writes one row per file, keyed by the path relative to `dataset/`. Files
-that fail to load are listed in `features.parquet.errors.json`.
+that fail to load are listed in `features.parquet.errors.json`, and the
+Parquet metadata records the config hash, preset id, library versions and
+input file hashes ([Reproducibility](reproducibility.md)).
 
 ## Where to go next
 
-[Configuration](configuration.md) covers framing, aggregation and the
-config schema; [Features](features.md) lists every feature with its units
-and parameters; [librosa equivalence](librosa.md) lists which features
-reproduce librosa exactly and where AFX differs.
+[Configuration](configuration.md) covers framing, aggregation, coverage,
+presets and the config schema; [Features](features.md) lists every feature
+with its units, parameters and undefined cases; [eGeMAPS](egemaps.md)
+compares the parameter set with openSMILE; [librosa equivalence](librosa.md)
+lists which features reproduce librosa exactly and where AFX differs;
+[Notebooks](notebooks.md) is the tutorial.

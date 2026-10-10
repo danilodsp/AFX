@@ -1,37 +1,53 @@
 # AFX
 
-Audio feature extraction for machine learning. 45 time-domain, autocorrelation, spectral, cepstral, harmonic and linear-prediction features computed with NumPy and SciPy, selected from a JSON config and aggregated into one vector per clip, with a scikit-learn transformer, a differentiable PyTorch path and a parallel batch CLI on top.
+Audio feature extraction for machine learning. AFX computes 47 features (time-domain, autocorrelation, spectral, spectrogram, cepstral, harmonic, linear prediction, and the eGeMAPS v02 parameter set) with NumPy and SciPy, selects them from a validated JSON config, and aggregates the frames into one vector per clip. The same config drives a scikit-learn transformer, a differentiable PyTorch module and a parallel batch CLI whose outputs record how they were made.
 
 [![Tests](https://github.com/danilodsp/AFX/actions/workflows/test.yml/badge.svg)](https://github.com/danilodsp/AFX/actions/workflows/test.yml)
+[![codecov](https://codecov.io/gh/danilodsp/AFX/branch/main/graph/badge.svg)](https://codecov.io/gh/danilodsp/AFX)
+[![PyPI](https://img.shields.io/pypi/v/afx-audio)](https://pypi.org/project/afx-audio/)
 ![Python](https://img.shields.io/badge/python-3.10%20to%203.14-blue)
-[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](https://github.com/danilodsp/AFX/blob/main/LICENSE)
 
-Documentation: [danilodsp.github.io/AFX](https://danilodsp.github.io/AFX/), built from [docs/](https://github.com/danilodsp/AFX/tree/main/docs/).
+Documentation: [danilopena.com/AFX](https://danilopena.com/AFX/)
 
 ```python
 import afx_audio as afx
 
-config = afx.load_preset('speech')                       # or afx.load_config('my_config.json')
+config = afx.load_preset('speech@1')                     # or afx.load_config('my_config.json')
 signal, sr = afx.load_audio('clip.wav', sr=config['sample_rate'])
 features = afx.extract_all_features(signal, sr, config)  # {'mfcc_mean': (20,), 'mfcc_std': (20,), ...}
 names, vector = afx.flatten_features(features)           # column names and one float vector
+
+afx.egemaps(signal, sr)                                  # the 88 eGeMAPS v02 functionals, by name
 ```
 
 ## Install
 
 ```bash
 pip install afx-audio
+pip install "afx-audio[all]"     # + scikit-learn, torch, pandas/pyarrow, matplotlib
 ```
 
-The distribution is `afx-audio` and the import name is `afx_audio`; the examples use `import afx_audio as afx`. The core install needs only NumPy, SciPy and soundfile. Extras: `sklearn` for `AFXFeatureExtractor` and the selectors, `torch` for the PyTorch path, `parquet` (pandas and pyarrow) for Parquet output, `plot` for `afx.utils.visualization`, `all` for those four, `docs`, `notebooks`, and `dev` for everything plus pytest and ruff. From a checkout: `pip install -e ".[dev]"`.
+The import name is `afx_audio`; the examples use `import afx_audio as afx`. The core install needs NumPy, SciPy and soundfile only. Extras: `sklearn` for `AFXFeatureExtractor` and the selectors, `torch` for the PyTorch path, `parquet` (pandas and pyarrow) for Parquet output, `plot` for `afx_audio.utils.visualization`, `all` for those four, `notebooks`, `docs`, and `dev` for everything plus the test and lint tools.
 
 ## Why AFX
 
-librosa, torchaudio and openSMILE each cover part of this space. AFX is for the case where you want a fixed-length feature vector per clip, chosen from a config that fails fast on typos, with the same numbers on the NumPy, PyTorch and scikit-learn paths and no compiled dependencies beyond NumPy and SciPy. Fourteen features reproduce a librosa function to float32 precision or better (`tests/test_librosa_parity.py`, listed in [docs/librosa.md](https://github.com/danilodsp/AFX/blob/main/docs/librosa.md)).
+librosa computes frame-level features; openSMILE computes standard parameter sets under a research-only licence; TSFEL covers generic time series. AFX sits between them for audio ML work:
+
+| Need | AFX |
+|---|---|
+| One vector per clip from a config | JSON config, validated before any audio is read, with "did you mean" suggestions for typos |
+| Standard voice features without licence restrictions | eGeMAPS v02 under MIT, agreement with openSMILE published per functional ([docs/egemaps.md](https://danilopena.com/AFX/egemaps/)) |
+| Numbers you can check | 14 features equal librosa to float32 precision or better, 20 torch features equal the NumPy path within rtol 1e-9 in float64, all in the test suite |
+| Results you can reproduce and cite | versioned presets (`speech@1`) frozen by hash, and every batch output records config hash, library versions and input file hashes |
+| Knowing what a statistic is based on | `"coverage": true` adds the fraction of valid frames next to every feature; `feature_info(name)['undefined']` says when a frame is NaN |
+| Pipelines | scikit-learn transformer on file paths or arrays, differentiable torch module, batch CLI to npy/json/csv/parquet |
+
+The core has no compiled dependencies beyond NumPy, SciPy and soundfile.
 
 ## Features
 
-Every feature is a function `extract_<name>(signal, sr, **params)` returning `{name: ndarray}`, registered in `afx.FEATURE_MAP`. Per-frame shapes are `(n_frames,)` or `(n_dims, n_frames)`. `afx.feature_info(name)` gives a feature's definition, units and parameters with defaults; [docs/features.md](https://github.com/danilodsp/AFX/blob/main/docs/features.md) lists them all. `afx.register_feature(name, func)` adds your own extractor to configs and every front end.
+Every feature is a function `extract_<name>(signal, sr, *, **params)` returning `{name: ndarray}`, registered in `afx.FEATURE_MAP`. Per-frame shapes are `(n_frames,)` or `(n_dims, n_frames)`, always float64. `afx.feature_info(name)` gives a feature's definition, units, parameters with defaults, when it is undefined, and its torch counterpart; [the feature reference](https://danilopena.com/AFX/features/) lists them all. `afx.register_feature(name, func)` adds your own extractor to configs and every front end.
 
 | Group | Features |
 |-------|----------|
@@ -42,8 +58,9 @@ Every feature is a function `extract_<name>(signal, sr, **params)` returning `{n
 | Cepstral | `mfcc`, `mfcc_delta`, `mfcc_delta_delta`, `gfcc` |
 | Harmonic | `pitch` (YIN), `hnr`, `thd` |
 | Linear prediction | `lpc`, `formants` |
+| Parameter set | `egemaps` (88 functionals per clip), `egemaps_lld` (25 descriptors per 10 ms frame) |
 
-Time-domain and autocorrelation features take `frame_size`, `hop_length` and `center` for frame-wise output, or analyze the whole clip when the sizes are omitted. Spectral and cepstral features use an STFT with a periodic Hann window, `n_fft = frame_size`, and optional librosa-style `center` padding. With `return_metadata=True` every extractor also returns the time of each frame's center, so features with the same framing share one time axis.
+Framed features take `frame_size`, `hop_length` and `center` (default True, as in librosa), so features with the same framing share frame count and frame times; time-domain features analyze the whole clip when the sizes are omitted. Spectral features use an STFT with a periodic Hann window and `n_fft = frame_size`. With `return_metadata=True` every extractor also returns the time of each frame's center.
 
 ## Config
 
@@ -52,34 +69,39 @@ Time-domain and autocorrelation features take `frame_size`, `hop_length` and `ce
   "sample_rate": 16000,
   "features": {
     "mfcc": {"n_mfcc": 20, "frame_size": 400, "hop_length": 160},
-    "pitch": {"frame_size": 400, "hop_length": 160},
-    "rms_energy": {}
+    "pitch": {"frame_size": 400, "hop_length": 160, "fmax": 600},
+    "rms_energy": {"frame_size": 400, "hop_length": 160}
   },
-  "aggregation": "summary"
+  "aggregation": "summary",
+  "coverage": true
 }
 ```
 
-`aggregation` is `mean`, `std`, `summary` (mean and std), `advanced_summary` (plus skewness and kurtosis), `skew`, `kurtosis`, `sliding_window` or `stack`. Frames where a feature is undefined (HNR on silence) are NaN and skipped by the statistics. `afx.validate_config` rejects unknown features, unknown parameters and non-positive sizes before any audio is read. Bundled presets: `speech`, `bioacoustics`, `music`, `machinery` (`afx.list_presets()`). See [docs/configuration.md](https://github.com/danilodsp/AFX/blob/main/docs/configuration.md) for framing, aggregation and normalization details.
+`aggregation` is `mean`, `std`, `summary` (mean and std), `advanced_summary` (plus skewness and kurtosis), `skew`, `kurtosis`, `sliding_window` or `stack`. Frames where a feature is undefined (pitch on unvoiced frames, spectral entropy on silence) are NaN and skipped by the statistics, and `coverage` adds `<feature>_valid_frac`. `afx.validate_config` rejects unknown features, unknown parameters and non-positive sizes before any audio is read.
+
+Bundled presets: `speech`, `bioacoustics`, `music`, `machinery` and `egemaps` (`afx.list_presets(versions=True)`). A preset id such as `speech@1` names a frozen file that spells out every parameter; cite it with the package version and the config hash from the output's provenance record. See [Configuration](https://danilopena.com/AFX/configuration/) for framing, aggregation, normalization and presets.
 
 ## scikit-learn
 
 ```python
 from afx_audio.sklearn import AFXFeatureExtractor
+from sklearn.impute import SimpleImputer
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.svm import SVC
 
 pipe = make_pipeline(
-    AFXFeatureExtractor(features=['mfcc', 'spectral_centroid', 'zcr'],
-                        sample_rate=16000, aggregation='summary', n_jobs=-1),
+    AFXFeatureExtractor(config='speech@1', n_jobs=-1),
+    SimpleImputer(),
     StandardScaler(),
     SVC(),
 )
 pipe.fit(train_paths, y_train)       # file paths or 1-D signals
-pipe[0].get_feature_names_out()      # ['mfcc_mean_0', ..., 'zcr_std']
+pipe[0].get_feature_names_out()      # ['mfcc_mean_0', ..., 'spectral_contrast_std_6']
+pipe[0].provenance_                  # config hash, versions, preset id
 ```
 
-Features that can be undefined for a whole clip (HNR of silence, formants of noise) come out as NaN; put a `SimpleImputer` before the scaler when using them. `examples/classify_folders.py` runs a preset through such a pipeline with cross-validation on a folder per class.
+Features that can be undefined for a whole clip (pitch of noise, formants of silence) come out as NaN, hence the imputer. `examples/classify_folders.py` runs a preset through such a pipeline with cross-validation on a folder per class.
 
 ## PyTorch
 
@@ -91,39 +113,49 @@ frontend = AFXFeatureModule(features={'mfcc': {'n_mfcc': 13}, 'spectral_centroid
                             sample_rate=16000, aggregation='mean_std', output='vector')
 ```
 
-Twenty features (mel spectrogram, MFCC and deltas, GFCC, chroma_stft, the twelve spectral descriptors, zcr and RMS) are implemented in torch with the same conventions as the NumPy path, tested against it to 1e-6 in float64, batched, and differentiable with respect to the waveform except through the counting in `zcr` and the bin selection in `spectral_rolloff`. `afx.torch.supported_features()` lists them. `import afx_audio as afx` does not import torch.
+Twenty features (mel spectrogram, MFCC and deltas, GFCC, chroma_stft, the twelve spectral descriptors, zcr and RMS) have torch implementations with the NumPy conventions, batched and differentiable with respect to the waveform except through the counting in `zcr` and the bin selection in `spectral_rolloff`. `afx.feature_info(name)['torch']` gives the tolerance each one is tested to. `import afx_audio` does not import torch.
 
 ## Batch extraction and CLI
 
 ```bash
-afx dataset/ --preset speech --output features.parquet --jobs 8
+afx dataset/ --preset speech@1 --output features.parquet --jobs 8 --stats
 afx dataset/ --config my_config.json --features mfcc,zcr --aggregation summary --output features.csv
+afx --provenance features.parquet
 afx --list-features
 afx --describe spectral_rolloff
 ```
 
-or `afx.extract_features_from_folder(folder, config, output, n_jobs=8)`. The output format follows the extension (`npy`, `json`, `csv`, `parquet`), rows are keyed by the path relative to the folder, in CSV and Parquet vector features expand to `name_0, name_1, ...` columns (JSON and npy keep one list per feature), and files that fail are listed in `<output>.errors.json` instead of aborting the run. Parallel output is identical to serial output. Worker processes use the platform's default start method, so on Windows, macOS and Python 3.14+ a script that calls it with `n_jobs > 1` needs an `if __name__ == '__main__':` guard.
+or `afx.extract_features_from_folder(folder, config, output, n_jobs=8)`. The output format follows the extension (`npy`, `json`, `csv`, `parquet`); rows are keyed by the path relative to the folder; in CSV and Parquet vector features expand to `name_0, name_1, ...` columns; files that fail are listed in `<output>.errors.json`. Parallel output equals serial output.
+
+Every output records its provenance (config and config hash, preset id, AFX, NumPy, SciPy and Python versions, sample rate and resampling, sha256 of each input file): in the Parquet schema metadata, otherwise in `<output>.provenance.json`. `--stats` (`dataset_stats=True`) also writes per-column mean, variance, min, max and NaN counts in one streaming pass, and `afx_audio.sklearn.scaler_from_stats` turns them into a fitted `StandardScaler`. See [Reproducibility](https://danilopena.com/AFX/reproducibility/).
+
+Workers never fork (forkserver on Linux, spawn on Windows and macOS), so a script that calls `extract_features_from_folder` with `n_jobs > 1` needs an `if __name__ == '__main__':` guard, and custom features must be importable from a module.
+
+## Notebooks
+
+[notebooks/](https://github.com/danilodsp/AFX/tree/main/notebooks) has a numbered tutorial from `01_quickstart` to `07_domain_presets`, each runnable on synthetic audio without a dataset, and `benchmark_validation`, which compares AFX with librosa, torchaudio, openSMILE, spafe and Praat.
 
 ## Performance
 
-`python benchmarks/bench_features.py` times every feature in a config. With the bundled `config.json`, `extract_all_features` on 10 s of audio at 22.05 kHz takes about 0.5 s on one CPU core for everything except `sample_entropy`, which alone takes another 0.4 to 0.8 s (template matching is quadratic in the frame length). Extractors with the same STFT parameters share one memoized STFT.
+On a 2-core 2.1 GHz Xeon VM, `extract_all_features` with the bundled `config.json` (39 features) takes 0.57 s for 10 s of audio at 22.05 kHz, of which `sample_entropy` is 0.27 s. Spectral features run at librosa's speed (8 to 12 ms each), and the torch module computes its 20 features for a batch of 16 clips at 0.14 s per clip. `python benchmarks/bench_features.py --librosa --torch-batch 16 --markdown` reproduces the [benchmarks page](https://danilopena.com/AFX/benchmarks/) on your machine.
+
+## Citing
+
+If you use AFX in research, cite it with the metadata in [CITATION.cff](https://github.com/danilodsp/AFX/blob/main/CITATION.cff) (GitHub's "Cite this repository" button), and give the preset id and config hash of the features you used. For eGeMAPS also cite Eyben et al. (2016).
 
 ## Development
 
 ```bash
 pip install -e ".[dev]"
-pytest
-ruff check AFX tests
-mypy AFX
+pre-commit install
+pytest                  # pytest -m "not slow" for a quick run
+ruff check .
+mypy afx_audio
 mkdocs serve
 ```
 
-`python docs/gen_features.py` regenerates the feature reference after an extractor changes; a test fails while it is stale.
-
-## Acknowledgment
-
-The audio examples used in the notebooks are derived from the LibriSpeech corpus ([Panayotov et al., 2015](https://www.danielpovey.com/files/2015_icassp_librispeech.pdf)), released under a public domain-compatible license ([download](https://www.openslr.org/12)). No audio files are committed to this repository.
+`python docs/gen_features.py` regenerates the feature reference after an extractor changes; a test fails while it is stale. See [CONTRIBUTING.md](https://github.com/danilodsp/AFX/blob/main/CONTRIBUTING.md).
 
 ## License
 
-MIT, see [LICENSE](https://github.com/danilodsp/AFX/blob/main/LICENSE).
+MIT, see [LICENSE](https://github.com/danilodsp/AFX/blob/main/LICENSE). No audio is committed to this repository; the notebooks synthesize clips or read datasets you download yourself.
