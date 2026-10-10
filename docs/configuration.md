@@ -30,9 +30,12 @@ the rate as an argument and only warns when it differs from the config's.
 
 ## Framing
 
-Every framed feature takes `center`, and it defaults to `True` for all
-of them (librosa's convention): the signal is first zero-padded by
-`frame_size // 2` on each side, so frame i is centred on sample
+Every framed feature except `onset_strength` takes `center`, and it
+defaults to `True` for all of them (librosa's convention).
+`onset_strength` always uses centered frames, the default of
+`librosa.onset.onset_strength`, and rejects `center` as an unknown
+parameter. Centering zero-pads the signal by `frame_size // 2` on each
+side, so frame i is centred on sample
 `i * hop_length`. Features with the same `frame_size` and `hop_length`
 then have the same number of frames and the same frame times
 (`spectral_flux` has one value fewer, stamped with the later frame of
