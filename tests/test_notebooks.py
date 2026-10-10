@@ -54,6 +54,7 @@ def test_stored_without_outputs(path):
         assert 'id' in cell
         if cell.cell_type == 'code':
             assert not cell.outputs and cell.execution_count is None, f'{path.name}: clear outputs before committing'
+            assert 'execution' not in cell.metadata, f'{path.name}: run nbstripout before committing'
 
 
 def _extras(names, table):

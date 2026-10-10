@@ -17,6 +17,8 @@ repos:
     rev: 0.9.1
     hooks:
       - id: nbstripout
+        # Without --keep-id every run renumbers cell ids to 0, 1, 2, ...
+        args: [--keep-id]
 
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v2.4.0
