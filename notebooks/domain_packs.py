@@ -256,7 +256,7 @@ def _balance(buckets: dict[str, list[str]], n_per_class: int | None,
 
 DOMAINS: dict[str, DomainSpec] = {
     'speech': DomainSpec(
-        name='speech', preset='speech', title='Speech & Paralinguistics',
+        name='speech', preset='speech@1', title='Speech & Paralinguistics',
         task='Speech-emotion classification (RAVDESS)',
         dataset_name='RAVDESS (speech audio, 24 actors)',
         dataset_url=_RAVDESS_URL, prepare=_prepare_ravdess,
@@ -264,14 +264,14 @@ DOMAINS: dict[str, DomainSpec] = {
         default_classes=['neutral', 'happy', 'sad', 'angry'],
         approx_download_mb=210),
     'bioacoustics': DomainSpec(
-        name='bioacoustics', preset='bioacoustics', title='Bioacoustics',
+        name='bioacoustics', preset='bioacoustics@1', title='Bioacoustics',
         task='Animal-sound classification (ESC-50 animal subset)',
         dataset_name='ESC-50 (environmental sound, animal categories)',
         dataset_url=_ESC50_URL, prepare=_prepare_esc50,
         collect=_collect_esc50, default_classes=_ESC50_ANIMALS,
         approx_download_mb=600),
     'music': DomainSpec(
-        name='music', preset='music', title='Music & MIR',
+        name='music', preset='music@1', title='Music & MIR',
         task='Music-genre classification (GTZAN)',
         dataset_name='GTZAN (10 genres)',
         dataset_url=_GTZAN_URL, prepare=_prepare_gtzan,
@@ -279,7 +279,7 @@ DOMAINS: dict[str, DomainSpec] = {
         default_classes=['classical', 'hiphop', 'jazz', 'metal', 'pop'],
         approx_download_mb=1200),
     'machinery': DomainSpec(
-        name='machinery', preset='machinery',
+        name='machinery', preset='machinery@1',
         title='Machinery & Condition Monitoring',
         task='Normal vs. anomaly detection (DCASE2020 Task 2, pump)',
         dataset_name='DCASE2020 Task 2 dev set (pump)',

@@ -27,14 +27,16 @@ BUDGET = {
     '05_sklearn_and_selection.ipynb': 180,
     '06_torch.ipynb': 180,
     '07_domain_presets.ipynb': 120,
+    '08_egemaps.ipynb': 240,
 }
 REQUIRES = {
     '02_frames_and_aggregation.ipynb': ('matplotlib',),
     '03_long_recordings_and_custom_features.ipynb': ('matplotlib',),
-    '04_batch_and_parallel.ipynb': ('pandas', 'pyarrow'),
+    '04_batch_and_parallel.ipynb': ('pandas', 'pyarrow', 'sklearn'),
     '05_sklearn_and_selection.ipynb': ('sklearn', 'matplotlib'),
     '06_torch.ipynb': ('torch', 'matplotlib'),
     '07_domain_presets.ipynb': ('sklearn', 'matplotlib'),
+    '08_egemaps.ipynb': ('sklearn', 'matplotlib', 'pandas'),
 }
 DATA_ENV_VARS = ('ESC_50_dataset', 'UrbanSound8K_dataset', 'dataset_nonspeech7k', 'DATASETS')
 
