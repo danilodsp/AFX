@@ -31,3 +31,13 @@ def test_framing_docs_name_every_feature_without_center():
     for name in uncentered:
         assert f'except `{name}`' in framing
         assert f'`{name}` is always centered' in readme
+
+
+def test_baselines_prose_quotes_the_table_std_range():
+    import re
+
+    text = _read('docs', 'baselines.md')
+    table = text.split('<!-- results start -->')[1].split('<!-- results end -->')[0]
+    stds = [float(s) for s in re.findall(r'± (\d\.\d+)', table)]
+    prose = ' '.join(text.split('## Reading the numbers')[1].split())
+    assert f'fold standard deviation is {min(stds):.3f} to {max(stds):.3f}' in prose
