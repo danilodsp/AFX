@@ -6,27 +6,35 @@ signal, ``extract_features_from_folder`` (or the ``afx`` CLI) for a dataset,
 ``AFXFeatureExtractor`` for scikit-learn pipelines and ``AFX.torch`` for the
 differentiable path. ``FEATURE_MAP`` lists every feature name.
 """
-from importlib.metadata import PackageNotFoundError, version
+import importlib.metadata as _metadata
 
-from .extract_all import extract_all_features, FEATURE_MAP
+from .batch_extractor import extract_features_from_folder
+from .extract_all import FEATURE_MAP, extract_all_features, extract_segments
 from .extractors.cepstral_features import clear_feature_cache, get_cache_stats
 from .io.io import load_audio
-from .utils.config_loader import load_config
-from .utils.aggregator import aggregate_features
-from .batch_extractor import extract_features_from_folder
 from .methods.stft import clear_stft_cache
-from .presets import load_preset, list_presets, preset_info
-from .utils.config_loader import validate_config
+from .presets import list_presets, load_preset, preset_info
+from .registry import feature_info, list_features, register_feature, unregister_feature
+from .utils.aggregator import aggregate_features
+from .utils.batch_utils import feature_names, flatten_features
+from .utils.config_loader import load_config, validate_config
 
 try:
-    __version__ = version('AFX')
-except PackageNotFoundError:  # running from a source checkout without install
+    __version__ = _metadata.version('afx-audio')
+except _metadata.PackageNotFoundError:  # running from a source checkout without install
     __version__ = '0.0.0'
 
 __all__ = [
     '__version__',
     'extract_all_features',
+    'extract_segments',
     'FEATURE_MAP',
+    'list_features',
+    'feature_info',
+    'register_feature',
+    'unregister_feature',
+    'feature_names',
+    'flatten_features',
     'extract_features_from_folder',
     'load_audio',
     'load_config',

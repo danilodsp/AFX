@@ -2,9 +2,10 @@
 Unit tests for modular signal processing methods.
 """
 import numpy as np
-from AFX.methods.stft import stft, magnitude_spectrogram, power_spectrogram
-from AFX.methods.mel import mel_filterbank, apply_mel_filterbank, log_mel_spectrogram
-from AFX.methods.dct import extract_mfcc_coefficients, dct_ii
+
+from AFX.methods.dct import dct_ii, extract_mfcc_coefficients
+from AFX.methods.mel import apply_mel_filterbank, log_mel_spectrogram, mel_filterbank
+from AFX.methods.stft import magnitude_spectrogram, power_spectrogram, stft
 
 
 def test_stft_basic():

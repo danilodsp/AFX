@@ -187,3 +187,6 @@ cython_debug/
 /datasets/
 datasets/
 notebooks/datasets/
+
+# mkdocs output
+site/

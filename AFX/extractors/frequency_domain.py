@@ -1,15 +1,22 @@
 """
-Frequency-domain feature extractors for audio signals.
+Spectral shape descriptors computed from the STFT magnitude.
 
-All extractors are vectorized over a shared STFT (see AFX.methods.stft),
-so multiple features computed on the same signal with the same framing
-reuse a single STFT computation.
+With ``frame_size`` and ``hop_length`` set (the default) every extractor
+returns one value per STFT frame, shape (n_frames,), from the shared and
+memoized STFT in AFX.methods.stft (periodic Hann window, n_fft =
+frame_size, zero padding of frame_size // 2 on both sides when
+``center``). Centroid, bandwidth, rolloff, skewness, kurtosis, slope, crest,
+decrease, entropy and flatness also accept ``frame_size=None`` or ``hop_length=None`` to use one
+Hann-windowed FFT of the whole clip, shape (1,).
 """
-from typing import Dict, Optional
+
+from typing import Any
+
 import numpy as np
 
-from AFX.methods.stft import stft, magnitude_spectrogram
+from AFX.methods.stft import magnitude_spectrogram, stft
 from AFX.utils.frame_utils import frame_times
+from AFX.utils.validation import validate_signal
 
 __all__ = [
     'extract_spectral_centroid',
@@ -21,6 +28,9 @@ __all__ = [
     'extract_spectral_flux',
     'extract_spectral_skewness',
     'extract_spectral_slope',
+    'extract_spectral_kurtosis',
+    'extract_spectral_crest',
+    'extract_spectral_decrease',
 ]
 
 _EPS = 1e-10
@@ -29,8 +39,8 @@ _EPS = 1e-10
 def _spectrum(
     signal: np.ndarray,
     sr: int,
-    frame_size: Optional[int],
-    hop_length: Optional[int],
+    frame_size: int | None,
+    hop_length: int | None,
     center: bool,
 ):
     """
@@ -41,10 +51,9 @@ def _spectrum(
     the Hann-windowed full signal, shape (n_freq, 1).
     """
     if frame_size is None or hop_length is None:
+        signal = validate_signal(signal)
         n = len(signal)
-        if n == 0:
-            raise ValueError('empty signal')
-        windowed = signal * np.hanning(n)
+        windowed = signal * _periodic_hann(n)
         mag = np.abs(np.fft.rfft(windowed, n=n))[:, np.newaxis]
         freqs = np.fft.rfftfreq(n, d=1.0 / sr)
         return mag, freqs
@@ -55,6 +64,16 @@ def _spectrum(
     mag = magnitude_spectrogram(stft_matrix)
     freqs = np.fft.rfftfreq(frame_size, d=1.0 / sr)
     return mag, freqs
+
+
+def _periodic_hann(n):
+    return 0.5 - 0.5 * np.cos(2.0 * np.pi * np.arange(n) / n)
+
+
+def _power_to_db(x, amin=1e-10, top_db=80.0):
+    """librosa.power_to_db with ref=1: 10 log10(max(x, amin)), floored top_db below the array maximum."""
+    db = 10.0 * np.log10(np.maximum(x, amin))
+    return np.maximum(db, db.max() - top_db)
 
 
 def _maybe_metadata(result, key, values, sr, hop_length, frame_size,
@@ -72,30 +91,18 @@ def _maybe_metadata(result, key, values, sr, hop_length, frame_size,
 def extract_spectral_centroid(
     signal: np.ndarray,
     sr: int,
-    frame_size: Optional[int] = 2048,
-    hop_length: Optional[int] = 512,
+    *,
+    frame_size: int | None = 2048,
+    hop_length: int | None = 512,
     center: bool = False,
     return_metadata: bool = False,
-    **kwargs
-) -> Dict[str, np.ndarray]:
-    """
-    Compute the spectral centroid (magnitude-weighted mean frequency).
-
-    Args:
-        signal: Audio signal (1D np.ndarray)
-        sr: Sample rate
-        frame_size: Frame size for STFT (None = analyze whole signal)
-        hop_length: Hop length between frames (None = analyze whole signal)
-        center: If True, pad so frames are centered (librosa-style)
-        return_metadata: If True, include frame times in metadata
-    Returns:
-        Dict with 'spectral_centroid' key, np.ndarray shape (n_frames,)
-    """
+) -> dict[str, Any]:
+    """Magnitude-weighted mean frequency in Hz, as librosa.feature.spectral_centroid. 0 for a silent frame."""
     mag, freqs = _spectrum(signal, sr, frame_size, hop_length, center)
     msum = mag.sum(axis=0)
     safe = np.where(msum > 0, msum, 1.0)
     centroid = np.where(msum > 0, (freqs @ mag) / safe, 0.0)
-    result = {'spectral_centroid': centroid}
+    result: dict[str, Any] = {'spectral_centroid': centroid}
     return _maybe_metadata(result, 'spectral_centroid', centroid, sr,
                            hop_length, frame_size, center, return_metadata,
                            len(signal))
@@ -104,18 +111,13 @@ def extract_spectral_centroid(
 def extract_spectral_bandwidth(
     signal: np.ndarray,
     sr: int,
-    frame_size: Optional[int] = 2048,
-    hop_length: Optional[int] = 512,
+    *,
+    frame_size: int | None = 2048,
+    hop_length: int | None = 512,
     center: bool = False,
     return_metadata: bool = False,
-    **kwargs
-) -> Dict[str, np.ndarray]:
-    """
-    Compute the spectral bandwidth (magnitude-weighted std of frequency
-    around the spectral centroid).
-
-    Args/returns: see extract_spectral_centroid.
-    """
+) -> dict[str, Any]:
+    """Magnitude-weighted standard deviation of frequency around the centroid, in Hz (librosa, p=2)."""
     mag, freqs = _spectrum(signal, sr, frame_size, hop_length, center)
     msum = mag.sum(axis=0)
     safe = np.where(msum > 0, msum, 1.0)
@@ -124,7 +126,7 @@ def extract_spectral_bandwidth(
     bandwidth = np.where(
         msum > 0, np.sqrt((dev2 * mag).sum(axis=0) / safe), 0.0
     )
-    result = {'spectral_bandwidth': bandwidth}
+    result: dict[str, Any] = {'spectral_bandwidth': bandwidth}
     return _maybe_metadata(result, 'spectral_bandwidth', bandwidth, sr,
                            hop_length, frame_size, center, return_metadata,
                            len(signal))
@@ -133,45 +135,28 @@ def extract_spectral_bandwidth(
 def extract_spectral_rolloff(
     signal: np.ndarray,
     sr: int,
-    frame_size: Optional[int] = 2048,
-    hop_length: Optional[int] = 512,
+    *,
+    frame_size: int | None = 2048,
+    hop_length: int | None = 512,
     roll_percent: float = 0.85,
     center: bool = False,
+    power: float = 1.0,
     return_metadata: bool = False,
-    **kwargs
-) -> Dict[str, np.ndarray]:
+) -> dict[str, Any]:
     """
-    Compute the spectral rolloff: the frequency below which ``roll_percent``
-    of the total spectral energy is contained (linearly interpolated).
+    Spectral rolloff: the lowest bin frequency at which the cumulative sum
+    of |X|^power reaches ``roll_percent`` of the frame total.
 
-    Args/returns: see extract_spectral_centroid, plus roll_percent.
+    ``power=1`` sums magnitudes, as librosa.feature.spectral_rolloff does
+    (identical output for the same framing); ``power=2`` sums energy.
+    0 Hz for an all-zero frame.
     """
     mag, freqs = _spectrum(signal, sr, frame_size, hop_length, center)
-    power = mag ** 2
-    cum = np.cumsum(power, axis=0)
-    total = cum[-1, :]
-    n_frames = mag.shape[1]
-    rolloff = np.zeros(n_frames)
+    cum = np.cumsum(mag if power == 1 else mag ** power, axis=0)
+    reached = cum >= roll_percent * cum[-1:, :]
+    rolloff = freqs[np.argmax(reached, axis=0)]
 
-    nonzero = total > 0
-    if np.any(nonzero):
-        target = roll_percent * total
-        # First bin where cumulative energy >= target
-        idx = np.argmax(cum >= target[np.newaxis, :], axis=0)
-        cols = np.arange(n_frames)
-        # Linear interpolation between idx-1 and idx (where idx > 0)
-        prev_idx = np.maximum(idx - 1, 0)
-        e_before = cum[prev_idx, cols]
-        e_after = cum[idx, cols]
-        f_before = freqs[prev_idx]
-        f_after = freqs[idx]
-        denom = np.where(e_after > e_before, e_after - e_before, 1.0)
-        alpha = np.clip((target - e_before) / denom, 0.0, 1.0)
-        interp = f_before + alpha * (f_after - f_before)
-        rolloff = np.where(idx > 0, interp, freqs[idx])
-        rolloff = np.where(nonzero, rolloff, 0.0)
-
-    result = {'spectral_rolloff': rolloff}
+    result: dict[str, Any] = {'spectral_rolloff': rolloff}
     return _maybe_metadata(result, 'spectral_rolloff', rolloff, sr,
                            hop_length, frame_size, center, return_metadata,
                            len(signal))
@@ -180,13 +165,13 @@ def extract_spectral_rolloff(
 def extract_spectral_skewness(
     signal: np.ndarray,
     sr: int,
-    frame_size: Optional[int] = 2048,
-    hop_length: Optional[int] = 512,
+    *,
+    frame_size: int | None = 2048,
+    hop_length: int | None = 512,
     center: bool = False,
     return_metadata: bool = False,
-    **kwargs,
-) -> Dict[str, np.ndarray]:
-    """Compute the spectral skewness (third standardized spectral moment)."""
+) -> dict[str, Any]:
+    """Third standardized moment of frequency under the magnitude spectrum. 0 for a silent or single-bin frame."""
     mag, freqs = _spectrum(signal, sr, frame_size, hop_length, center)
     msum = mag.sum(axis=0)
     safe = np.where(msum > 0, msum, 1.0)
@@ -194,9 +179,10 @@ def extract_spectral_skewness(
     dev = freqs[:, np.newaxis] - centroid[np.newaxis, :]
     bandwidth = np.sqrt(((dev ** 2) * mag).sum(axis=0) / safe)
     safe_bw = np.where(bandwidth > 0, bandwidth, 1.0)
-    skewness = ((dev / safe_bw) ** 3 * mag).sum(axis=0) / safe
+    z = dev / safe_bw
+    skewness = (z * z * z * mag).sum(axis=0) / safe
     skewness = np.where((msum > 0) & (bandwidth > 0), skewness, 0.0)
-    result = {'spectral_skewness': skewness}
+    result: dict[str, Any] = {'spectral_skewness': skewness}
     return _maybe_metadata(result, 'spectral_skewness', skewness, sr,
                            hop_length, frame_size, center, return_metadata,
                            len(signal))
@@ -205,13 +191,13 @@ def extract_spectral_skewness(
 def extract_spectral_slope(
     signal: np.ndarray,
     sr: int,
-    frame_size: Optional[int] = 2048,
-    hop_length: Optional[int] = 512,
+    *,
+    frame_size: int | None = 2048,
+    hop_length: int | None = 512,
     center: bool = False,
     return_metadata: bool = False,
-    **kwargs,
-) -> Dict[str, np.ndarray]:
-    """Compute the spectral slope (linear regression of dB magnitude on Hz)."""
+) -> dict[str, Any]:
+    """Least-squares slope of 20 log10(|X| + 1e-10) against frequency, in dB per Hz."""
     mag, freqs = _spectrum(signal, sr, frame_size, hop_length, center)
     mag_db = 20.0 * np.log10(mag + _EPS)
     x = freqs - freqs.mean()
@@ -221,8 +207,98 @@ def extract_spectral_slope(
         slope = (x @ mag_db) / denom
     else:
         slope = np.zeros(mag.shape[1])
-    result = {'spectral_slope': slope}
+    result: dict[str, Any] = {'spectral_slope': slope}
     return _maybe_metadata(result, 'spectral_slope', slope, sr,
+                           hop_length, frame_size, center, return_metadata,
+                           len(signal))
+
+
+def extract_spectral_kurtosis(
+    signal: np.ndarray,
+    sr: int,
+    *,
+    frame_size: int | None = 2048,
+    hop_length: int | None = 512,
+    center: bool = False,
+    fisher: bool = True,
+    return_metadata: bool = False,
+) -> dict[str, Any]:
+    """
+    Fourth standardized moment of frequency under the magnitude spectrum, minus 3 when ``fisher``.
+
+    The kurtosis of the spectrum seen as a distribution over frequency
+    (Peeters, 2004, "A large set of audio features for sound
+    description"), not the time-domain spectral kurtosis used for fault
+    detection. 0 (or 3 without ``fisher``) is the value of a Gaussian
+    shape; NaN for a silent or single-bin frame.
+    """
+    mag, freqs = _spectrum(signal, sr, frame_size, hop_length, center)
+    msum = mag.sum(axis=0)
+    safe = np.where(msum > 0, msum, 1.0)
+    centroid = (freqs @ mag) / safe
+    dev2 = (freqs[:, np.newaxis] - centroid[np.newaxis, :]) ** 2
+    var = (dev2 * mag).sum(axis=0) / safe
+    defined = (msum > 0) & (var > 0)
+    with np.errstate(divide='ignore', invalid='ignore'):
+        kurt = np.where(defined, (dev2 * dev2 * mag).sum(axis=0) / safe / var ** 2, np.nan)
+    if fisher:
+        kurt = kurt - 3.0
+    result: dict[str, Any] = {'spectral_kurtosis': kurt}
+    return _maybe_metadata(result, 'spectral_kurtosis', kurt, sr,
+                           hop_length, frame_size, center, return_metadata,
+                           len(signal))
+
+
+def extract_spectral_crest(
+    signal: np.ndarray,
+    sr: int,
+    *,
+    frame_size: int | None = 2048,
+    hop_length: int | None = 512,
+    center: bool = False,
+    return_metadata: bool = False,
+) -> dict[str, Any]:
+    """
+    Largest over mean magnitude of the spectrum, per frame.
+
+    1 for a flat spectrum; a sinusoid gives about frame_size / 4 with the
+    Hann window (its energy spreads over three bins). 1 for a silent frame.
+    """
+    mag, _ = _spectrum(signal, sr, frame_size, hop_length, center)
+    mean = mag.mean(axis=0)
+    crest = np.divide(mag.max(axis=0), mean, out=np.ones_like(mean), where=mean > 0)
+    result: dict[str, Any] = {'spectral_crest': crest}
+    return _maybe_metadata(result, 'spectral_crest', crest, sr,
+                           hop_length, frame_size, center, return_metadata,
+                           len(signal))
+
+
+def extract_spectral_decrease(
+    signal: np.ndarray,
+    sr: int,
+    *,
+    frame_size: int | None = 2048,
+    hop_length: int | None = 512,
+    center: bool = False,
+    return_metadata: bool = False,
+) -> dict[str, Any]:
+    """
+    Spectral decrease (Peeters, 2004): sum_k (a_k - a_1) / (k - 1) / sum_k a_k over bins k = 2..K.
+
+    a_k is the magnitude of bin k, with a_1 the DC bin, as in the Timbre
+    Toolbox and Lerch's pyACA. Negative when the spectrum rises above its
+    first bin on average. 0 for a silent frame.
+    """
+    a, _ = _spectrum(signal, sr, frame_size, hop_length, center)
+    if len(a) < 2:
+        decrease = np.zeros(a.shape[1])
+    else:
+        k = np.arange(1, len(a))[:, np.newaxis]
+        num = ((a[1:] - a[:1]) / k).sum(axis=0)
+        den = a[1:].sum(axis=0)
+        decrease = np.divide(num, den, out=np.zeros_like(num), where=den > 0)
+    result: dict[str, Any] = {'spectral_decrease': decrease}
+    return _maybe_metadata(result, 'spectral_decrease', decrease, sr,
                            hop_length, frame_size, center, return_metadata,
                            len(signal))
 
@@ -230,21 +306,17 @@ def extract_spectral_slope(
 def extract_spectral_entropy(
     signal: np.ndarray,
     sr: int,
+    *,
     frame_size: int = 2048,
     hop_length: int = 512,
     center: bool = False,
     return_metadata: bool = False,
-    **kwargs
-) -> Dict[str, np.ndarray]:
+) -> dict[str, Any]:
     """
-    Compute the spectral entropy of an audio signal.
+    Shannon entropy in bits of the magnitude spectrum normalized to sum 1.
 
-    The magnitude spectrum of each frame is normalized to a probability
-    distribution p(f); entropy is H = -sum(p log2 p). Higher for noise-like
-    frames, lower for tonal frames.
-
-    Returns:
-        Dict with 'spectral_entropy' key, np.ndarray shape (n_frames,)
+    At most log2(frame_size // 2 + 1) for a flat spectrum, near 0 for a
+    single tone. 0 for a silent frame.
     """
     mag, _ = _spectrum(signal, sr, frame_size, hop_length, center)
     msum = mag.sum(axis=0)
@@ -252,7 +324,7 @@ def extract_spectral_entropy(
     ps = mag / safe
     entropy = -np.sum(ps * np.log2(ps + _EPS), axis=0)
     entropy = np.where(msum > _EPS, entropy, 0.0)
-    result = {'spectral_entropy': entropy}
+    result: dict[str, Any] = {'spectral_entropy': entropy}
     return _maybe_metadata(result, 'spectral_entropy', entropy, sr,
                            hop_length, frame_size, center, return_metadata,
                            len(signal))
@@ -261,26 +333,24 @@ def extract_spectral_entropy(
 def extract_spectral_flatness(
     signal: np.ndarray,
     sr: int,
+    *,
     frame_size: int = 2048,
     hop_length: int = 512,
     center: bool = False,
     return_metadata: bool = False,
-    **kwargs
-) -> Dict[str, np.ndarray]:
+) -> dict[str, Any]:
     """
-    Compute the spectral flatness of an audio signal: the ratio of the
-    geometric mean to the arithmetic mean of the power spectrum per frame.
-    Close to 1.0 for noise, close to 0.0 for tonal content.
+    Geometric over arithmetic mean of the power spectrum (Wiener entropy).
 
-    Returns:
-        Dict with 'spectral_flatness' key, np.ndarray shape (n_frames,)
+    Near 1 for white noise, near 0 for tones. Power is floored at 1e-10,
+    as librosa.feature.spectral_flatness does with amin=1e-10, so silent
+    frames give 1.
     """
     mag, _ = _spectrum(signal, sr, frame_size, hop_length, center)
-    power = np.maximum(mag ** 2, _EPS)
-    geometric = np.exp(np.mean(np.log(power), axis=0))
-    arithmetic = np.mean(power, axis=0)
-    flatness = np.where(arithmetic > _EPS, geometric / arithmetic, 0.0)
-    result = {'spectral_flatness': flatness}
+    # The floor keeps both means >= 1e-10, so a silent frame is flat (1.0)
+    power = np.maximum(mag.astype(np.float64) ** 2, _EPS)
+    flatness = np.exp(np.mean(np.log(power), axis=0)) / np.mean(power, axis=0)
+    result: dict[str, Any] = {'spectral_flatness': flatness}
     return _maybe_metadata(result, 'spectral_flatness', flatness, sr,
                            hop_length, frame_size, center, return_metadata,
                            len(signal))
@@ -289,6 +359,7 @@ def extract_spectral_flatness(
 def extract_spectral_contrast(
     signal: np.ndarray,
     sr: int,
+    *,
     frame_size: int = 2048,
     hop_length: int = 512,
     n_bands: int = 6,
@@ -296,17 +367,17 @@ def extract_spectral_contrast(
     quantile: float = 0.02,
     center: bool = True,
     return_metadata: bool = False,
-    **kwargs
-) -> Dict[str, np.ndarray]:
+) -> dict[str, Any]:
     """
-    Compute the spectral contrast of an audio signal.
+    Spectral contrast (Jiang et al., 2002), shape (n_bands + 1, n_frames).
 
-    For each of n_bands+1 octave-spaced sub-bands, contrast is the dB
-    difference between the mean of the top-quantile (peak) and
-    bottom-quantile (valley) magnitudes in each frame.
-
-    Returns:
-        Dict with 'spectral_contrast' key, np.ndarray (n_bands+1, n_frames)
+    The magnitude spectrum is split into octave bands starting at fmin
+    (the first band is 0..fmin); in each band and frame, peak and valley
+    are the means of the top and bottom ``quantile`` of magnitudes, and
+    contrast is power_to_db(peak) - power_to_db(valley) with amin 1e-10 and
+    top_db 80. This follows librosa.feature.spectral_contrast exactly,
+    including its use of 10 log10 on magnitudes, so values are half the
+    20 log10 magnitude ratio.
     """
     stft_matrix = stft(
         signal, frame_size=frame_size, hop_length=hop_length,
@@ -347,18 +418,17 @@ def extract_spectral_contrast(
         if len(sub_band) == 0:
             continue
 
-        n_quantile = int(np.maximum(np.rint(quantile * len(sub_band)), 1))
+        # Quantile size from the band before its top bin is dropped, as librosa does
+        n_quantile = int(np.maximum(np.rint(quantile * np.count_nonzero(current_band)), 1))
 
         # Sort once per band (all frames at once) instead of per frame
         sorted_band = np.sort(sub_band, axis=0)
         valley[k] = sorted_band[:n_quantile].mean(axis=0)
         peak[k] = sorted_band[-n_quantile:].mean(axis=0)
 
-    peak_db = 20 * np.log10(peak + _EPS)
-    valley_db = 20 * np.log10(valley + _EPS)
-    contrast = peak_db - valley_db
+    contrast = _power_to_db(peak) - _power_to_db(valley)
 
-    result = {'spectral_contrast': contrast}
+    result: dict[str, Any] = {'spectral_contrast': contrast}
     if return_metadata:
         result['metadata'] = {
             'times': frame_times(n_frames, sr, hop_length, frame_size, center)
@@ -369,18 +439,18 @@ def extract_spectral_contrast(
 def extract_spectral_flux(
     signal: np.ndarray,
     sr: int,
+    *,
     frame_size: int = 2048,
     hop_length: int = 512,
     center: bool = True,
     return_metadata: bool = False,
-    **kwargs
-) -> Dict[str, np.ndarray]:
+) -> dict[str, Any]:
     """
-    Compute the spectral flux: the Euclidean distance between consecutive
-    magnitude spectra.
+    Euclidean distance between consecutive magnitude spectra, shape (n_frames - 1,).
 
-    Returns:
-        Dict with 'spectral_flux' key, np.ndarray shape (n_frames - 1,)
+    Centering pads by reflection here (constant padding elsewhere). A clip
+    with a single frame gives [0.0]. flux[i] compares frames i and i + 1 and
+    carries the time of frame i + 1.
     """
     stft_matrix = stft(
         signal, frame_size=frame_size, hop_length=hop_length,
@@ -388,12 +458,15 @@ def extract_spectral_flux(
     )
     magnitude = magnitude_spectrogram(stft_matrix)
 
-    diffs = np.diff(magnitude, axis=1)
-    flux = np.sqrt(np.sum(diffs ** 2, axis=0))
+    if magnitude.shape[1] < 2:
+        # A single frame has no successor; report no change rather than an empty array
+        flux = np.zeros(1)
+    else:
+        flux = np.sqrt(np.sum(np.diff(magnitude, axis=1) ** 2, axis=0))
 
-    result = {'spectral_flux': flux}
+    result: dict[str, Any] = {'spectral_flux': flux}
     if return_metadata:
         # flux[i] compares frames i and i+1; report the time of frame i+1
-        times = frame_times(len(flux) + 1, sr, hop_length, frame_size, center)[1:]
+        times = frame_times(magnitude.shape[1], sr, hop_length, frame_size, center)[-len(flux):]
         result['metadata'] = {'times': times}
     return result

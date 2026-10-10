@@ -1,137 +1,98 @@
 """
-Pitch detection utilities.
+YIN fundamental frequency estimation.
+
+de Cheveigné and Kawahara (2002), "YIN, a fundamental frequency estimator
+for speech and music", JASA 111(4).
 """
 import numpy as np
+
 from AFX.methods.autocorrelation import autocorrelation
 
 
-def _difference_function(frame: np.ndarray, tau_max: int) -> np.ndarray:
+def _difference_function(frames: np.ndarray, tau_max: int) -> np.ndarray:
     """
-    YIN difference function d(tau) for tau = 0..tau_max, computed via
-    cumulative energies and one FFT-based autocorrelation:
+    YIN difference function d(tau), tau = 0..tau_max, for each row of ``frames``.
 
-        d(tau) = sum_{j=0}^{W-tau-1} (x[j] - x[j+tau])^2
-               = E1(tau) + E2(tau) - 2 * r(tau)
+        d(tau) = sum_{j=0}^{W-tau-1} (x[j] - x[j+tau])^2 = E1(tau) + E2(tau) - 2 r(tau)
 
-    where E1/E2 are prefix/suffix energies of the overlapping segments and
-    r(tau) the linear autocorrelation. Equivalent to the naive O(W * tau_max)
-    loop but O(W log W).
+    E1 and E2 are the energies of the two overlapping segments, from one
+    cumulative sum, and r the FFT autocorrelation: O(W log W) per frame
+    instead of O(W * tau_max).
     """
-    w = len(frame)
-    frame = frame.astype(np.float64)
-    sq = frame ** 2
-    # cumulative energy: cum[k] = sum(sq[:k])
-    cum = np.concatenate(([0.0], np.cumsum(sq)))
+    frames = np.atleast_2d(np.asarray(frames, dtype=np.float64))
+    w = frames.shape[1]
+    cum = np.concatenate([np.zeros((len(frames), 1)), np.cumsum(frames ** 2, axis=1)], axis=1)
     taus = np.arange(tau_max + 1)
-    # E1(tau) = sum_{j=0}^{w-tau-1} x[j]^2 ;  E2(tau) = sum_{j=tau}^{w-1} x[j]^2
-    e1 = cum[w - taus]
-    e2 = cum[w] - cum[taus]
-    acf = autocorrelation(frame, tau_max + 1)
-    d = e1 + e2 - 2.0 * acf
-    # Guard tiny negative values from float error
+    e1 = cum[:, w - taus]
+    e2 = cum[:, w:w + 1] - cum[:, taus]
+    d = e1 + e2 - 2.0 * autocorrelation(frames, tau_max + 1)
     return np.maximum(d, 0.0)
 
 
+def _cmnd(d: np.ndarray) -> np.ndarray:
+    """Cumulative mean normalized difference d'(tau) = d(tau) tau / sum_{1..tau} d; d'(0) = 1."""
+    cmnd = np.ones_like(d)
+    cum = np.cumsum(d[:, 1:], axis=1)
+    taus = np.arange(1, d.shape[1])
+    np.divide(d[:, 1:] * taus, cum, out=cmnd[:, 1:], where=cum > 0)
+    return cmnd
+
+
 def yin(y: np.ndarray, frame_length: int, hop_length: int, fmin: float = 50.0,
-        fmax: float = 2000.0, sr: int = 22050, threshold: float = 0.1):
+        fmax: float = 2000.0, sr: int = 22050, threshold: float = 0.1) -> np.ndarray:
     """
-    YIN pitch detection algorithm implementation.
+    Frame-wise f0 in Hz, 0 for frames judged unvoiced.
 
-    Based on the algorithm described in "YIN, a fundamental frequency estimator for speech and music"
-    by Alain de Cheveigné and Hideki Kawahara.
+    Frames are taken without padding. The lag search runs over
+    [sr / fmax, min(sr / fmin, frame_length / 2)]. In each frame the first
+    dip of the cumulative mean normalized difference below ``threshold`` is
+    followed to its local minimum (steps 3-4 of the paper); without such a
+    dip the global minimum is used if it is below 0.5. The lag is refined by
+    parabolic interpolation, and estimates outside [fmin, fmax] are set to 0.
 
-    Args:
-        y: Input signal (1D np.ndarray)
-        frame_length: Length of each analysis frame in samples
-        hop_length: Number of samples between frames
-        fmin: Minimum frequency to detect (Hz)
-        fmax: Maximum frequency to detect (Hz)
-        sr: Sampling rate (Hz)
-        threshold: Threshold for pitch detection (default: 0.1)
-
-    Returns:
-        np.ndarray: Array of pitch values in Hz, shape (n_frames,)
+    Returns an array of shape (n_frames,); a signal shorter than one frame
+    gives [0.0].
     """
-    # Frame the signal
+    y = np.asarray(y, dtype=np.float64)
     if len(y) < frame_length:
         return np.array([0.0])
 
-    # Calculate minimum and maximum tau (lag) to search
+    n_frames = 1 + (len(y) - frame_length) // hop_length
     tau_min = int(sr / fmax) if fmax > 0 else 1
     tau_max = min(int(sr / fmin) if fmin > 0 else frame_length // 2, frame_length // 2)
-
-    # Ensure we have valid range
     if tau_min >= tau_max:
-        return np.zeros(1 + (len(y) - frame_length) // hop_length)
+        return np.zeros(n_frames)
 
-    # Create frames
-    n_frames = 1 + (len(y) - frame_length) // hop_length
-    pitches = np.zeros(n_frames)
+    frames = np.lib.stride_tricks.sliding_window_view(y, frame_length)[::hop_length]
+    cmnd = _cmnd(_difference_function(frames, tau_max))
+    rows = np.arange(n_frames)
 
-    for frame_idx in range(n_frames):
-        start = frame_idx * hop_length
-        frame = y[start:start + frame_length]
+    # First lag in [tau_min, tau_max) below the threshold...
+    search = cmnd[:, tau_min:tau_max]
+    below = search < threshold
+    found = below.any(axis=1)
+    start = tau_min + np.argmax(below, axis=1)
+    # ...then walk down while the curve keeps decreasing (stop at tau_max - 1)
+    lags = np.arange(tau_max)
+    stops = np.ones((n_frames, tau_max), dtype=bool)
+    stops[:, :-1] = cmnd[:, 1:tau_max] >= cmnd[:, :tau_max - 1]
+    stops &= lags >= start[:, np.newaxis]
+    dip = np.argmax(stops, axis=1)
 
-        # Step 1: Calculate the difference function (FFT-based, O(W log W))
-        difference = _difference_function(frame, tau_max)
+    fallback = tau_min + np.argmin(cmnd[:, tau_min:tau_max + 1], axis=1)
+    tau = np.where(found, dip, fallback).astype(np.float64)
 
-        # Step 2: Calculate the cumulative mean normalized difference function
-        cmnd = np.ones_like(difference)
-        cmnd[0] = 1.0  # By definition in the YIN paper
+    # Parabolic interpolation through (tau-1, tau, tau+1) when the vertex is a minimum
+    t = tau.astype(np.intp)
+    inner = (t > 0) & (t < tau_max)
+    tc = np.clip(t, 1, tau_max - 1)
+    a, b, c = cmnd[rows, tc - 1], cmnd[rows, tc], cmnd[rows, tc + 1]
+    denom = a - 2 * b + c
+    refine = inner & (denom > 0)
+    offset = np.divide(0.5 * (a - c), denom, out=np.zeros_like(denom), where=refine)
+    tau = tau + offset
 
-        # cmnd[tau] = d[tau] * tau / sum(d[1..tau]); 1.0 where the sum is 0
-        cum_sum = np.cumsum(difference[1:])
-        valid = cum_sum > 0
-        taus = np.arange(1, tau_max + 1)
-        cmnd[1:][valid] = (
-            difference[1:][valid] * taus[valid] / cum_sum[valid]
-        )
-
-        # Step 3: Find the first dip below threshold within valid tau range
-        tau_pitch = tau_min
-        found_pitch = False
-
-        # Find the first local minimum below the threshold
-        for tau in range(tau_min, tau_max):
-            if cmnd[tau] < threshold:
-                # Find the minimum in this valley
-                local_min = tau
-                while tau + 1 < tau_max and cmnd[tau+1] < cmnd[tau]:
-                    tau += 1
-                    if cmnd[tau] < cmnd[local_min]:
-                        local_min = tau
-                
-                tau_pitch = local_min
-                found_pitch = True
-                break
-
-        # If no dip is found below threshold, pick the minimum
-        if not found_pitch:
-            min_idx = np.argmin(cmnd[tau_min:tau_max+1])
-            tau_pitch = min_idx + tau_min
-
-        # Step 4: Refine the pitch estimation with parabolic interpolation
-        # Fit the parabola through the samples at (tau-1, tau, tau+1),
-        # centered on the detected minimum itself.
-        if 0 < tau_pitch < tau_max:
-            a = cmnd[tau_pitch - 1]
-            b = cmnd[tau_pitch]
-            c = cmnd[tau_pitch + 1]
-
-            # Only use interpolation if we have a clear minimum
-            denom = a - 2 * b + c
-            if denom > 0:  # Convex: it's a minimum
-                offset = 0.5 * (a - c) / denom
-                tau_pitch = tau_pitch + offset
-
-        # Convert tau to frequency (Hz)
-        if found_pitch or (tau_pitch < len(cmnd) and cmnd[int(tau_pitch)] < 0.5):  # 0.5 is a bit more generous than threshold
-            pitches[frame_idx] = sr / tau_pitch if tau_pitch > 0 else 0.0
-        else:
-            pitches[frame_idx] = 0.0
-
-    # Post-processing: Ensure frequencies are within valid range
-    pitches[pitches < fmin] = 0.0
-    pitches[pitches > fmax] = 0.0
-            
-    return pitches
+    accept = found | (cmnd[rows, np.clip(tau.astype(np.intp), 0, tau_max)] < 0.5)
+    pitch = np.where(accept & (tau > 0), sr / np.where(tau > 0, tau, 1.0), 0.0)
+    pitch[(pitch < fmin) | (pitch > fmax)] = 0.0
+    return pitch

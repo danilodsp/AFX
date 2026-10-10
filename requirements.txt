@@ -1,6 +1,0 @@
-numpy>=1.23
-scipy>=1.10
-soundfile>=0.12
-pandas>=1.5
-matplotlib>=3.7
-scikit-learn>=1.2

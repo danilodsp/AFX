@@ -1,17 +1,18 @@
 [build-system]
-requires = ["setuptools>=64"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "AFX"
-version = "0.2.0"
-description = "Audio feature extraction for machine learning: 38 time, spectral, cepstral and harmonic features with NumPy, PyTorch and scikit-learn front ends"
+name = "afx-audio"
+version = "0.3.0"
+description = "Audio feature extraction for machine learning: 45 time, spectral, cepstral, harmonic and linear-prediction features with NumPy, PyTorch and scikit-learn front ends"
 readme = "README.md"
-license = { file = "LICENSE" }
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [
     { name = "Danilo Pena" },
 ]
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 keywords = [
     "audio", "feature-extraction", "mfcc", "spectral-features", "signal-processing",
     "music-information-retrieval", "speech", "bioacoustics", "pytorch", "scikit-learn",
@@ -20,47 +21,61 @@ classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Multimedia :: Sound/Audio :: Analysis",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Typing :: Typed",
 ]
 dependencies = [
     "numpy>=1.23",
     "scipy>=1.10",
     "soundfile>=0.12",
-    "pandas>=1.5",
-    "matplotlib>=3.7",
-    "scikit-learn>=1.2",
 ]
 
 [project.optional-dependencies]
-notebooks = [
-    "seaborn>=0.12",
-    "librosa>=0.10",
-    "jupyter",
+sklearn = [
+    "scikit-learn>=1.3",
 ]
 torch = [
     "torch>=2.0",
 ]
 parquet = [
+    "pandas>=1.5",
     "pyarrow>=10",
+]
+plot = [
+    "matplotlib>=3.7",
+]
+all = [
+    "afx-audio[sklearn,torch,parquet,plot]",
+]
+notebooks = [
+    "afx-audio[sklearn,parquet,plot]",
+    "seaborn>=0.12",
+    "librosa>=0.10",
+    "jupyter",
 ]
 test = [
+    "afx-audio[sklearn,parquet,plot]",
     "pytest>=7",
     "librosa>=0.10",
-    "pyarrow>=10",
+]
+docs = [
+    "mkdocs>=1.6,<2",
+    "mkdocs-material>=9.5",
+    "mkdocstrings[python]>=0.26",
 ]
 dev = [
-    "AFX[test,torch,notebooks]",
+    "afx-audio[test,torch,notebooks,docs]",
     "ruff",
+    "mypy",
     "build",
 ]
 
@@ -69,6 +84,8 @@ afx = "AFX.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/danilodsp/AFX"
+Documentation = "https://danilodsp.github.io/AFX/"
+Changelog = "https://github.com/danilodsp/AFX/blob/main/CHANGELOG.md"
 Repository = "https://github.com/danilodsp/AFX"
 Issues = "https://github.com/danilodsp/AFX/issues"
 
@@ -76,15 +93,28 @@ Issues = "https://github.com/danilodsp/AFX/issues"
 include = ["AFX*"]
 
 [tool.setuptools.package-data]
-AFX = ["config.json", "presets/*.json"]
+AFX = ["config.json", "presets/*.json", "py.typed"]
 
 [tool.ruff]
 line-length = 120
-target-version = "py39"
+target-version = "py310"
+# Notebooks are exploratory and linted by eye; notebooks/domain_packs.py is checked
+extend-exclude = ["*.ipynb"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]
 
 [tool.ruff.lint.per-file-ignores]
 # importorskip must run before the imports that need torch
 "tests/test_torch_features.py" = ["E402"]
 
+[tool.mypy]
+python_version = "3.10"
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+filterwarnings = [
+    # fork() from the multi-threaded test process in the parallel batch tests
+    "ignore:This process .* is multi-threaded, use of fork:DeprecationWarning",
+]

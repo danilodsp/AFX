@@ -1,8 +1,9 @@
 """
 Shape normalization and flattening utilities for features.
 """
-from typing import Dict
+
 import numpy as np
+
 
 def normalize_feature_shape(feature: np.ndarray, mode: str = 'flatten') -> np.ndarray:
     """
@@ -20,7 +21,7 @@ def normalize_feature_shape(feature: np.ndarray, mode: str = 'flatten') -> np.nd
     else:
         raise ValueError(f'Unknown mode: {mode}')
 
-def normalize_features_dict(features: Dict[str, np.ndarray], mode: str = 'flatten') -> Dict[str, np.ndarray]:
+def normalize_features_dict(features: dict[str, np.ndarray], mode: str = 'flatten') -> dict[str, np.ndarray]:
     """
     Normalize all features in a dict.
     """

@@ -9,11 +9,8 @@ These tests pin the fixed behavior.
 import numpy as np
 import pytest
 
-from AFX.extractors import (
-    frequency_domain, harmonic_features, time_domain
-)
-from AFX.extract_all import extract_all_features, FEATURE_MAP
-
+from AFX.extract_all import FEATURE_MAP, extract_all_features
+from AFX.extractors import frequency_domain, harmonic_features, time_domain
 
 SR = 22050
 
@@ -123,7 +120,7 @@ def test_extract_all_features_covers_default_config():
 
 def test_extract_all_features_rejects_unknown_feature():
     config = {'features': {'definitely_not_a_feature': {}}}
-    with pytest.raises(KeyError, match='definitely_not_a_feature'):
+    with pytest.raises(ValueError, match='definitely_not_a_feature'):
         extract_all_features(_tone(duration=0.1), SR, config)
 
 

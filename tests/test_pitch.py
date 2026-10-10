@@ -1,11 +1,11 @@
 """
 Unit tests for pitch detection utilities.
 """
+import librosa
 import numpy as np
 import pytest
-from AFX.utils.pitch import yin
 
-import librosa
+from AFX.utils.pitch import yin
 
 
 def test_yin_against_librosa():
@@ -33,10 +33,10 @@ def test_yin_against_librosa():
     fmax = 2000.0
 
     # Compute pitch with both implementations
-    pitch_custom = yin(signal, frame_length=frame_size, hop_length=hop_length, 
+    pitch_custom = yin(signal, frame_length=frame_size, hop_length=hop_length,
                       fmin=fmin, fmax=fmax, sr=sr)
 
-    pitch_librosa = librosa.yin(signal, fmin=fmin, fmax=fmax, sr=sr, 
+    pitch_librosa = librosa.yin(signal, fmin=fmin, fmax=fmax, sr=sr,
                                frame_length=frame_size, hop_length=hop_length)
 
     # Determine the minimum length for comparison

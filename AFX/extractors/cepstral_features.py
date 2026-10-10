@@ -1,22 +1,26 @@
 """
-Cepstral feature extractors for audio signals (MFCC, delta, etc.).
+Spectrogram and cepstral extractors: mel spectrogram, MFCC and deltas, GFCC,
+CQT and chroma.
+
+All of them start from the shared STFT in AFX.methods.stft (periodic Hann
+window, ``frame_size`` = n_fft) and return (n_dims, n_frames) arrays. With
+``center=True`` the signal is zero-padded by frame_size // 2 on both sides
+first, as in librosa.
 """
+
+from typing import Any
+
 import numpy as np
-from typing import Dict
-from AFX.utils.frame_utils import frame_times
-from AFX.utils.cache import (
-    get_cached_mel_filterbank, cache_mel_filterbank,
-    clear_feature_cache, get_cache_stats
-)
-from AFX.methods.cqt import cqt_approximation
-from AFX.methods.stft import stft, power_spectrogram, magnitude_spectrogram
-from AFX.methods.mel import mel_filterbank, apply_mel_filterbank, log_mel_spectrogram
+
+from AFX.methods.chroma import chroma_from_power, extract_chroma_from_cqt
+from AFX.methods.cqt import C1_HZ, cqt_approximation
 from AFX.methods.dct import extract_mfcc_coefficients
 from AFX.methods.delta import compute_delta
-from AFX.methods.chroma import extract_chroma_from_cqt, chroma_from_stft
-
-
-from AFX.methods.gammatone import gammatone_filterbank, apply_gammatone_filterbank
+from AFX.methods.gammatone import apply_gammatone_filterbank, gammatone_filterbank
+from AFX.methods.mel import apply_mel_filterbank, log_mel_spectrogram, mel_filterbank
+from AFX.methods.stft import power_spectrogram, stft
+from AFX.utils.cache import cache_mel_filterbank, clear_feature_cache, get_cache_stats, get_cached_mel_filterbank
+from AFX.utils.frame_utils import frame_times
 
 __all__ = [
     'extract_mfcc',
@@ -27,13 +31,15 @@ __all__ = [
     'extract_cqt',
     'extract_melspectrogram',
     'extract_gfcc',
+    'extract_tonnetz',
+    'extract_onset_strength',
     'clear_feature_cache',
     'get_cache_stats',
 ]
 
 
 def _get_mel_filterbank(n_mels, frame_size, sr, fmin, fmax):
-    """Mel filterbank via the shared cache."""
+    """Slaney-normalized mel filterbank from the process-wide cache."""
     filterbank = get_cached_mel_filterbank(n_mels, frame_size, sr, fmin, fmax, 'slaney')
     if filterbank is None:
         filterbank = mel_filterbank(n_mels, frame_size, sr, fmin, fmax, norm='slaney')
@@ -41,585 +47,314 @@ def _get_mel_filterbank(n_mels, frame_size, sr, fmin, fmax):
     return filterbank
 
 
-def _compute_mfcc(
-    signal, sr, n_mfcc, frame_size, hop_length, n_mels, fmin, fmax, center
-):
-    """
-    Shared MFCC pipeline: STFT -> power spectrogram -> mel filterbank ->
-    log (dB) -> DCT-II. Used by extract_mfcc and the delta variants.
-    """
-    stft_matrix = stft(
-        signal, frame_size=frame_size, hop_length=hop_length,
-        window='hann', center=center,
-    )
-    power_spec = power_spectrogram(stft_matrix)
-    filterbank = _get_mel_filterbank(n_mels, frame_size, sr, fmin, fmax)
-    mel_spec = apply_mel_filterbank(power_spec, filterbank)
-    log_mel = log_mel_spectrogram(mel_spec, amin=1e-10, top_db=80.0)
+def _mel_power(signal, sr, frame_size, hop_length, n_mels, fmin, fmax, center):
+    power = power_spectrogram(stft(signal, frame_size=frame_size, hop_length=hop_length, window='hann', center=center))
+    fmax = sr / 2.0 if fmax is None else fmax
+    return apply_mel_filterbank(power, _get_mel_filterbank(n_mels, frame_size, sr, fmin, fmax))
+
+
+def _compute_mfcc(signal, sr, n_mfcc, frame_size, hop_length, n_mels, fmin, fmax, center, top_db=80.0):
+    """STFT power -> mel -> dB (clamped at 1e-10, top_db below the peak) -> orthonormal DCT-II."""
+    mel = _mel_power(signal, sr, frame_size, hop_length, n_mels, fmin, fmax, center)
+    log_mel = log_mel_spectrogram(mel, amin=1e-10, top_db=top_db)
     return extract_mfcc_coefficients(log_mel, n_mfcc, norm='ortho')
+
+
+def _with_times(name, values, sr, hop_length, frame_size, center, return_metadata):
+    out = {name: values}
+    if return_metadata:
+        out['metadata'] = {'times': frame_times(values.shape[-1], sr, hop_length, frame_size, center)}
+    return out
+
 
 def extract_mfcc(
     signal: np.ndarray,
     sr: int,
+    *,
     n_mfcc: int = 13,
     frame_size: int = 2048,
     hop_length: int = 512,
     n_mels: int = 128,
     fmin: float = 0.0,
-    fmax: float = None,
+    fmax: float | None = None,
     center: bool = False,
+    top_db: float | None = 80.0,
     return_metadata: bool = False,
-    **kwargs
-) -> Dict[str, np.ndarray]:
+) -> dict[str, Any]:
     """
-    Compute MFCCs from an audio signal using NumPy/SciPy implementation.
+    Mel-frequency cepstral coefficients, shape (n_mfcc, n_frames).
 
-    The MFCC computation pipeline:
-    1. Apply Short-Time Fourier Transform (STFT) with Hann window
-    2. Compute power spectrogram from STFT magnitude  
-    3. Map power spectrum through triangular mel-scale filterbank
-    4. Take logarithm of mel energies (with clamping to avoid log(0))
-    5. Apply Discrete Cosine Transform type-II to decorrelate features
-
-    Args:
-        signal: Audio signal (1D np.ndarray)
-        sr: Sample rate in Hz
-        n_mfcc: Number of MFCC coefficients to extract (default: 13)
-        frame_size: Frame size for STFT (n_fft) (default: 2048)
-        hop_length: Hop length between frames in samples (default: 512)
-        n_mels: Number of mel filterbank bands (default: 128)
-        fmin: Minimum frequency for mel filterbank in Hz (default: 0.0)
-        fmax: Maximum frequency for mel filterbank in Hz (default: sr/2)
-        center: If True, pad the signal so that frames are centered
-            (matching ``librosa`` behavior). When ``preserve_shape`` is used,
-            setting ``center=False`` yields the standard ``(n_features, n_frames)``
-            shape with no extra padding frames.
-        return_metadata: If True, include frame times in metadata
-
-    Returns:
-        Dict with 'mfcc' key and np.ndarray of shape (n_mfcc, n_frames)
-
-    Metadata:
-        shape: (n_mfcc, n_frames)
-        units: Dimensionless (cepstral coefficients)
-        times: np.ndarray, shape (n_frames,) if return_metadata is True
-
-    Notes:
-        - Uses Hann windowing and optional center padding for STFT
-        - Mel filterbank uses Slaney normalization 
-        - DCT-II with orthogonal normalization extracts cepstral coefficients
-        - Frame times are frame centers, see AFX.utils.frame_utils.frame_times
+    Power spectrogram -> Slaney mel filterbank (n_mels bands, fmin..fmax,
+    fmax defaults to sr / 2) -> 10 log10 clamped at 1e-10 and floored
+    ``top_db`` below the clip's maximum -> orthonormal DCT-II. This is
+    librosa.feature.mfcc with the same n_fft, hop_length and center.
     """
-    # Set default fmax
-    if fmax is None:
-        fmax = sr / 2.0
+    mfcc = _compute_mfcc(signal, sr, n_mfcc, frame_size, hop_length, n_mels, fmin, fmax, center, top_db)
+    return _with_times('mfcc', mfcc, sr, hop_length, frame_size, center, return_metadata)
 
-    mfcc = _compute_mfcc(
-        signal, sr, n_mfcc, frame_size, hop_length, n_mels, fmin, fmax, center
-    )
 
-    result = {'mfcc': mfcc}
-    if return_metadata:
-        times = frame_times(mfcc.shape[1], sr, hop_length, frame_size, center)
-        return {'mfcc': mfcc, 'metadata': {'times': times}}
-    return result
+def _delta(mfcc, width, order):
+    # The kernel cannot be wider than the sequence; fewer than 3 frames
+    # carry no slope information.
+    width = min(width, mfcc.shape[1])
+    if width % 2 == 0:
+        width -= 1
+    if width < 3:
+        return np.zeros_like(mfcc)
+    return compute_delta(mfcc, width=width, order=order)
+
 
 def extract_mfcc_delta(
     signal: np.ndarray,
     sr: int,
+    *,
     n_mfcc: int = 13,
     frame_size: int = 2048,
     hop_length: int = 512,
-    order: int = 1,
+    n_mels: int = 128,
+    fmin: float = 0.0,
+    fmax: float | None = None,
     center: bool = False,
+    width: int = 9,
+    order: int = 1,
     return_metadata: bool = False,
-    **kwargs
-) -> Dict[str, np.ndarray]:
+) -> dict[str, Any]:
     """
-    Compute delta or delta-delta MFCCs from an audio signal using internal implementation.
+    MFCC deltas, shape (n_mfcc, n_frames), key 'mfcc_delta'.
 
-    This function computes MFCC features using the internal implementation and then applies
-    delta (first derivative) or delta-delta (second derivative) computation using a 
-    finite difference kernel-based method.
-
-    The delta computation uses the formula:
-    delta[t] = sum_{n=-N}^{N} w[n] * x[t+n]
-
-    where w is the delta kernel:
-    w[n] = n / (2 * sum(i^2 for i in range(1, (width+1)//2 + 1)))
-
-    Args:
-        signal: Audio signal (1D np.ndarray)
-        sr: Sample rate in Hz
-        n_mfcc: Number of MFCC coefficients (default: 13)
-        frame_size: Frame size for STFT (default: 2048)
-        hop_length: Hop length between frames in samples (default: 512)
-        order: Delta order (1=delta, 2=delta-delta) (default: 1)
-        center: If True, pad the signal so that frames are centered
-            before computing the STFT.
-        return_metadata: If True, include frame times in metadata
-        **kwargs: Additional arguments passed to internal MFCC computation
-
-    Returns:
-        Dict with 'mfcc_delta' key and np.ndarray of shape (n_mfcc, n_frames)
-
-    Metadata:
-        shape: (n_mfcc, n_frames)
-        units: Dimensionless (delta cepstral coefficients)
-        times: np.ndarray, shape (n_frames,) if return_metadata is True
-
-    Notes:
-        - Uses internal MFCC computation
-        - Delta computation uses finite difference with edge padding
-        - Width of delta kernel is automatically set to min(9, n_frames) 
-        - Returns zeros if insufficient frames (< 3) for delta computation
+    Savitzky-Golay derivative over ``width`` frames (clipped to the largest
+    odd value not above n_frames) with polynomial fits at the edges, as
+    librosa.feature.delta computes it; in the interior, order 1 is the
+    regression d[t] = sum_n n x[t+n] / sum_n n^2. ``order`` is the
+    derivative order (2 = acceleration). All zeros when fewer than 3 frames
+    are available.
     """
-    # Set defaults
-    n_mels = kwargs.get('n_mels', 128)
-    fmin = kwargs.get('fmin', 0.0)
-    fmax = kwargs.get('fmax', sr / 2.0)
-
-    mfcc = _compute_mfcc(
-        signal, sr, n_mfcc, frame_size, hop_length, n_mels, fmin, fmax, center
-    )
-
-    n_frames = mfcc.shape[1]
-
-    # Ensure width is odd, >=3, and does not exceed n_frames
-    width = min(9, n_frames)
-    if width < 3:
-        delta = np.zeros_like(mfcc)
-    else:
-        if width % 2 == 0:
-            width -= 1
-
-        # Compute delta using internal implementation
-        delta = compute_delta(mfcc, width=width, order=order)
-
-    result = {'mfcc_delta': delta}
-
-    if return_metadata:
-        times = frame_times(delta.shape[1], sr, hop_length, frame_size, center)
-        return {'mfcc_delta': delta, 'metadata': {'times': times}}
-
-    return result
+    mfcc = _compute_mfcc(signal, sr, n_mfcc, frame_size, hop_length, n_mels, fmin, fmax, center)
+    delta = _delta(mfcc, width, order)
+    return _with_times('mfcc_delta', delta, sr, hop_length, frame_size, center, return_metadata)
 
 
 def extract_mfcc_delta_delta(
     signal: np.ndarray,
     sr: int,
+    *,
     n_mfcc: int = 13,
     frame_size: int = 2048,
     hop_length: int = 512,
+    n_mels: int = 128,
+    fmin: float = 0.0,
+    fmax: float | None = None,
     center: bool = False,
+    width: int = 9,
     return_metadata: bool = False,
-    **kwargs
-) -> Dict[str, np.ndarray]:
-    """
-    Compute delta-delta (acceleration) MFCCs from an audio signal using internal implementation.
+) -> dict[str, Any]:
+    """Second-order MFCC deltas (acceleration), see extract_mfcc_delta."""
+    mfcc = _compute_mfcc(signal, sr, n_mfcc, frame_size, hop_length, n_mels, fmin, fmax, center)
+    delta2 = _delta(mfcc, width, 2)
+    return _with_times('mfcc_delta_delta', delta2, sr, hop_length, frame_size, center, return_metadata)
 
-    This function computes MFCC features using the internal implementation and then applies
-    delta-delta (second derivative) computation using a finite difference kernel-based method.
-
-    The acceleration computation uses the formula:
-    delta_delta[t] = sum_{n=-N}^{N} w[n] * delta[t+n]
-
-    where delta is the first derivative and w is the delta kernel:
-    w[n] = n / (2 * sum(i^2 for i in range(1, (width+1)//2 + 1)))
-
-    Args:
-        signal: Audio signal (1D np.ndarray)
-        sr: Sample rate in Hz
-        n_mfcc: Number of MFCC coefficients (default: 13)
-        frame_size: Frame size for STFT (default: 2048)
-        hop_length: Hop length between frames in samples (default: 512)
-        center: If True, pad the signal so that frames are centered
-            before computing the STFT.
-        return_metadata: If True, include frame times in metadata
-        **kwargs: Additional arguments passed to internal MFCC computation
-
-    Returns:
-        Dict with 'mfcc_delta_delta' key and np.ndarray of shape (n_mfcc, n_frames)
-
-    Metadata:
-        shape: (n_mfcc, n_frames)
-        units: Dimensionless (delta-delta cepstral coefficients)
-        times: np.ndarray, shape (n_frames,) if return_metadata is True
-
-    Notes:
-        - Uses internal MFCC computation
-        - Delta-delta computation uses finite difference with edge padding
-        - Width of delta kernel is automatically set to min(9, n_frames)
-        - Returns zeros if insufficient frames (< 3) for delta computation
-        - Computes second-order derivatives (acceleration) of MFCC features
-    """
-    # Delegate to extract_mfcc_delta with order=2 (identical pipeline)
-    out = extract_mfcc_delta(
-        signal, sr, n_mfcc=n_mfcc, frame_size=frame_size,
-        hop_length=hop_length, order=2, center=center,
-        return_metadata=return_metadata, **kwargs
-    )
-    result = {'mfcc_delta_delta': out['mfcc_delta']}
-    if return_metadata:
-        result['metadata'] = out['metadata']
-    return result
 
 def extract_gfcc(
     signal: np.ndarray,
     sr: int,
+    *,
     n_gfcc: int = 13,
     frame_size: int = 2048,
     hop_length: int = 512,
     n_gammatone: int = 64,
     fmin: float = 50.0,
-    fmax: float = None,
+    fmax: float | None = None,
     center: bool = False,
     return_metadata: bool = False,
-    **kwargs
-) -> Dict[str, np.ndarray]:
+) -> dict[str, Any]:
     """
-    Compute Gammatone Frequency Cepstral Coefficients (GFCC) from an audio signal.
+    Gammatone frequency cepstral coefficients, shape (n_gfcc, n_frames).
 
-    The GFCC computation pipeline:
-    1. Apply Short-Time Fourier Transform (STFT) with Hann window
-    2. Compute power spectrogram from STFT magnitude
-    3. Map power spectrum through gammatone filterbank
-    4. Take logarithm of gammatone energies (with clamping to avoid log(0))
-    5. Apply Discrete Cosine Transform type-II to decorrelate features
-
-    Args:
-        signal: Audio signal (1D np.ndarray)
-        sr: Sample rate in Hz
-        n_gfcc: Number of GFCC coefficients to extract (default: 13)
-        frame_size: Frame size for STFT (n_fft) (default: 2048)
-        hop_length: Hop length between frames in samples (default: 512)
-        n_gammatone: Number of gammatone filterbank bands (default: 64)
-        fmin: Minimum frequency for gammatone filterbank in Hz (default: 50.0)
-        fmax: Maximum frequency for gammatone filterbank in Hz (default: sr/2)
-        center: If True, pad the signal so that frames are centered
-            before computing the STFT.
-        return_metadata: If True, include frame times in metadata
-
-    Returns:
-        Dict with 'gfcc' key and np.ndarray of shape (n_gfcc, n_frames)
-
-    Metadata:
-        shape: (n_gfcc, n_frames)
-        units: Dimensionless (cepstral coefficients)
-        times: np.ndarray, shape (n_frames,) if return_metadata is True
-
-    Notes:
-        - Uses Hann windowing and optional center padding for STFT
-        - Gammatone filterbank is ERB-spaced
-        - DCT-II with orthogonal normalization extracts cepstral coefficients
-        - Frame times are frame centers, see AFX.utils.frame_utils.frame_times
+    The MFCC pipeline with the mel filterbank replaced by ``n_gammatone``
+    4th-order gammatone magnitude responses on the ERB-rate scale
+    (Glasberg and Moore, 1990), each normalized to unit area.
     """
-    if fmax is None:
-        fmax = sr / 2.0
-
-    # 1. Compute STFT with Hann window
-    stft_matrix = stft(
-        signal,
-        frame_size=frame_size,
-        hop_length=hop_length,
-        window='hann',
-        center=center,
-    )
-
-    # 2. Compute power spectrogram
-    power_spec = power_spectrogram(stft_matrix)
-
-    # 3. Create and apply gammatone filterbank (cached via lru_cache)
-    filterbank = gammatone_filterbank(n_gammatone, frame_size, sr, fmin, fmax)
-    gammatone_spec = apply_gammatone_filterbank(power_spec, filterbank)
-
-    # 4. Convert to log scale — same dB compression as the MFCC pipeline so
-    # both cepstral feature families are on a comparable scale
+    fmax = sr / 2.0 if fmax is None else fmax
+    power = power_spectrogram(stft(signal, frame_size=frame_size, hop_length=hop_length, window='hann', center=center))
+    gammatone_spec = apply_gammatone_filterbank(power, gammatone_filterbank(n_gammatone, frame_size, sr, fmin, fmax))
+    # Same dB compression as the MFCC path, so the two families share a scale
     log_gammatone = log_mel_spectrogram(gammatone_spec, amin=1e-10, top_db=80.0)
-
-    # 5. Extract GFCC coefficients using DCT-II
     gfcc = extract_mfcc_coefficients(log_gammatone, n_gfcc, norm='ortho')
+    return _with_times('gfcc', gfcc, sr, hop_length, frame_size, center, return_metadata)
 
-    result = {'gfcc': gfcc}
-    if return_metadata:
-        times = frame_times(gfcc.shape[1], sr, hop_length, frame_size, center)
-        return {'gfcc': gfcc, 'metadata': {'times': times}}
-    return result
 
 def extract_chroma_cqt(
     signal: np.ndarray,
     sr: int,
+    *,
     frame_size: int = 2048,
     hop_length: int = 512,
+    n_bins: int = 84,
+    bins_per_octave: int = 12,
+    fmin: float = C1_HZ,
     center: bool = False,
     return_metadata: bool = False,
-    **kwargs
-) -> Dict[str, np.ndarray]:
+) -> dict[str, Any]:
     """
-    Compute chroma CQT features from an audio signal using internal implementation.
+    Chromagram from the STFT-based CQT approximation, shape (12, n_frames).
 
-    This method computes a chromagram from a Constant-Q Transform (CQT) approximation,
-    capturing harmonic content and mapping it to 12 pitch classes. The implementation:
-
-    1. Computes a CQT approximation using log-spaced frequency bins and STFT
-    2. Maps frequency bins to chroma bins (12 pitch classes, modulo 12)
-    3. Aggregates energy into each chroma bin across all octaves
-
-    Mathematical formulation:
-    - CQT frequencies: f[k] = fmin * 2^(k/bins_per_octave)
-    - MIDI note mapping: midi = 69 + 12 * log2(freq / 440)
-    - Chroma bin: chroma_bin = midi % 12
-    - Aggregation: chroma[c] = sum(cqt_mag[k] for all k where bin[k] maps to c)
-
-    Args:
-        signal: Audio signal (1D np.ndarray)
-        sr: Sample rate in Hz
-        frame_size: Frame size for STFT used in CQT approximation (default: 2048)
-        hop_length: Hop length between frames in samples (default: 512)
-        center: If True, pad the signal so that frames are centered in the STFT
-            used for the CQT approximation.
-        return_metadata: If True, include frame times in metadata
-        **kwargs: Additional parameters (n_bins, bins_per_octave, fmin)
-
-    Returns:
-        Dict with 'chroma_cqt' key and np.ndarray of shape (12, n_frames)
-
-    Metadata:
-        shape: (12, n_frames) where each row is a pitch class [C, C#, D, D#, E, F, F#, G, G#, A, A#, B]
-        units: Summed magnitude (energy) for each pitch class
-        times: np.ndarray, shape (n_frames,) if return_metadata is True
-
-    Notes:
-        - Uses geometric frequency spacing to approximate CQT behavior
-        - Default range covers ~7 octaves from C1 (32.7 Hz) to C8 (4186 Hz)
-        - Higher frame_size provides better frequency resolution for low frequencies
-        - Chroma bins activate based on harmonic content presence in corresponding pitch classes
+    Each CQT bin (see extract_cqt) is assigned to pitch class
+    round(69 + 12 log2(f / 440)) mod 12 (0 = C) and summed over octaves;
+    each frame is L1-normalized.
     """
-    n_bins = kwargs.get('n_bins', 84)  # 7 octaves * 12 bins per octave
-    bins_per_octave = kwargs.get('bins_per_octave', 12)
-    fmin = kwargs.get('fmin', 32.70319566257483)  # C1 in Hz
-
-    # Compute chroma features using internal CQT approximation
     chroma = extract_chroma_from_cqt(
-        signal,
-        sr=sr,
-        hop_length=hop_length,
-        n_bins=n_bins,
-        bins_per_octave=bins_per_octave,
-        fmin=fmin,
-        center=center,
-        frame_size=frame_size,
+        signal, sr=sr, hop_length=hop_length, n_bins=n_bins, bins_per_octave=bins_per_octave,
+        fmin=fmin, center=center, frame_size=frame_size,
     )
-
-    result = {'chroma_cqt': chroma}
-
-    if return_metadata:
-        times = frame_times(chroma.shape[1], sr, hop_length, frame_size, center)
-        return {'chroma_cqt': chroma, 'metadata': {'times': times}}
-
-    return result
+    return _with_times('chroma_cqt', chroma, sr, hop_length, frame_size, center, return_metadata)
 
 
 def extract_chroma_stft(
     signal: np.ndarray,
     sr: int,
+    *,
     frame_size: int = 2048,
     hop_length: int = 512,
     center: bool = True,
+    tuning: float = 0.0,
+    normalize: bool = True,
     return_metadata: bool = False,
-    **kwargs
-) -> Dict[str, np.ndarray]:
+) -> dict[str, Any]:
     """
-    Compute chroma STFT features from an audio signal using internal implementation.
+    Chromagram from the STFT power spectrum, shape (12, n_frames), row 0 = C.
 
-    Extracts a chromagram using Short-Time Fourier Transform (STFT) and projects
-    the frequency content onto 12 chroma bins (pitch classes).
-
-    The process involves:
-    1. Compute magnitude spectrogram from STFT using high-resolution FFT
-    2. Map frequency bins to chroma bins using: chroma_bin = round(12 * log2(f / f_ref)) % 12
-    3. Aggregate magnitudes into chroma bins across all octaves for each frame
-    4. Optional L1 normalization per frame (each chroma vector sums to 1)
-
-    Mathematical Details:
-    - Frequency bins: f = bin_index * sr / n_fft
-    - Chroma mapping: chroma_bin = round(12 * log2(f / f_ref)) % 12
-    - Reference frequency: f_ref = 261.626 Hz (C4)
-    - Aggregation: sum all frequency bins mapping to same chroma bin
-    - Normalization: chroma[i, :] = chroma[i, :] / sum(chroma[:, :], axis=0)
-
-    Args:
-        signal: Audio signal (1D np.ndarray)
-        sr: Sample rate in Hz
-        frame_size: Frame size for STFT (n_fft) (default: 2048)
-        hop_length: Hop length between frames in samples (default: 512)
-        center: If True (default), pad the signal so frames are centered.
-            Pass False to align frame counts with extractors that default
-            to center=False (mfcc, spectral features).
-        return_metadata: If True, include frame times in metadata
-        **kwargs: Additional arguments (f_ref for reference frequency, normalize for L1 norm)
-
-    Returns:
-        Dict with 'chroma_stft' key and np.ndarray of shape (12, n_frames)
-
-    Metadata:
-        shape: (12, n_frames)
-        units: Normalized amplitude (if normalize=True)
-        times: np.ndarray, shape (n_frames,) if return_metadata is True
-
-    Notes:
-        - Uses Hann windowing for STFT
-        - Reference frequency f_ref defaults to 261.626 Hz (C4)
-        - DC bin (f=0) is ignored to avoid log(0) in chroma mapping
-        - Chroma bin mapping: 0=C, 1=C#, 2=D, 3=D#, 4=E, 5=F, 6=F#, 7=G, 8=G#, 9=A, 10=A#, 11=B
-        - Frame times are frame centers, see AFX.utils.frame_utils.frame_times
+    Power spectrogram projected on librosa's chroma filterbank (Gaussian
+    pitch-class weights per bin, Gaussian octave weighting centred on 880 Hz),
+    each frame scaled to a maximum of 1 when ``normalize``. Identical to
+    librosa.feature.chroma_stft(..., tuning=tuning); librosa estimates the
+    tuning when it is not given, AFX uses ``tuning`` (fractions of a
+    semitone from A440) as is.
     """
-    # Extract optional parameters
-    f_ref = kwargs.get('f_ref', 261.626)  # C4 frequency
-    normalize = kwargs.get('normalize', True)
+    spec = stft(signal, frame_size=frame_size, hop_length=hop_length, window='hann', center=center)
+    chroma = chroma_from_power(power_spectrogram(spec), sr=sr, n_fft=frame_size, tuning=tuning, normalize=normalize)
+    return _with_times('chroma_stft', chroma, sr, hop_length, frame_size, center, return_metadata)
 
-    stft_matrix = stft(signal, frame_size=frame_size, hop_length=hop_length,
-                       window='hann', center=center)
-    mag_spec = magnitude_spectrogram(stft_matrix)
-    chroma = chroma_from_stft(mag_spec, sr=sr, n_fft=frame_size,
-                              f_ref=f_ref, normalize=normalize)
-
-    result = {'chroma_stft': chroma}
-    if return_metadata:
-        times = frame_times(chroma.shape[1], sr, hop_length, frame_size, center)
-        return {'chroma_stft': chroma, 'metadata': {'times': times}}
-    return result
 
 def extract_cqt(
     signal: np.ndarray,
     sr: int,
+    *,
     hop_length: int = 512,
     n_bins: int = 84,
     bins_per_octave: int = 12,
+    fmin: float | None = None,
+    frame_size: int = 2048,
     center: bool = True,
+    n_fft: int | None = None,
     return_metadata: bool = False,
-    **kwargs
-) -> Dict[str, np.ndarray]:
+) -> dict[str, Any]:
     """
-    Compute the Constant-Q Transform (CQT) of an audio signal using internal implementation.
+    Constant-Q magnitude approximated from the STFT, shape (n_bins, n_frames).
 
-    This function approximates the Constant-Q Transform by:
-    1. Computing STFT with high frequency resolution (n_fft=2048)
-    2. Creating logarithmically-spaced frequency bins (geometric series)
-    3. Mapping STFT bins to CQT bins using linear interpolation
-
-    The CQT uses filters whose bandwidths increase exponentially with frequency,
-    providing better resolution at low frequencies. This implementation uses
-    log-frequency projection of the STFT to approximate this behavior.
-
-    Args:
-        signal: Audio signal (1D np.ndarray)
-        sr: Sample rate in Hz
-        hop_length: Hop length between frames in samples
-        n_bins: Number of frequency bins
-        bins_per_octave: Bins per octave (typically 12)
-        center: If True (default), pad the signal so frames are centered
-        return_metadata: If True, include frame times in metadata
-        **kwargs: Additional parameters: fmin, and the STFT size as either
-            n_fft or frame_size (default 2048)
-
-    Returns:
-        Dict with 'cqt' key and np.ndarray of shape (n_bins, n_frames)
-
-    Metadata:
-        shape: (n_bins, n_frames)
-        units: magnitude (approximated from STFT)
-        times: np.ndarray, shape (n_frames,) if return_metadata is True
-
-    Notes:
-        - Uses geometric frequency spacing: f[k] = fmin * 2^(k/bins_per_octave)
-        - Default minimum frequency is C1 (≈32.7 Hz)
-        - Higher n_fft provides better frequency resolution for low frequencies
-        - This is an approximation of the true CQT using log-frequency filterbanks
+    Bin k is centered at fmin * 2^(k / bins_per_octave) (fmin defaults to
+    C1, 32.7 Hz) and is a triangular, L1-normalized weighting of the STFT
+    magnitudes between its neighbours. This is not a true constant-Q
+    transform: the time resolution is that of the ``frame_size`` STFT at
+    every frequency, and low bins narrower than the STFT bin spacing fall
+    back to the nearest STFT bin. ``n_fft`` is an alias for ``frame_size``.
     """
-    fmin = kwargs.get('fmin', None)  # C1 by default (see cqt_approximation)
-    n_fft = kwargs.get('n_fft', kwargs.get('frame_size', 2048))
-
+    if n_fft is not None:
+        frame_size = n_fft
     cqt_magnitude, _ = cqt_approximation(
-        signal, sr=sr, hop_length=hop_length, n_bins=n_bins,
-        bins_per_octave=bins_per_octave, fmin=fmin, frame_size=n_fft,
-        center=center,
+        signal, sr=sr, hop_length=hop_length, n_bins=n_bins, bins_per_octave=bins_per_octave,
+        fmin=fmin, frame_size=frame_size, center=center,
     )
+    return _with_times('cqt', cqt_magnitude, sr, hop_length, frame_size, center, return_metadata)
 
-    result = {'cqt': cqt_magnitude}
-    if return_metadata:
-        times = frame_times(cqt_magnitude.shape[1], sr, hop_length, n_fft, center)
-        return {'cqt': cqt_magnitude, 'metadata': {'times': times}}
-    return result
 
 def extract_melspectrogram(
     signal: np.ndarray,
     sr: int,
+    *,
     n_mels: int = 128,
     frame_size: int = 2048,
     hop_length: int = 512,
     fmin: float = 0.0,
-    fmax: float = None,
+    fmax: float | None = None,
     center: bool = True,
     return_metadata: bool = False,
-    **kwargs
-) -> Dict[str, np.ndarray]:
+) -> dict[str, Any]:
     """
-    Compute Mel-scaled spectrogram from an audio signal using internal implementation.
+    Mel power spectrogram, shape (n_mels, n_frames).
 
-    This method computes a time-frequency representation of the signal on the Mel scale,
-    using triangular filterbanks applied to the power spectrum. The implementation:
-
-    1. Computes power spectrogram via STFT with Hann windowing and center padding
-    2. Creates Mel filterbank matrix with triangular filters spaced in Mel scale
-    3. Applies filterbank to project spectral energy onto Mel bands
-    4. Returns result with shape (n_mels, n_frames) containing non-negative power values
-
-    Mathematical formulation:
-    - STFT: X[f,t] = sum(x[n] * w[n-t*H] * exp(-j*2*pi*f*n/N))
-    - Power spectrum: P[f,t] = |X[f,t]|^2  
-    - Mel filterbank: M[m,f] with triangular filters on mel-frequency scale
-    - Mel spectrogram: S[m,t] = sum(M[m,f] * P[f,t]) over frequency f
-
-    Args:
-        signal: Audio signal (1D np.ndarray)
-        sr: Sample rate in Hz
-        n_mels: Number of Mel bands (default: 128)
-        frame_size: Frame size for STFT (n_fft) (default: 2048)
-        hop_length: Hop length between frames in samples (default: 512)
-        fmin: Lowest mel filter edge in Hz (default: 0)
-        fmax: Highest mel filter edge in Hz (default: sr/2)
-        center: If True (default), pad the signal so frames are centered.
-            Pass False to align frame counts with extractors that default
-            to center=False (mfcc, spectral features).
-        return_metadata: If True, include frame times in metadata
-
-    Returns:
-        Dict with 'melspectrogram' key and np.ndarray of shape (n_mels, n_frames)
-
-    Metadata:
-        shape: (n_mels, n_frames)
-        units: power (spectral energy in each mel band)
-        times: np.ndarray, shape (n_frames,) if return_metadata is True
-
-    Notes:
-        - Uses Hann windowing for STFT
-        - Mel filterbank uses Slaney normalization and scale (htk=False)
-        - Filter shapes are triangular with linear interpolation between mel frequencies
-        - Frame times are frame centers, see AFX.utils.frame_utils.frame_times
-        - All output values are non-negative (power domain)
+    |STFT|^2 projected on a Slaney-scale, Slaney-normalized triangular
+    filterbank (librosa.feature.melspectrogram with power=2 and htk=False).
+    Values are linear power, not dB.
     """
-    if fmax is None:
-        fmax = sr / 2.0
+    mel = _mel_power(signal, sr, frame_size, hop_length, n_mels, fmin, fmax, center)
+    return _with_times('melspectrogram', mel, sr, hop_length, frame_size, center, return_metadata)
 
-    stft_matrix = stft(signal, frame_size=frame_size, hop_length=hop_length,
-                       window='hann', center=center)
-    power_spec = power_spectrogram(stft_matrix)
-    filterbank = _get_mel_filterbank(n_mels, frame_size, sr, fmin, fmax)
-    mel_spec = apply_mel_filterbank(power_spec, filterbank)
 
-    result = {'melspectrogram': mel_spec}
-    if return_metadata:
-        times = frame_times(mel_spec.shape[1], sr, hop_length, frame_size, center)
-        return {'melspectrogram': mel_spec, 'metadata': {'times': times}}
-    return result
+def extract_tonnetz(
+    signal: np.ndarray,
+    sr: int,
+    *,
+    frame_size: int = 2048,
+    hop_length: int = 512,
+    center: bool = True,
+    tuning: float = 0.0,
+    return_metadata: bool = False,
+) -> dict[str, Any]:
+    """
+    Tonal centroid features (Harte et al., 2006), shape (6, n_frames).
+
+    The L1-normalized chroma_stft is projected on the circles of fifths,
+    minor thirds and major thirds (x and y of each), as
+    librosa.feature.tonnetz does; librosa defaults to chroma_cqt as input,
+    so pass it ``chroma=librosa.feature.chroma_stft(..., tuning=0)`` to
+    compare.
+    """
+    spec = stft(signal, frame_size=frame_size, hop_length=hop_length, window='hann', center=center)
+    chroma = chroma_from_power(power_spectrogram(spec), sr=sr, n_fft=frame_size, tuning=tuning, normalize=False)
+    total = chroma.sum(axis=0, keepdims=True)
+    chroma = chroma / np.where(total < np.finfo(chroma.dtype).tiny, 1.0, total)
+    scale = np.array([7.0 / 6, 7.0 / 6, 3.0 / 2, 3.0 / 2, 2.0 / 3, 2.0 / 3])
+    angles = np.multiply.outer(scale, np.arange(12, dtype=np.float64))
+    angles[::2] -= 0.5  # even rows are the sine components
+    radius = np.array([1, 1, 1, 1, 0.5, 0.5])[:, np.newaxis]
+    tonnetz = (radius * np.cos(np.pi * angles)) @ chroma
+    return _with_times('tonnetz', tonnetz, sr, hop_length, frame_size, center, return_metadata)
+
+
+def extract_onset_strength(
+    signal: np.ndarray,
+    sr: int,
+    *,
+    frame_size: int = 2048,
+    hop_length: int = 512,
+    n_mels: int = 128,
+    fmin: float = 0.0,
+    fmax: float | None = None,
+    lag: int = 1,
+    max_size: int = 1,
+    return_metadata: bool = False,
+) -> dict[str, Any]:
+    """
+    Spectral-flux onset strength, shape (n_frames,), as librosa.onset.onset_strength.
+
+    The centered mel power spectrogram in dB (ref 1, top_db 80) is
+    differenced over ``lag`` frames against a ``max_size``-bin maximum
+    filter of itself along frequency, negative changes are dropped and the
+    bands averaged. The envelope is shifted by lag + frame_size // (2 *
+    hop_length) frames so peaks line up with onsets in time, and trimmed
+    to the number of mel frames.
+    """
+    if lag < 1 or max_size < 1:
+        raise ValueError('lag and max_size must be positive')
+    mel = _mel_power(signal, sr, frame_size, hop_length, n_mels, fmin, fmax, True)
+    db = 10.0 * np.log10(np.maximum(mel, 1e-10))
+    db = np.maximum(db, db.max() - 80.0)
+    if max_size == 1:
+        ref = db
+    else:
+        from scipy.ndimage import maximum_filter1d
+
+        ref = maximum_filter1d(db, max_size, axis=0)
+    onset = np.maximum(0.0, db[:, lag:] - ref[:, :-lag]).mean(axis=0)
+    onset = np.pad(onset, (lag + frame_size // (2 * hop_length), 0))[:db.shape[1]]
+    return _with_times('onset_strength', onset, sr, hop_length, frame_size, True, return_metadata)

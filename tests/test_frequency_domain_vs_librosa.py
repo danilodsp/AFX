@@ -1,10 +1,10 @@
 """
 Compare frequency domain extractors against librosa implementations.
 """
-import numpy as np
-from AFX.extractors import frequency_domain
-
 import librosa
+import numpy as np
+
+from AFX.extractors import frequency_domain
 
 
 def test_extract_spectral_centroid_against_librosa():
@@ -205,7 +205,9 @@ def test_extract_spectral_flux_against_librosa():
     flux_librosa = np.sqrt(np.sum(np.diff(S, axis=1) ** 2, axis=0))
 
     # Compare shapes
-    assert flux_custom.shape == flux_librosa.shape, f"Shape mismatch: custom {flux_custom.shape} vs librosa {flux_librosa.shape}"
+    assert flux_custom.shape == flux_librosa.shape, (
+        f"Shape mismatch: custom {flux_custom.shape} vs librosa {flux_librosa.shape}"
+    )
 
     # The values don't need to match exactly, but the patterns should be similar
     # Compute correlation to check similarity

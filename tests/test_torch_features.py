@@ -13,8 +13,8 @@ from AFX.extractors import cepstral_features, frequency_domain, time_domain
 
 # AFX.methods re-exports the stft *function*; get the module explicitly
 np_stft_mod = importlib.import_module('AFX.methods.stft')
-from AFX.torch import AFXFeatureModule, functional as F_afx, supported_features
-
+from AFX.torch import AFXFeatureModule, supported_features
+from AFX.torch import functional as F_afx
 
 SR = 22050
 RNG = np.random.default_rng(42)
@@ -281,3 +281,110 @@ def test_module_mean_std_shapes(signal, batched):
         sample_rate=SR, aggregation='mean_std', output='vector',
     ).double()(x)
     assert tuple(vec.shape) == lead + (10,)
+
+
+# ---------------------------------------------------------------------------
+# Every torch-supported feature against its NumPy extractor
+# ---------------------------------------------------------------------------
+
+_MODULE_PARAMS = [
+    ({}),
+    ({'frame_size': 512, 'hop_length': 128, 'center': True}),
+]
+
+
+@pytest.mark.parametrize('params', _MODULE_PARAMS)
+@pytest.mark.parametrize('name', supported_features())
+def test_module_matches_numpy_extractor(signal, name, params):
+    import AFX
+
+    default = torch.get_default_dtype()
+    torch.set_default_dtype(torch.float64)  # build the constant buffers in float64
+    try:
+        module = AFXFeatureModule({name: params}, sample_rate=SR)
+    finally:
+        torch.set_default_dtype(default)
+    out = module(_t(signal))[name].numpy()
+    ref = AFX.FEATURE_MAP[name](signal, SR, **params)[name]
+    assert out.shape == ref.shape
+    np.testing.assert_allclose(out, ref, rtol=1e-6, atol=1e-6 * max(1.0, np.abs(ref).max()))
+
+
+@pytest.mark.parametrize('name', ['spectral_contrast', 'chroma_stft', 'gfcc', 'mfcc_delta', 'spectral_skewness'])
+def test_new_features_are_differentiable_and_batched(signal, name):
+    module = AFXFeatureModule({name: {}}, sample_rate=SR, aggregation='mean').double()
+    x = torch.stack([_t(signal), 0.5 * _t(signal[::-1].copy())]).requires_grad_(True)
+    out = module(x)[name]
+    assert out.shape[0] == 2
+    out.sum().backward()
+    assert x.grad is not None and torch.isfinite(x.grad).all() and x.grad.abs().sum() > 0
+    single = module(_t(signal))[name]
+    torch.testing.assert_close(out[0].detach(), single)
+
+
+@pytest.mark.parametrize('width, order', [(3, 1), (5, 2), (9, 1), (9, 2)])
+def test_torch_delta_matches_numpy(width, order):
+    from AFX.methods.delta import compute_delta
+
+    feats = np.random.default_rng(3).standard_normal((4, 30))
+    np.testing.assert_allclose(F_afx.delta(_t(feats), width, order=order).numpy(), compute_delta(feats, width, order),
+                               atol=1e-12)
+
+
+@pytest.mark.parametrize('name', ['spectral_bandwidth', 'spectral_skewness', 'spectral_flux', 'rms_energy',
+                                  'spectral_contrast', 'mfcc_delta'])
+def test_silent_frames_give_finite_gradients(name):
+    x = np.random.default_rng(1).standard_normal(8000)
+    x[:4000] = 0.0
+    params = {'frame_size': 1024, 'hop_length': 512}
+    module = AFXFeatureModule({name: params}, sample_rate=16000, aggregation='mean').double()
+    wav = _t(x).requires_grad_(True)
+    module(wav)[name].sum().backward()
+    assert torch.isfinite(wav.grad).all()
+
+
+def test_module_rejects_unsupported_settings():
+    with pytest.raises(ValueError, match='order'):
+        AFXFeatureModule({'mfcc_delta': {'order': 3}})
+    with pytest.raises(ValueError, match='whole-clip'):
+        AFXFeatureModule({'spectral_centroid': {'frame_size': None}})
+    with pytest.raises(ValueError, match='order'):
+        F_afx.delta(torch.zeros(2, 20), order=3)
+    module = AFXFeatureModule(['mfcc', 'zcr'])
+    assert module.feature_names() == ['mfcc', 'zcr']
+
+
+def test_module_input_checks_and_summary_alias(signal):
+    module = AFXFeatureModule(['zcr'], sample_rate=SR, aggregation='summary')
+    assert module.aggregation == 'mean_std'
+    with pytest.raises(TypeError, match='floating-point'):
+        module(torch.zeros(1000, dtype=torch.int16))
+    with pytest.raises(TypeError, match='torch.Tensor'):
+        module(signal)
+
+
+@pytest.mark.parametrize('aggregation, numpy_aggregation', [('mean_std', 'summary'), ('mean', 'mean')])
+def test_module_column_names_match_numpy(signal, aggregation, numpy_aggregation):
+    import AFX
+
+    features = {'mfcc': {'n_mfcc': 4}, 'spectral_centroid': {}, 'zcr': {}}
+    module = AFXFeatureModule(features, sample_rate=SR, aggregation=aggregation, output='vector').double()
+    names = module.get_feature_names_out()
+    ref = AFX.extract_all_features(signal, SR, {'features': features, 'aggregation': numpy_aggregation})
+    ref_names, ref_values = AFX.flatten_features(ref)
+    assert names == ref_names
+    np.testing.assert_allclose(module(_t(signal)).numpy(), ref_values, rtol=1e-6, atol=1e-6)
+
+
+def test_aggregation_skips_undefined_frames_like_numpy():
+    import AFX
+
+    x = np.concatenate([np.zeros(SR), np.random.default_rng(4).standard_normal(SR)])
+    features = {'spectral_kurtosis': {}, 'rms_energy': {'frame_size': 1024, 'hop_length': 512}}
+    module = AFXFeatureModule(features, sample_rate=SR, aggregation='mean_std', output='vector').double()
+    wav = _t(x).requires_grad_(True)
+    out = module(wav)
+    ref = AFX.flatten_features(AFX.extract_all_features(x, SR, {'features': features, 'aggregation': 'summary'}))[1]
+    np.testing.assert_allclose(out.detach().numpy(), ref, rtol=1e-6)
+    out.sum().backward()
+    assert torch.isfinite(wav.grad).all()

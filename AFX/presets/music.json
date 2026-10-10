@@ -1,11 +1,13 @@
 {
   "name": "music",
   "title": "Music & MIR",
-  "description": "Music information retrieval set for genre, instrument and key/harmony tasks. Chroma (STFT + CQT) and CQT capture pitch/harmony; spectral contrast and rolloff capture timbre; MFCCs and rhythmic energy round out the descriptor.",
+  "description": "Music information retrieval set for genre, instrument and key/harmony tasks. Chroma (STFT + CQT) and CQT capture pitch/harmony; spectral contrast and rolloff capture timbre; tonnetz adds tonal centroids, onset strength rhythm, and MFCCs round out the descriptor.",
   "sample_rate": 22050,
   "features": {
     "chroma_cqt": {"frame_size": 2048, "hop_length": 512},
     "chroma_stft": {"frame_size": 2048, "hop_length": 512},
+    "tonnetz": {"frame_size": 2048, "hop_length": 512},
+    "onset_strength": {"frame_size": 2048, "hop_length": 512},
     "spectral_contrast": {"frame_size": 2048, "hop_length": 512},
     "spectral_centroid": {"frame_size": 2048, "hop_length": 512},
     "spectral_rolloff": {"frame_size": 2048, "hop_length": 512},

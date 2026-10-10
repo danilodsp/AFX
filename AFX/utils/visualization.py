@@ -1,10 +1,15 @@
 """
 Visualization utilities for audio features.
 """
-from typing import Optional
 
+from typing import cast
+
+try:
+    import matplotlib.pyplot as plt
+    from matplotlib.figure import Figure
+except ImportError as e:
+    raise ImportError('AFX.utils.visualization requires matplotlib: pip install "afx-audio[plot]"') from e
 import numpy as np
-import matplotlib.pyplot as plt
 
 
 def plot_mfcc(
@@ -12,7 +17,7 @@ def plot_mfcc(
     sr: int,
     hop_length: int = 512,
     title: str = 'MFCC',
-    ax: Optional[plt.Axes] = None,
+    ax: plt.Axes | None = None,
     show: bool = True,
 ) -> plt.Axes:
     """
@@ -36,17 +41,17 @@ def plot_mfcc(
             f'mfcc must be a non-empty 2D array (n_mfcc, n_frames), got shape {mfcc.shape}'
         )
     created_fig = ax is None
-    if created_fig:
+    if ax is None:
         _, ax = plt.subplots(figsize=(10, 4))
     time_axis = np.arange(mfcc.shape[1]) * hop_length / sr
-    extent = [time_axis[0], time_axis[-1], 0, mfcc.shape[0]]
+    extent = (float(time_axis[0]), float(time_axis[-1]), 0.0, float(mfcc.shape[0]))
     im = ax.imshow(mfcc, aspect='auto', origin='lower', cmap='viridis', extent=extent)
     # MFCCs are dimensionless coefficients, not dB
     ax.figure.colorbar(im, ax=ax)
     ax.set_xlabel('Time (s)')
     ax.set_ylabel('MFCC Coefficient')
     ax.set_title(title)
-    ax.figure.tight_layout()
+    cast(Figure, ax.figure).tight_layout()
     if show and created_fig:
         plt.show()
     return ax
@@ -58,7 +63,7 @@ def plot_spectrogram(
     hop_length: int = 512,
     y_axis: str = 'log',
     title: str = 'Spectrogram',
-    ax: Optional[plt.Axes] = None,
+    ax: plt.Axes | None = None,
     show: bool = True,
 ) -> plt.Axes:
     """
@@ -92,7 +97,7 @@ def plot_spectrogram(
     eps = 1e-10
     S_db = 10 * np.log10(S + eps)
     created_fig = ax is None
-    if created_fig:
+    if ax is None:
         _, ax = plt.subplots(figsize=(10, 4))
     time_axis = np.arange(S.shape[1]) * hop_length / sr
     # True linear bin center frequencies for the rows of S
@@ -107,7 +112,7 @@ def plot_spectrogram(
     ax.figure.colorbar(mesh, ax=ax, format='%+2.0f dB')
     ax.set_xlabel('Time (s)')
     ax.set_title(title)
-    ax.figure.tight_layout()
+    cast(Figure, ax.figure).tight_layout()
     if show and created_fig:
         plt.show()
     return ax
@@ -116,7 +121,7 @@ def plot_spectrogram(
 def plot_feature_distribution(
     feature: np.ndarray,
     title: str = 'Feature Distribution',
-    ax: Optional[plt.Axes] = None,
+    ax: plt.Axes | None = None,
     show: bool = True,
 ) -> plt.Axes:
     """
@@ -136,13 +141,13 @@ def plot_feature_distribution(
     if feature.size == 0:
         raise ValueError('feature must be a non-empty array')
     created_fig = ax is None
-    if created_fig:
+    if ax is None:
         _, ax = plt.subplots(figsize=(6, 4))
     ax.hist(feature.flatten(), bins=50, color='steelblue', alpha=0.7)
     ax.set_title(title)
     ax.set_xlabel('Value')
     ax.set_ylabel('Frequency')
-    ax.figure.tight_layout()
+    cast(Figure, ax.figure).tight_layout()
     if show and created_fig:
         plt.show()
     return ax

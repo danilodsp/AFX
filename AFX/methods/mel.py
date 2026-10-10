@@ -1,130 +1,55 @@
 """
-Mel-scale filterbank construction and processing.
+Mel scale and triangular mel filterbanks, as in librosa (Slaney's Auditory Toolbox by default, HTK optional).
 """
+
+import warnings
+
 import numpy as np
-from typing import Optional
+
+# Slaney mel scale: linear below 1 kHz at 200/3 Hz per mel, logarithmic above
+_F_SP = 200.0 / 3
+_MIN_LOG_HZ = 1000.0
+_MIN_LOG_MEL = _MIN_LOG_HZ / _F_SP
+_LOGSTEP = np.log(6.4) / 27.0
 
 
 def hz_to_mel(hz: np.ndarray, htk: bool = False) -> np.ndarray:
-    """
-    Convert frequency in Hz to mel scale.
-
-    Args:
-        hz: Frequency in Hz
-        htk: Use HTK formula if True, otherwise use Slaney formula (librosa default)
-
-    Returns:
-        Frequency in mel scale
-    """
+    """Hz to mel: Slaney scale by default, 2595 log10(1 + f / 700) with ``htk``."""
     hz = np.asarray(hz, dtype=np.float64)
-
     if htk:
-        # HTK formula: mel = 2595 * log10(1 + hz / 700)
         return 2595.0 * np.log10(1.0 + hz / 700.0)
-    else:
-        # Slaney formula (librosa default with htk=False)
-        # Linear below 1000 Hz, log above
-        f_min = 0.0
-        f_sp = 200.0 / 3  # ~66.67 Hz per mel
-
-        # Frequencies where we switch from linear to log
-        min_log_hz = 1000.0
-        min_log_mel = (min_log_hz - f_min) / f_sp  # 15.0
-
-        # Log scale parameters
-        logstep = np.log(6.4) / 27.0  # Exact value matching librosa
-
-        # Apply piecewise conversion
-        mel = np.zeros_like(hz)
-
-        # Linear region
-        linear_mask = hz <= min_log_hz
-        mel[linear_mask] = (hz[linear_mask] - f_min) / f_sp
-
-        # Log region
-        log_mask = hz > min_log_hz
-        mel[log_mask] = min_log_mel + np.log(hz[log_mask] / min_log_hz) / logstep
-
-        return mel
+    with np.errstate(divide='ignore'):
+        log_part = _MIN_LOG_MEL + np.log(hz / _MIN_LOG_HZ) / _LOGSTEP
+    return np.where(hz <= _MIN_LOG_HZ, hz / _F_SP, log_part)
 
 
 def mel_to_hz(mel: np.ndarray, htk: bool = False) -> np.ndarray:
-    """
-    Convert frequency in mel scale to Hz.
-
-    Args:
-        mel: Frequency in mel scale
-        htk: Use HTK formula if True, otherwise use Slaney formula (librosa default)
-
-    Returns:
-        Frequency in Hz
-    """
+    """Inverse of hz_to_mel."""
     mel = np.asarray(mel, dtype=np.float64)
-
     if htk:
-        # HTK formula: hz = 700 * (10^(mel/2595) - 1)
-        return 700.0 * (10.0**(mel / 2595.0) - 1.0)
-    else:
-        # Slaney formula (librosa default with htk=False)
-        f_min = 0.0
-        f_sp = 200.0 / 3  # ~66.67 Hz per mel
-
-        # Frequencies where we switch from linear to log
-        min_log_hz = 1000.0
-        min_log_mel = (min_log_hz - f_min) / f_sp  # 15.0
-
-        # Log scale parameters
-        logstep = np.log(6.4) / 27.0  # Exact value matching librosa
-
-        # Apply piecewise conversion
-        hz = np.zeros_like(mel)
-
-        # Linear region
-        linear_mask = mel <= min_log_mel
-        hz[linear_mask] = f_min + mel[linear_mask] * f_sp
-
-        # Log region  
-        log_mask = mel > min_log_mel
-        hz[log_mask] = min_log_hz * np.exp(logstep * (mel[log_mask] - min_log_mel))
-
-        return hz
+        return 700.0 * (10.0 ** (mel / 2595.0) - 1.0)
+    with np.errstate(over='ignore'):
+        log_part = _MIN_LOG_HZ * np.exp(_LOGSTEP * (mel - _MIN_LOG_MEL))
+    return np.where(mel <= _MIN_LOG_MEL, mel * _F_SP, log_part)
 
 
 def mel_frequencies(
     n_mels: int,
     fmin: float = 0.0,
-    fmax: Optional[float] = None,
+    fmax: float | None = None,
     sr: int = 22050,
     htk: bool = False
 ) -> np.ndarray:
     """
-    Compute mel-scale frequencies.
+    n_mels + 2 frequencies in Hz, equally spaced in mel from fmin to fmax (default sr / 2).
 
-    Args:
-        n_mels: Number of mel bands
-        fmin: Minimum frequency in Hz
-        fmax: Maximum frequency in Hz (defaults to sr/2)
-        sr: Sample rate
-        htk: Use HTK formula if True, otherwise use Slaney formula (librosa default)
-
-    Returns:
-        Array of n_mels + 2 frequencies in Hz: the filter edge frequencies
-        (left edge, n_mels centers, right edge) needed to build triangular
-        filters. Note this differs from librosa.mel_frequencies, which
-        returns exactly n_mels values.
+    These are the filter edges: left edge, the n_mels centers, right edge.
+    librosa.mel_frequencies(n_mels + 2, ...) returns the same values.
     """
     if fmax is None:
         fmax = sr / 2.0
-
-    # Convert to mel scale
-    mel_min = hz_to_mel(np.array([fmin]), htk=htk)[0]
-    mel_max = hz_to_mel(np.array([fmax]), htk=htk)[0]
-
-    # Create mel scale points
-    mel_points = np.linspace(mel_min, mel_max, n_mels + 2)
-
-    # Convert back to Hz
-    return mel_to_hz(mel_points, htk=htk)
+    mel_min, mel_max = hz_to_mel(np.array([fmin, fmax]), htk=htk)
+    return mel_to_hz(np.linspace(mel_min, mel_max, n_mels + 2), htk=htk)
 
 
 def mel_filterbank(
@@ -132,95 +57,53 @@ def mel_filterbank(
     n_fft: int,
     sr: int = 22050,
     fmin: float = 0.0,
-    fmax: Optional[float] = None,
-    norm: str = 'slaney',
+    fmax: float | None = None,
+    norm: str | None = 'slaney',
     htk: bool = False
 ) -> np.ndarray:
     """
-    Create a mel-scale filterbank.
+    Triangular mel filterbank, shape (n_mels, n_fft // 2 + 1), equal to librosa.filters.mel.
 
-    Args:
-        n_mels: Number of mel filters
-        n_fft: Length of FFT
-        sr: Sample rate
-        fmin: Minimum frequency in Hz
-        fmax: Maximum frequency in Hz (defaults to sr/2)
-        norm: Normalization method ('slaney' or None)
-        htk: Use HTK formula if True, otherwise use Slaney formula (librosa default)
-
-    Returns:
-        Mel filterbank matrix of shape (n_mels, n_freq) where n_freq = n_fft // 2 + 1
+    Filter m rises from edge m to center m + 1 and falls to edge m + 2 of
+    mel_frequencies. ``norm='slaney'`` divides each filter by half its
+    width in Hz so every band has the same area; ``norm=None`` leaves a
+    peak of 1. Warns, like librosa, when a filter falls between FFT bins
+    and is all zero.
     """
     if fmax is None:
         fmax = sr / 2.0
-
-    # Get mel frequencies
     mel_freqs = mel_frequencies(n_mels, fmin, fmax, sr, htk=htk)
-
-    # Frequencies of the rfft bins (0 .. sr/2 inclusive). Note: fftfreq would
-    # give a negative frequency at the Nyquist index, truncating the top filter.
+    # rfftfreq, not fftfreq: the Nyquist bin must be +sr/2 or the top filter is cut
     fftfreqs = np.fft.rfftfreq(n_fft, 1.0 / sr)
-    n_freq = len(fftfreqs)
 
-    # Vectorized triangular filter construction (librosa's ramp formulation):
-    # rising edge (f - left)/(center - left), falling edge (right - f)/(right - center)
     fdiff = np.diff(mel_freqs)
     ramps = mel_freqs[:, np.newaxis] - fftfreqs[np.newaxis, :]
     lower = -ramps[:-2] / np.maximum(fdiff[:-1][:, np.newaxis], 1e-12)
     upper = ramps[2:] / np.maximum(fdiff[1:][:, np.newaxis], 1e-12)
     filterbank = np.maximum(0.0, np.minimum(lower, upper))
-    assert filterbank.shape == (n_mels, n_freq)
-
-    # Apply normalization
+    if not np.all((mel_freqs[:-2] == 0) | (filterbank.max(axis=1) > 0)):
+        warnings.warn(
+            f'Empty filters in the mel filterbank (n_mels={n_mels}, n_fft={n_fft}, sr={sr}): some bands fall '
+            'between FFT bins and stay zero. Use fewer mels or a larger n_fft.',
+            stacklevel=2,
+        )
     if norm == 'slaney':
-        # Slaney normalization: normalize by the width of each filter
-        enorm = 2.0 / (mel_freqs[2:] - mel_freqs[:-2])
-        filterbank *= enorm[:, np.newaxis]
-
+        filterbank *= (2.0 / (mel_freqs[2:] - mel_freqs[:-2]))[:, np.newaxis]
     return filterbank
 
 
-def apply_mel_filterbank(
-    spectrogram: np.ndarray,
-    filterbank: np.ndarray
-) -> np.ndarray:
-    """
-    Apply mel filterbank to a spectrogram.
-
-    Args:
-        spectrogram: Power or magnitude spectrogram of shape (n_freq, n_frames)
-        filterbank: Mel filterbank of shape (n_mels, n_freq)
-
-    Returns:
-        Mel spectrogram of shape (n_mels, n_frames)
-    """
+def apply_mel_filterbank(spectrogram: np.ndarray, filterbank: np.ndarray) -> np.ndarray:
+    """(n_mels, n_freq) @ (n_freq, n_frames) -> (n_mels, n_frames)."""
     return np.dot(filterbank, spectrogram)
 
 
 def log_mel_spectrogram(
     mel_spec: np.ndarray,
     amin: float = 1e-10,
-    top_db: Optional[float] = 80.0
+    top_db: float | None = 80.0
 ) -> np.ndarray:
-    """
-    Convert mel spectrogram to log scale.
-
-    Args:
-        mel_spec: Mel spectrogram
-        amin: Minimum value to clamp to (avoids log(0))
-        top_db: Maximum dB range (for dynamic range limiting)
-
-    Returns:
-        Log mel spectrogram in dB
-    """
-    # Clamp to minimum value
-    mel_spec = np.maximum(mel_spec, amin)
-
-    # Convert to dB
-    log_mel = 10.0 * np.log10(mel_spec)
-
-    # Apply dynamic range limiting if specified
+    """10 log10(max(S, amin)), floored ``top_db`` below the maximum (librosa.power_to_db with ref=1)."""
+    log_mel = 10.0 * np.log10(np.maximum(mel_spec, amin))
     if top_db is not None:
-        log_mel = np.maximum(log_mel, log_mel.max() - top_db)
-
+        log_mel = np.maximum(log_mel, np.max(log_mel) - top_db)
     return log_mel

@@ -7,15 +7,16 @@ plus band noise) so no audio fixture needs to be committed to the repo. If a
 real LibriSpeech sample is present at tests/data/116-288045-0000.wav it is
 used instead.
 """
+import os
+
+import librosa
 import numpy as np
 import pytest
 import soundfile as sf
-from AFX.methods.stft import stft, power_spectrogram
-from AFX.methods.mel import mel_filterbank, apply_mel_filterbank, log_mel_spectrogram
-from AFX.methods.dct import extract_mfcc_coefficients
 
-import librosa
-import os
+from AFX.methods.dct import extract_mfcc_coefficients
+from AFX.methods.mel import apply_mel_filterbank, log_mel_spectrogram, mel_filterbank
+from AFX.methods.stft import power_spectrogram, stft
 
 TEST_WAV = "tests/data/116-288045-0000.wav"
 
@@ -54,7 +55,9 @@ def test_mel_and_mfcc_against_librosa(sr, n_mels, n_mfcc, frame_size, hop_length
         y = _speech_like_signal(sr)
 
     # --- Librosa reference ---
-    mel_librosa = librosa.feature.melspectrogram(y=y, sr=sr, n_fft=frame_size, hop_length=hop_length, n_mels=n_mels, power=2.0)
+    mel_librosa = librosa.feature.melspectrogram(
+        y=y, sr=sr, n_fft=frame_size, hop_length=hop_length, n_mels=n_mels, power=2.0
+    )
     log_mel_librosa = librosa.power_to_db(mel_librosa, ref=np.max)
     mfcc_librosa = librosa.feature.mfcc(S=log_mel_librosa, n_mfcc=n_mfcc)
 
@@ -82,7 +85,9 @@ def test_mel_and_mfcc_against_librosa(sr, n_mels, n_mfcc, frame_size, hop_length
     )
 
     # Only check the first coefficient is finite (do not compare value)
-    assert np.isfinite(mfcc[0]).all() and np.isfinite(mfcc_librosa[0]).all(), "First MFCC coefficient contains non-finite values"
+    assert np.isfinite(mfcc[0]).all() and np.isfinite(mfcc_librosa[0]).all(), (
+        "First MFCC coefficient contains non-finite values"
+    )
 
     # --- Statistical comparison ---
     def describe(arr, name):

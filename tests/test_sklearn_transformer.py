@@ -157,3 +157,55 @@ def test_default_config_loads(signals):
                               sample_rate=SR)
     X = ext.fit_transform(signals[:2])
     assert X.shape[0] == 2
+
+
+def test_output_columns_follow_requested_feature_order():
+    from AFX.sklearn import AFXFeatureExtractor
+
+    x = [np.random.default_rng(0).standard_normal(8000)]
+    ext = AFXFeatureExtractor(features=['mfcc', 'zcr'], sample_rate=16000, aggregation='summary').fit(x)
+    names = list(ext.get_feature_names_out())
+    assert names[0] == 'mfcc_mean_0' and names[-1] == 'zcr_std'
+
+
+@pytest.mark.parametrize('bad', [np.zeros((8000, 2)), np.zeros(8000, dtype=np.int16)])
+def test_raw_signals_are_validated(bad):
+    from AFX.sklearn import AFXFeatureExtractor
+
+    with pytest.raises((ValueError, TypeError)):
+        AFXFeatureExtractor(features=['zcr'], sample_rate=16000).fit([bad])
+
+
+def test_bad_aggregation_fails_before_extraction():
+    from AFX.sklearn import AFXFeatureExtractor
+
+    with pytest.raises(ValueError, match='aggregation'):
+        AFXFeatureExtractor(features=['zcr'], aggregation='bogus').fit([np.zeros(100)])
+
+
+def test_config_sample_rate_and_aggregation_are_used_by_default():
+    import AFX
+
+    preset = AFX.load_preset('speech')
+    ext = AFXFeatureExtractor(config=preset).fit([np.zeros(SR)])
+    assert ext.config_['sample_rate'] == preset['sample_rate'] == SR
+    assert ext.config_['aggregation'] == 'summary'
+    assert AFXFeatureExtractor(config=preset, aggregation='mean').fit([np.zeros(SR)]).config_['aggregation'] == 'mean'
+    assert AFXFeatureExtractor(features=['zcr']).fit([np.zeros(100)]).config_['sample_rate'] == 22050
+
+
+def test_pandas_output():
+    pd = pytest.importorskip('pandas')
+    x = [np.random.default_rng(i).standard_normal(4000) for i in range(3)]
+    out = AFXFeatureExtractor(features=['zcr', 'mfcc'], sample_rate=SR).set_output(transform='pandas').fit_transform(x)
+    assert isinstance(out, pd.DataFrame) and list(out.columns[:2]) == ['zcr', 'mfcc_0']
+
+
+def test_features_dict_and_preset_name():
+    x = [np.random.default_rng(0).standard_normal(SR)]
+    ext = AFXFeatureExtractor(features={'mfcc': {'n_mfcc': 3}}, sample_rate=SR).fit(x)
+    assert list(ext.get_feature_names_out()) == ['mfcc_0', 'mfcc_1', 'mfcc_2']
+    with pytest.raises(ValueError, match="Did you mean 'n_mfcc'"):
+        AFXFeatureExtractor(features={'mfcc': {'n_mfccs': 3}}).fit(x)
+    ext = AFXFeatureExtractor(config='speech').fit(x)
+    assert ext.config_['sample_rate'] == 16000 and ext.config_['aggregation'] == 'summary'

@@ -1,160 +1,143 @@
 """
 Feature aggregation utilities (mean, std, pooling strategies).
 """
-from typing import Dict, Union
+
+import warnings
+from collections.abc import Callable
+
 import numpy as np
-from scipy.stats import skew, kurtosis
 
-from AFX.utils import stack_feature_vectors, zscore_normalize, minmax_normalize
+from AFX.utils import minmax_normalize, stack_feature_vectors, zscore_normalize
 
 
-def mean_pooling(features: Dict[str, np.ndarray]) -> Dict[str, np.ndarray]:
-    """Aggregate features by computing the mean along the last axis."""
+def _moments(v: np.ndarray, which: tuple[str, ...]) -> dict[str, np.ndarray]:
+    """
+    NaN-ignoring statistics over the last axis, kept as a length-1 axis.
+
+    Frames where a feature is undefined (NaN, e.g. HNR of a silent frame)
+    are skipped; a statistic is NaN only when every frame is NaN. Skewness
+    and kurtosis use biased moments with Fisher's definition and are NaN at
+    zero variance, as in scipy.stats.skew / kurtosis.
+    """
+    out = {}
+    with np.errstate(all='ignore'), warnings.catch_warnings():
+        warnings.simplefilter('ignore', RuntimeWarning)
+        mean = np.nanmean(v, axis=-1, keepdims=True)
+        if 'mean' in which:
+            out['mean'] = mean
+        if 'std' in which:
+            out['std'] = np.nanstd(v, axis=-1, keepdims=True)
+        if 'skew' in which or 'kurt' in which:
+            dev = v - mean
+            m2 = np.nanmean(dev ** 2, axis=-1, keepdims=True)
+            zero = m2 <= (np.finfo(np.float64).eps * mean) ** 2
+            if 'skew' in which:
+                m3 = np.nanmean(dev ** 3, axis=-1, keepdims=True)
+                out['skew'] = np.where(zero, np.nan, m3 / m2 ** 1.5)
+            if 'kurt' in which:
+                m4 = np.nanmean(dev ** 4, axis=-1, keepdims=True)
+                out['kurt'] = np.where(zero, np.nan, m4 / m2 ** 2 - 3.0)
+    return out
+
+
+def _pool(features, which, suffix):
     result = {}
     for k, v in features.items():
+        v = np.asarray(v, dtype=np.float64)
         if v.ndim == 0:
-            result[k] = v
+            stats = {'mean': v, 'std': np.zeros_like(v), 'skew': np.zeros_like(v), 'kurt': np.zeros_like(v)}
         else:
-            result[k] = np.mean(v, axis=-1, keepdims=True)
+            stats = _moments(v, which)
+        for name in which:
+            result[f'{k}_{name}' if suffix else k] = stats[name]
     return result
 
-def std_pooling(features: Dict[str, np.ndarray]) -> Dict[str, np.ndarray]:
-    """Aggregate features by computing the standard deviation along the last axis."""
-    result = {}
-    for k, v in features.items():
-        if v.ndim == 0:
-            result[k] = v
-        else:
-            result[k] = np.std(v, axis=-1, keepdims=True)
-    return result
 
-def statistical_summary(features: Dict[str, np.ndarray]) -> Dict[str, np.ndarray]:
-    """Return both mean and standard deviation for each feature."""
-    summary = {}
-    for k, v in features.items():
-        if v.ndim == 0:
-            summary[f'{k}_mean'] = v
-            summary[f'{k}_std'] = np.zeros_like(v)
-        else:
-            summary[f'{k}_mean'] = np.mean(v, axis=-1, keepdims=True)
-            summary[f'{k}_std'] = np.std(v, axis=-1, keepdims=True)
-    return summary
+def mean_pooling(features: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
+    """Mean over the last (time) axis, ignoring NaN frames."""
+    return _pool(features, ('mean',), suffix=False)
 
-def skew_pooling(features: Dict[str, np.ndarray]) -> Dict[str, np.ndarray]:
-    """Aggregate features by computing skewness along the last axis."""
-    result = {}
-    for k, v in features.items():
-        if v.ndim == 0:
-            result[k] = np.zeros_like(v)
-        else:
-            result[k] = skew(v, axis=-1, keepdims=True)
-    return result
 
-def kurtosis_pooling(features: Dict[str, np.ndarray]) -> Dict[str, np.ndarray]:
-    """Aggregate features by computing kurtosis along the last axis."""
-    result = {}
-    for k, v in features.items():
-        if v.ndim == 0:
-            result[k] = np.zeros_like(v)
-        else:
-            result[k] = kurtosis(v, axis=-1, keepdims=True)
-    return result
+def std_pooling(features: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
+    """Standard deviation over the last axis, ignoring NaN frames."""
+    return _pool(features, ('std',), suffix=False)
 
-def advanced_statistical_summary(features: Dict[str, np.ndarray]) -> Dict[str, np.ndarray]:
-    """Return mean, std, skewness and kurtosis for each feature."""
-    summary = {}
-    for k, v in features.items():
-        if v.ndim == 0:
-            summary[f'{k}_mean'] = v
-            summary[f'{k}_std'] = np.zeros_like(v)
-            summary[f'{k}_skew'] = np.zeros_like(v)
-            summary[f'{k}_kurt'] = np.zeros_like(v)
-        else:
-            summary[f'{k}_mean'] = np.mean(v, axis=-1, keepdims=True)
-            summary[f'{k}_std'] = np.std(v, axis=-1, keepdims=True)
-            summary[f'{k}_skew'] = skew(v, axis=-1, keepdims=True)
-            summary[f'{k}_kurt'] = kurtosis(v, axis=-1, keepdims=True)
-    return summary
+
+def statistical_summary(features: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
+    """<name>_mean and <name>_std over the last axis, ignoring NaN frames."""
+    return _pool(features, ('mean', 'std'), suffix=True)
+
+
+def skew_pooling(features: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
+    """Skewness over the last axis, ignoring NaN frames."""
+    return _pool(features, ('skew',), suffix=False)
+
+
+def kurtosis_pooling(features: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
+    """Excess kurtosis over the last axis, ignoring NaN frames."""
+    return _pool(features, ('kurt',), suffix=False)
+
+
+def advanced_statistical_summary(features: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
+    """<name>_mean, _std, _skew and _kurt over the last axis, ignoring NaN frames."""
+    return _pool(features, ('mean', 'std', 'skew', 'kurt'), suffix=True)
+
 
 def sliding_window_aggregation(
-    features: Dict[str, np.ndarray], 
-    window_size: int, 
-    hop_length: int, 
+    features: dict[str, np.ndarray],
+    window_size: int,
+    hop_length: int,
     agg_method: str = 'mean'
-) -> Dict[str, np.ndarray]:
+) -> dict[str, np.ndarray]:
     """
     Apply sliding window aggregation to features.
     Args:
         features: Dict of feature arrays (shape: [..., time_frames])
         window_size: Size of the sliding window in frames
         hop_length: Hop length between windows in frames
-        agg_method: Aggregation method within each window ('mean', 'std', 'max', 'min')
+        agg_method: Aggregation method within each window ('mean', 'std', 'max', 'min'),
+            NaN frames ignored
     Returns:
-        Dict of aggregated features with reduced temporal dimension
+        Dict of arrays with the last axis replaced by one value per window
     """
+    reducers: dict[str, Callable[..., np.ndarray]] = {
+        'mean': np.nanmean, 'std': np.nanstd, 'max': np.nanmax, 'min': np.nanmin,
+    }
+    if agg_method not in reducers:
+        raise ValueError(f'Unknown aggregation method: {agg_method}')
+    reduce = reducers[agg_method]
     result = {}
-    for k, v in features.items():
-        if v.ndim == 0:
-            result[k] = v
-            continue
-
-        # Apply sliding window to the last axis (time dimension)
-        time_frames = v.shape[-1]
-        if time_frames < window_size:
-            # If signal is shorter than window, use global aggregation
-            if agg_method == 'mean':
-                result[k] = np.mean(v, axis=-1, keepdims=True)
-            elif agg_method == 'std':
-                result[k] = np.std(v, axis=-1, keepdims=True)
-            elif agg_method == 'max':
-                result[k] = np.max(v, axis=-1, keepdims=True)
-            elif agg_method == 'min':
-                result[k] = np.min(v, axis=-1, keepdims=True)
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', RuntimeWarning)
+        for k, v in features.items():
+            v = np.asarray(v, dtype=np.float64)
+            if v.ndim == 0:
+                result[k] = v
+            elif v.shape[-1] < window_size:
+                # Shorter than one window: one global value
+                result[k] = reduce(v, axis=-1, keepdims=True)
             else:
-                raise ValueError(f"Unknown aggregation method: {agg_method}")
-        else:
-            # Calculate number of windows
-            n_windows = (time_frames - window_size) // hop_length + 1
-            window_results = []
-
-            for i in range(n_windows):
-                start_idx = i * hop_length
-                end_idx = start_idx + window_size
-                window_data = v[..., start_idx:end_idx]
-
-                if agg_method == 'mean':
-                    window_agg = np.mean(window_data, axis=-1)
-                elif agg_method == 'std':
-                    window_agg = np.std(window_data, axis=-1)
-                elif agg_method == 'max':
-                    window_agg = np.max(window_data, axis=-1)
-                elif agg_method == 'min':
-                    window_agg = np.min(window_data, axis=-1)
-                else:
-                    raise ValueError(f"Unknown aggregation method: {agg_method}")
-
-                window_results.append(window_agg)
-
-            # Stack window results along the time axis
-            result[k] = np.stack(window_results, axis=-1)
-
+                windows = np.lib.stride_tricks.sliding_window_view(v, window_size, axis=-1)[..., ::hop_length, :]
+                result[k] = reduce(windows, axis=-1)
     return result
 
+
 def aggregate_features(
-    features: Dict[str, np.ndarray],
+    features: dict[str, np.ndarray],
     method: str = 'mean',
     flatten: bool = True,
-    normalize: str = None,
-    window_size: int = None,
-    hop_length: int = None,
-    norm_stats: Dict[str, Dict[str, float]] = None,
+    normalize: str | None = None,
+    window_size: int | None = None,
+    hop_length: int | None = None,
+    norm_stats: dict[str, dict[str, float]] | None = None,
     sliding_agg: str = 'mean'
-) -> Union[Dict[str, np.ndarray], np.ndarray]:
+) -> dict[str, np.ndarray] | np.ndarray:
     """
     Aggregate features using the specified method, then optionally flatten and normalize each feature.
     Args:
         features: Dict of feature arrays
-        method: Aggregation method ('mean', 'std', 'summary', 'advanced_summary', 'skew', 'kurtosis', 'sliding_window', 'stack')
+        method: Aggregation method ('mean', 'std', 'summary', 'advanced_summary',
+            'skew', 'kurtosis', 'sliding_window', 'stack')
         flatten: Whether to flatten each feature to 1D (ignored if method='stack')
         normalize: Normalization method ('zscore', 'minmax', or None)
         window_size: Window size for sliding window aggregation (required if method='sliding_window')

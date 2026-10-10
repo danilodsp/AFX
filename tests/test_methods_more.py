@@ -3,19 +3,17 @@ Coverage for AFX.methods modules previously untested directly:
 stft (incl. result cache), delta, gammatone, cqt, chroma, and the
 filterbank caches.
 """
+import librosa
 import numpy as np
 import pytest
-import librosa
 
-from AFX.methods.stft import stft, clear_stft_cache
-from AFX.methods.mel import mel_filterbank
-from AFX.methods.delta import compute_delta
-from AFX.methods.gammatone import gammatone_filterbank, erb_space
-from AFX.methods.cqt import cqt_filterbank, cqt_approximation
 from AFX.methods.chroma import chroma_from_stft, frequency_to_chroma_bin
-from AFX.utils.cache import (
-    get_cached_mel_filterbank, cache_mel_filterbank, clear_feature_cache
-)
+from AFX.methods.cqt import cqt_approximation, cqt_filterbank
+from AFX.methods.delta import compute_delta
+from AFX.methods.gammatone import erb_space, gammatone_filterbank
+from AFX.methods.mel import mel_filterbank
+from AFX.methods.stft import clear_stft_cache, stft
+from AFX.utils.cache import cache_mel_filterbank, clear_feature_cache, get_cached_mel_filterbank
 
 SR = 22050
 
@@ -73,13 +71,14 @@ def test_stft_short_signal_pads_to_one_frame():
 
 # ---------- delta ----------
 
-def test_compute_delta_matches_librosa_interior():
+@pytest.mark.parametrize('order', [1, 2])
+@pytest.mark.parametrize('width', [3, 5, 9])
+def test_compute_delta_matches_librosa(width, order):
     rng = np.random.RandomState(0)
     feats = rng.randn(5, 60)
-    ours = compute_delta(feats, width=9, order=1)
-    ref = librosa.feature.delta(feats, width=9, order=1, axis=1)
-    # Edge handling differs (edge-replication vs interp); interior must match
-    assert np.allclose(ours[:, 8:-8], ref[:, 8:-8], atol=1e-8)
+    ours = compute_delta(feats, width=width, order=order)
+    ref = librosa.feature.delta(feats, width=width, order=order, axis=1)
+    np.testing.assert_allclose(ours, ref, atol=1e-12)
 
 
 def test_compute_delta_validates_order():
@@ -87,12 +86,9 @@ def test_compute_delta_validates_order():
         compute_delta(np.zeros((3, 20)), order=3)
 
 
-def test_compute_delta_order2_is_delta_of_delta():
-    rng = np.random.RandomState(1)
-    feats = rng.randn(4, 50)
-    d1 = compute_delta(feats, width=5, order=1)
-    d2 = compute_delta(feats, width=5, order=2)
-    assert np.allclose(d2, compute_delta(d1, width=5, order=1), atol=1e-8)
+def test_compute_delta_clips_width_to_sequence():
+    feats = np.random.RandomState(1).randn(2, 6)
+    np.testing.assert_allclose(compute_delta(feats, width=9), compute_delta(feats, width=5))
 
 
 # ---------- gammatone ----------
@@ -167,3 +163,33 @@ def test_mel_filterbank_matches_librosa():
     fb = mel_filterbank(128, 2048, SR, 0.0, SR / 2.0, norm='slaney')
     ref = librosa.filters.mel(sr=SR, n_fft=2048, n_mels=128)
     assert np.max(np.abs(fb - ref)) < 1e-6
+
+
+def test_stft_cache_is_thread_safe():
+    from concurrent.futures import ThreadPoolExecutor
+
+    rng = np.random.default_rng(0)
+    signals = [rng.standard_normal(4000) for _ in range(12)]
+    expected = [np.array(stft(x, frame_size=256, hop_length=64)) for x in signals]
+    with ThreadPoolExecutor(8) as pool:
+        results = list(pool.map(lambda i: stft(signals[i % 12], frame_size=256, hop_length=64), range(400)))
+    for i, r in enumerate(results):
+        np.testing.assert_array_equal(r, expected[i % 12])
+
+
+def test_delta_kernel_values_and_checks():
+    from AFX.methods.delta import delta_kernel
+
+    np.testing.assert_allclose(delta_kernel(5), [-0.2, -0.1, 0.0, 0.1, 0.2])
+    for bad in (1, 4):
+        with pytest.raises(ValueError):
+            delta_kernel(bad)
+
+
+def test_frame_signal_matches_stft_framing():
+    from AFX.utils.frame_utils import frame_signal
+
+    x = np.arange(10.0)
+    frames = frame_signal(x, frame_length=4, hop_length=3)
+    np.testing.assert_array_equal(frames, [[0, 3, 6], [1, 4, 7], [2, 5, 8], [3, 6, 9]])
+    np.testing.assert_array_equal(frame_signal(np.ones(2), 4, 2)[:, 0], [1, 1, 0, 0])

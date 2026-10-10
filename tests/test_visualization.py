@@ -2,6 +2,7 @@
 Unit tests for AFX.utils.visualization.
 """
 import matplotlib
+
 matplotlib.use('Agg')
 
 import matplotlib.pyplot as plt
@@ -9,9 +10,9 @@ import numpy as np
 import pytest
 
 from AFX.utils.visualization import (
+    plot_feature_distribution,
     plot_mfcc,
     plot_spectrogram,
-    plot_feature_distribution,
 )
 
 

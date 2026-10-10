@@ -10,7 +10,10 @@ import numpy as np
 import pytest
 
 from AFX.extractors import (
-    cepstral_features, frequency_domain, harmonic_features, time_domain,
+    cepstral_features,
+    frequency_domain,
+    harmonic_features,
+    time_domain,
 )
 from AFX.utils.frame_utils import frame_times
 

@@ -6,12 +6,12 @@ import numpy as np
 
 from AFX.extractors import time_domain
 from AFX.extractors.time_domain import (
-    extract_kurtosis,
-    extract_short_time_energy,
     extract_energy_ratio,
-    extract_sample_entropy,
+    extract_kurtosis,
     extract_mobility,
-    extract_rms_energy
+    extract_rms_energy,
+    extract_sample_entropy,
+    extract_short_time_energy,
 )
 
 
@@ -85,25 +85,14 @@ def test_extract_zero_crossing_rate_compare_with_librosa():
     hop_length = 512
     sr = 22050
 
-    # We'll test using the same frames
-    frames = librosa.util.frame(signal, frame_length=frame_size, hop_length=hop_length)
-    n_frames = frames.shape[1]
-
-    # Calculate ZCR using our implementation
     result = time_domain.extract_zero_crossing_rate(
         signal, sr=sr, frame_size=frame_size, hop_length=hop_length
     )
+    zcr_librosa = librosa.feature.zero_crossing_rate(
+        signal, frame_length=frame_size, hop_length=hop_length, center=False
+    )[0]
+    np.testing.assert_allclose(result['zcr'], zcr_librosa, atol=1e-12)
     zcr_custom = result['zcr']
-
-    # Calculate ZCR using librosa manually on the same frames
-    zcr_librosa = np.zeros(n_frames)
-    for i in range(n_frames):
-        frame = frames[:, i]
-        changes = np.abs(np.diff(np.signbit(frame).astype(int)))
-        zcr_librosa[i] = np.sum(changes) / (frame_size - 1)
-
-    # Check that values match (with tolerance)
-    assert np.allclose(zcr_librosa, zcr_custom, rtol=1e-5, atol=1e-5)
 
     # Check metadata return
     result_with_meta = time_domain.extract_zero_crossing_rate(

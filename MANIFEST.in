@@ -3,3 +3,6 @@ include AFX/presets/*.json
 include LICENSE
 include README.md
 include CHANGELOG.md
+include mkdocs.yml
+recursive-include docs *.md *.py
+recursive-include benchmarks *.py

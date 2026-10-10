@@ -1,10 +1,10 @@
 """
 Test the spectral flatness implementation against librosa.
 """
-import numpy as np
-from AFX.extractors import frequency_domain
-
 import librosa
+import numpy as np
+
+from AFX.extractors import frequency_domain
 
 
 def test_extract_spectral_flatness_against_librosa():

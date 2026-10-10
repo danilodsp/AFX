@@ -1,12 +1,11 @@
 """
 Torch compatibility utilities (for future extension).
 """
-from typing import Dict
 
 import numpy as np
 
 
-def to_torch(features: Dict[str, np.ndarray], dtype=None):
+def to_torch(features: dict[str, np.ndarray], dtype=None):
     """
     Convert feature dict to torch.Tensor (if torch is available).
 
@@ -22,7 +21,7 @@ def to_torch(features: Dict[str, np.ndarray], dtype=None):
         Tensors are created with ``torch.as_tensor(v, dtype=...)``. When the
         input dtype differs from the target dtype (e.g. float64 numpy arrays
         converted to float32 tensors), the data is copied rather than
-        aliased — so there are no memory-sharing surprises. Inputs already
+        aliased, so there are no memory-sharing surprises. Inputs already
         matching the target dtype may share memory with the source array.
     """
     try:

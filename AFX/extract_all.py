@@ -1,13 +1,19 @@
 """
 Unified API for extracting all audio features as specified in config.
 """
-from typing import Dict, Any
+import os
+import warnings
+from collections.abc import Callable
+from typing import Any, cast
+
 import numpy as np
-from .extractors import time_domain, frequency_domain, cepstral_features, harmonic_features
+
+from .extractors import cepstral_features, frequency_domain, harmonic_features, linear_prediction, time_domain
 from .utils.aggregator import aggregate_features
+from .utils.config_loader import validate_config
+from .utils.validation import validate_signal, validate_sr
 
-
-FEATURE_MAP = {
+FEATURE_MAP: dict[str, Callable[..., dict[str, Any]]] = {
     # Time domain
     'zcr': time_domain.extract_zero_crossing_rate,
     'variance': time_domain.extract_variance,
@@ -37,6 +43,9 @@ FEATURE_MAP = {
     'spectral_flux': frequency_domain.extract_spectral_flux,
     'spectral_skewness': frequency_domain.extract_spectral_skewness,
     'spectral_slope': frequency_domain.extract_spectral_slope,
+    'spectral_kurtosis': frequency_domain.extract_spectral_kurtosis,
+    'spectral_crest': frequency_domain.extract_spectral_crest,
+    'spectral_decrease': frequency_domain.extract_spectral_decrease,
     # Cepstral / spectrogram
     'mfcc': cepstral_features.extract_mfcc,
     'mfcc_delta': cepstral_features.extract_mfcc_delta,
@@ -46,25 +55,31 @@ FEATURE_MAP = {
     'cqt': cepstral_features.extract_cqt,
     'melspectrogram': cepstral_features.extract_melspectrogram,
     'gfcc': cepstral_features.extract_gfcc,
+    'tonnetz': cepstral_features.extract_tonnetz,
+    'onset_strength': cepstral_features.extract_onset_strength,
     # Harmonic
     'pitch': harmonic_features.extract_pitch,
     'thd': harmonic_features.extract_thd,
     'hnr': harmonic_features.extract_hnr,
+    # Linear prediction
+    'lpc': linear_prediction.extract_lpc,
+    'formants': linear_prediction.extract_formants,
 }
 
 def extract_all_features(
     signal: np.ndarray,
     sr: int,
-    config: Dict[str, Any],
+    config: dict[str, Any],
     return_metadata: bool = False
-) -> Dict[str, np.ndarray]:
+) -> dict[str, Any] | np.ndarray:
     """
     Extract all features specified in the config from the audio signal.
     Args:
         signal: Audio signal (1D np.ndarray)
         sr: Sample rate
         config: Config dict with a 'features' block mapping feature names to
-            extractor keyword arguments. Optional keys: 'aggregation'
+            extractor keyword arguments (or a list of names for default
+            parameters). Optional keys: 'aggregation'
             (default 'mean'), 'flatten' (default True), 'normalize'
             ('zscore', 'minmax' or None), 'aggregation_params' (extra
             keyword arguments for ``aggregate_features``, e.g. window_size
@@ -76,35 +91,34 @@ def extract_all_features(
         when aggregation is 'stack'. With return_metadata=True a dict with
         'features' and 'metadata' keys.
     """
-    if not isinstance(config, dict) or 'features' not in config:
-        raise ValueError(
-            "config must be a dict with a 'features' key mapping feature "
-            "names to parameter dicts (see AFX/config.json)"
+    if isinstance(signal, (str, os.PathLike)) or (
+        isinstance(signal, (list, tuple)) and signal and isinstance(signal[0], (str, os.PathLike))
+    ):
+        raise TypeError(
+            'extract_all_features takes a signal array. Load a file with AFX.load_audio; for many files use '
+            'AFX.extract_features_from_folder or AFX.sklearn.AFXFeatureExtractor.'
         )
-    signal = np.asarray(signal)
-    if signal.ndim != 1:
-        raise ValueError(
-            f'signal must be 1-D (mono), got shape {signal.shape}. '
-            'Downmix multichannel audio first, e.g. signal.mean(axis=1).'
+    signal = validate_signal(signal)
+    validate_sr(sr)
+    # sr is passed separately, so the config's own sample_rate is optional here
+    config = validate_config(config, require_sample_rate=False)
+    if 'sample_rate' in config and config['sample_rate'] != sr:
+        warnings.warn(
+            f"sr={sr} differs from the config's sample_rate={config['sample_rate']}. Frame sizes are in samples, "
+            'so the analysis windows change length in time; resample with load_audio(path, sr=config["sample_rate"]).',
+            stacklevel=2,
         )
+
     preserve_shape = config.get('preserve_shape', False)
-    features = {}
-    metadata = {}
+    per_frame: dict[str, np.ndarray] = {}
+    metadata: dict[str, Any] = {}
     for feat_name, params in config['features'].items():
-        extractor = FEATURE_MAP.get(feat_name)
-        if extractor is None:
-            raise KeyError(
-                f'Unknown feature: {feat_name!r}. '
-                f'Available features: {sorted(FEATURE_MAP)}'
-            )
-        params = params.copy()
-        params['return_metadata'] = return_metadata
-        out = extractor(signal, sr, **params)
+        out = FEATURE_MAP[feat_name](signal, sr, return_metadata=return_metadata, **params)
+        per_frame[feat_name] = out[feat_name]
         if return_metadata and 'metadata' in out:
             metadata[feat_name] = out['metadata']
-            features[feat_name] = out[feat_name]
-        else:
-            features[feat_name] = out[feat_name]
+
+    features: dict[str, np.ndarray] | np.ndarray = per_frame
 
     if not preserve_shape:
         # Extra keyword arguments for aggregate_features: window_size /
@@ -114,8 +128,51 @@ def extract_all_features(
         agg_kwargs['method'] = config.get('aggregation', 'mean')
         agg_kwargs['flatten'] = config.get('flatten', True)
         agg_kwargs['normalize'] = config.get('normalize', None)
-        features = aggregate_features(features, **agg_kwargs)
+        features = aggregate_features(per_frame, **agg_kwargs)
 
     if return_metadata:
         return {'features': features, 'metadata': metadata}
     return features
+
+
+def extract_segments(
+    signal: np.ndarray,
+    sr: int,
+    config: dict[str, Any],
+    segment_length: float,
+    hop: float | None = None,
+) -> tuple[list[str], np.ndarray, np.ndarray]:
+    """
+    One aggregated feature vector per fixed-length segment of a long signal.
+
+    The signal is cut into segments of ``segment_length`` seconds every
+    ``hop`` seconds (default: no overlap; a trailing partial segment is
+    dropped, and a signal shorter than one segment is a single segment),
+    and ``extract_all_features`` runs on each with ``config``.
+
+    Returns:
+        (names, X, starts): column names as in flatten_features, an array
+        of shape (n_segments, n_features), and each segment's start time
+        in seconds.
+    """
+    from AFX.utils.batch_utils import flatten_features
+
+    if segment_length <= 0 or (hop is not None and hop <= 0):
+        raise ValueError('segment_length and hop must be positive')
+    if config.get('preserve_shape') or config.get('aggregation') == 'stack':
+        raise ValueError("extract_segments needs an aggregation other than 'stack' and no preserve_shape")
+    signal = validate_signal(signal)
+    validate_sr(sr)
+    seg = max(1, int(round(segment_length * sr)))
+    step = seg if hop is None else max(1, int(round(hop * sr)))
+    starts = np.arange(0, max(len(signal) - seg, 0) + 1, step)
+    names: list[str] = []
+    rows = []
+    for start in starts:
+        feats = cast(dict[str, Any], extract_all_features(signal[start:start + seg], sr, config))
+        seg_names, values = flatten_features(feats)
+        if names and seg_names != names:
+            raise ValueError('feature dimensions changed between segments; fix the frame sizes in the config')
+        names = seg_names
+        rows.append(values)
+    return names, np.vstack(rows), starts / float(sr)

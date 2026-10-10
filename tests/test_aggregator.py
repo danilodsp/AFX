@@ -3,7 +3,9 @@ Unit tests for the new aggregate_features API (flatten and normalization).
 """
 import numpy as np
 import pytest
+
 from AFX.utils.aggregator import aggregate_features
+
 
 def test_aggregate_features_flatten():
     features = {'a': np.ones((2, 5)), 'b': np.arange(10).reshape(2, 5)}
@@ -69,14 +71,14 @@ def test_aggregate_features_kurtosis():
 def test_sliding_window_aggregation():
     """Test sliding window aggregation."""
     features = {'test': np.random.rand(3, 50)}  # 3 features x 50 time frames
-    
+
     # Test with valid window size
-    agg = aggregate_features(features, method='sliding_window', 
+    agg = aggregate_features(features, method='sliding_window',
                            window_size=10, hop_length=5, flatten=True)
     assert 'test' in agg
-    
+
     # Test with window larger than signal (should fall back to global)
-    agg_large = aggregate_features(features, method='sliding_window', 
+    agg_large = aggregate_features(features, method='sliding_window',
                                  window_size=100, hop_length=50, flatten=True)
     assert 'test' in agg_large
     assert agg_large['test'].shape == (3,)  # Should be global aggregation
@@ -84,16 +86,16 @@ def test_sliding_window_aggregation():
 def test_sliding_window_parameters():
     """Test that sliding window requires proper parameters."""
     features = {'test': np.random.rand(3, 20)}
-    
+
     try:
         # Should raise error without window_size and hop_length
         aggregate_features(features, method='sliding_window')
-        assert False, "Should have raised ValueError"
+        raise AssertionError("Should have raised ValueError")
     except ValueError as e:
         assert "window_size and hop_length must be specified" in str(e)
 
 def test_mean_pooling_1d_array():
-    """Ensure 1D arrays are aggregated correctly."""
+    """1-D arrays aggregate to one value."""
     features = {'x': np.arange(10)}
     agg = aggregate_features(features, method='mean', flatten=True)
     assert agg['x'].shape == (1,)
@@ -112,7 +114,7 @@ def test_sliding_window_1d_array():
 
 def test_scalar_normalization_skipped():
     """Test that normalization is skipped for scalar features (single value)."""
-    from AFX.utils.normalization import zscore_normalize, minmax_normalize
+    from AFX.utils.normalization import minmax_normalize, zscore_normalize
     # Scalar features
     features = {'a': np.array([42.0]), 'b': np.array([0.5])}
     z_norm = zscore_normalize(features)
@@ -169,3 +171,21 @@ def test_extract_all_features_rejects_stereo():
     stereo = np.zeros((1000, 2))
     with pytest.raises(ValueError, match='1-D'):
         extract_all_features(stereo, 22050, {'features': {'zcr': {}}})
+
+
+def test_extract_segments():
+    import AFX
+
+    sr = 8000
+    x = np.random.default_rng(0).standard_normal(sr * 3)
+    config = {'features': {'rms_energy': {}, 'mfcc': {'n_mfcc': 5, 'frame_size': 512, 'hop_length': 256}},
+              'aggregation': 'summary'}
+    names, X, starts = AFX.extract_segments(x, sr, config, segment_length=1.0, hop=0.5)
+    assert X.shape == (5, len(names)) and names[0] == 'rms_energy_mean'
+    np.testing.assert_allclose(starts, [0, 0.5, 1.0, 1.5, 2.0])
+    second = AFX.flatten_features(AFX.extract_all_features(x[sr // 2: sr // 2 + sr], sr, config))[1]
+    np.testing.assert_allclose(X[1], second)
+    _, X1, _ = AFX.extract_segments(x[:1000], sr, config, segment_length=1.0)
+    assert X1.shape[0] == 1
+    with pytest.raises(ValueError):
+        AFX.extract_segments(x, sr, {**config, 'aggregation': 'stack'}, segment_length=1.0)

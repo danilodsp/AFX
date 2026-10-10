@@ -5,9 +5,8 @@ import numpy as np
 import pytest
 
 import AFX
-from AFX.presets import list_presets, load_preset, preset_info
 from AFX import extract_all_features
-
+from AFX.presets import list_presets, load_preset, preset_info
 
 EXPECTED = {'speech', 'bioacoustics', 'music', 'machinery'}
 

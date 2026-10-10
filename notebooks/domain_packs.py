@@ -30,13 +30,13 @@ import sys
 import tarfile
 import urllib.request
 import zipfile
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 
-from AFX.io.io import load_audio
 from AFX.extract_all import extract_all_features
+from AFX.io.io import load_audio
 
 
 # --------------------------------------------------------------------------- #
@@ -110,9 +110,9 @@ class DomainSpec:
     #: Prepare the dataset and return the directory that holds the audio.
     prepare: Callable[[str], str]
     #: (data_dir, classes, n_per_class, seed) -> list of (path, label)
-    collect: Callable[..., List[Tuple[str, str]]]
+    collect: Callable[..., list[tuple[str, str]]]
     #: Default class labels to keep (None = discover from data).
-    default_classes: Optional[Sequence[str]] = None
+    default_classes: Sequence[str] | None = None
     approx_download_mb: int = 0
 
 
@@ -136,7 +136,7 @@ def _prepare_ravdess(root: str) -> str:
 
 
 def _collect_ravdess(data_dir, classes, n_per_class, seed):
-    buckets: Dict[str, List[str]] = {}
+    buckets: dict[str, list[str]] = {}
     for r, _, files in os.walk(data_dir):
         for f in files:
             if not f.endswith('.wav'):
@@ -170,7 +170,7 @@ def _prepare_esc50(root: str) -> str:
 def _collect_esc50(data_dir, classes, n_per_class, seed):
     meta = os.path.join(data_dir, 'meta', 'esc50.csv')
     audio = os.path.join(data_dir, 'audio')
-    buckets: Dict[str, List[str]] = {}
+    buckets: dict[str, list[str]] = {}
     with open(meta, newline='') as fh:
         for row in csv.DictReader(fh):
             cat = row['category']
@@ -204,7 +204,7 @@ def _prepare_gtzan(root: str) -> str:
 
 
 def _collect_gtzan(data_dir, classes, n_per_class, seed):
-    buckets: Dict[str, List[str]] = {}
+    buckets: dict[str, list[str]] = {}
     for genre in sorted(os.listdir(data_dir)):
         gdir = os.path.join(data_dir, genre)
         if not os.path.isdir(gdir) or (classes and genre not in classes):
@@ -232,7 +232,7 @@ def _prepare_dcase_pump(root: str) -> str:
 def _collect_dcase_pump(data_dir, classes, n_per_class, seed):
     # The labeled split is test/ with normal_*.wav and anomaly_*.wav.
     test_dir = os.path.join(data_dir, 'test')
-    buckets: Dict[str, List[str]] = {}
+    buckets: dict[str, list[str]] = {}
     search = test_dir if os.path.isdir(test_dir) else data_dir
     for r, _, files in os.walk(search):
         for f in files:
@@ -247,10 +247,10 @@ def _collect_dcase_pump(data_dir, classes, n_per_class, seed):
 
 
 # --------------------------------------------------------------------------- #
-def _balance(buckets: Dict[str, List[str]], n_per_class: Optional[int],
-             seed: int) -> List[Tuple[str, str]]:
+def _balance(buckets: dict[str, list[str]], n_per_class: int | None,
+             seed: int) -> list[tuple[str, str]]:
     rng = random.Random(seed)
-    examples: List[Tuple[str, str]] = []
+    examples: list[tuple[str, str]] = []
     for label in sorted(buckets):
         paths = sorted(buckets[label])
         rng.shuffle(paths)
@@ -261,7 +261,7 @@ def _balance(buckets: Dict[str, List[str]], n_per_class: Optional[int],
     return examples
 
 
-DOMAINS: Dict[str, DomainSpec] = {
+DOMAINS: dict[str, DomainSpec] = {
     'speech': DomainSpec(
         name='speech', preset='speech', title='Speech & Paralinguistics',
         task='Speech-emotion classification (RAVDESS)',
@@ -300,16 +300,16 @@ DOMAINS: Dict[str, DomainSpec] = {
 # --------------------------------------------------------------------------- #
 # Feature matrix construction
 # --------------------------------------------------------------------------- #
-def features_to_vector(feats: Dict[str, np.ndarray]
-                       ) -> Tuple[np.ndarray, List[str]]:
+def features_to_vector(feats: dict[str, np.ndarray]
+                       ) -> tuple[np.ndarray, list[str]]:
     """
     Flatten an aggregated AFX feature dict into a single vector plus names.
 
     Scalar features keep their key; multi-value features expand to
-    ``key_0, key_1, ...`` — matching AFX's batch/CSV column convention.
+    ``key_0, key_1, ...``, the AFX batch/CSV column convention.
     """
-    values: List[float] = []
-    names: List[str] = []
+    values: list[float] = []
+    names: list[str] = []
     for key in feats:  # preserve insertion order for stable columns
         arr = np.asarray(feats[key], dtype=float).ravel()
         if arr.size == 1:
@@ -321,11 +321,11 @@ def features_to_vector(feats: Dict[str, np.ndarray]
     return np.asarray(values, dtype=float), names
 
 
-def build_feature_matrix(examples: Sequence[Tuple[str, str]],
-                         config: Dict,
-                         max_seconds: Optional[float] = 8.0,
+def build_feature_matrix(examples: Sequence[tuple[str, str]],
+                         config: dict,
+                         max_seconds: float | None = 8.0,
                          verbose: bool = True
-                         ) -> Tuple[np.ndarray, np.ndarray, List[str]]:
+                         ) -> tuple[np.ndarray, np.ndarray, list[str]]:
     """
     Extract preset features for every (path, label) example.
 
@@ -338,9 +338,9 @@ def build_feature_matrix(examples: Sequence[Tuple[str, str]],
         (X, y, feature_names) with X of shape (n_examples, n_features).
     """
     sr_target = config['sample_rate']
-    rows: List[np.ndarray] = []
-    labels: List[str] = []
-    names: Optional[List[str]] = None
+    rows: list[np.ndarray] = []
+    labels: list[str] = []
+    names: list[str] | None = None
     n = len(examples)
     for i, (path, label) in enumerate(examples):
         try:
@@ -360,7 +360,7 @@ def build_feature_matrix(examples: Sequence[Tuple[str, str]],
         if verbose and (i + 1) % 25 == 0:
             print(f'    extracted {i + 1}/{n}')
     if not rows:
-        raise RuntimeError('No features extracted — check the dataset path.')
+        raise RuntimeError('No features extracted; check the dataset path.')
     # Guard against ragged rows (e.g. a clip too short for some feature).
     width = max(r.size for r in rows)
     X = np.vstack([

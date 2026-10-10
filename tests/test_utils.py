@@ -2,7 +2,9 @@
 Unit tests for aggregator and shape_utils utilities.
 """
 import numpy as np
+
 from AFX.utils import aggregator, shape_utils
+
 
 def test_mean_pooling():
     features = {'a': np.ones((3, 10)), 'b': np.arange(10)}

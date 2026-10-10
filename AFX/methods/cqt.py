@@ -1,8 +1,8 @@
 """
 Constant-Q Transform (CQT) implementation and approximation.
 """
+
 import numpy as np
-from typing import Optional, Tuple
 
 C1_HZ = 32.70319566257483  # C1 in Hz
 
@@ -13,7 +13,7 @@ def cqt_filterbank(
     fmin: float,
     sr: int,
     frame_size: int,
-) -> Tuple[np.ndarray, np.ndarray]:
+) -> tuple[np.ndarray, np.ndarray]:
     """
     Build a triangular log-frequency filterbank projecting STFT bins onto
     geometrically spaced CQT bins.
@@ -84,10 +84,10 @@ def cqt_approximation(
     hop_length: int = 512,
     n_bins: int = 84,
     bins_per_octave: int = 12,
-    fmin: Optional[float] = None,
+    fmin: float | None = None,
     frame_size: int = 2048,
     center: bool = True,
-) -> Tuple[np.ndarray, np.ndarray]:
+) -> tuple[np.ndarray, np.ndarray]:
     """
     Compute a CQT approximation (pseudo-CQT) from an STFT.
 
@@ -117,7 +117,7 @@ def cqt_approximation(
         - Higher frame_size provides better resolution at low frequencies
         - Raises ValueError if the top bin exceeds Nyquist
     """
-    from AFX.methods.stft import stft, magnitude_spectrogram
+    from AFX.methods.stft import magnitude_spectrogram, stft
 
     # Set default minimum frequency (C1 note)
     if fmin is None:

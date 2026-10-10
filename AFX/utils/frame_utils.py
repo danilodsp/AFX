@@ -3,6 +3,8 @@ Utilities for audio frame processing.
 """
 import numpy as np
 
+from AFX.utils.validation import validate_signal
+
 
 def frame_times(
     n_frames: int,
@@ -50,3 +52,31 @@ def frame_signal(
         signal = np.pad(signal, (0, frame_length - len(signal)))
     frames = np.lib.stride_tricks.sliding_window_view(signal, frame_length)
     return np.ascontiguousarray(frames[::hop_length].T)
+
+
+def analysis_frames(
+    signal: np.ndarray,
+    frame_size: int | None,
+    hop_length: int | None,
+    center: bool = False,
+    pad_mode: str = 'constant',
+) -> np.ndarray:
+    """
+    (n_frames, frame_len) float64 view used by the frame-wise extractors.
+
+    With both ``frame_size`` and ``hop_length`` set: frames of frame_size
+    samples every hop_length samples, trailing samples that do not fill a
+    frame dropped. ``center`` first pads frame_size // 2 samples on both
+    sides (``pad_mode`` as in np.pad), so frame i is centred on sample
+    i * hop_length as in librosa. Without ``center``, a signal shorter than
+    one frame is analyzed as a single unpadded frame. With either size
+    None: the whole signal as one frame.
+    """
+    signal = validate_signal(signal).astype(np.float64, copy=False)
+    if frame_size is None or hop_length is None:
+        return signal[np.newaxis, :]
+    if center:
+        signal = np.pad(signal, frame_size // 2, mode=pad_mode)  # type: ignore[call-overload]
+    if len(signal) < frame_size:
+        return signal[np.newaxis, :]
+    return np.lib.stride_tricks.sliding_window_view(signal, frame_size)[::hop_length]

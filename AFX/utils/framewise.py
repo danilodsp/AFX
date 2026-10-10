@@ -1,80 +1,69 @@
 """
-Decorator for frame-wise feature extraction.
+Decorator that turns a whole-signal feature function into a frame-wise one.
 """
-from typing import Callable, Dict
-import numpy as np
 import functools
-from AFX.utils.frame_utils import frame_signal, frame_times
+import inspect
+from collections.abc import Callable
+from typing import Any
+
+import numpy as np
+
+from AFX.utils.frame_utils import analysis_frames, frame_times
 
 
 def framewise_extractor(feature_func: Callable) -> Callable:
     """
-    Decorator to apply a feature function frame-wise over an audio signal.
-    The decorated function will accept frame_size and hop_length kwargs.
-    If frame_size or hop_length are not provided, or the signal is shorter
-    than one frame, the function is called once on the whole signal (no
-    zero padding, so statistics of a short clip are not diluted by
-    padding). Returns a dict with the same key as the feature function,
-    with values stacked over frames.
+    Run ``feature_func(frame, sr, **params)`` on every frame and stack the results.
+
+    The wrapped function gains keyword-only ``frame_size``, ``hop_length``,
+    ``center`` and ``return_metadata`` arguments; framing follows
+    AFX.utils.frame_utils.analysis_frames (whole signal when either is None
+    or the clip is shorter than a frame). ``feature_func`` must return a
+    dict with exactly one key; scalar results stack to (n_frames,), vector
+    results to (n_dims, n_frames).
+
+    This calls Python once per frame. The built-in extractors are
+    vectorized; use it for custom features where that does not matter.
     """
     @functools.wraps(feature_func)
-    def wrapper(signal: np.ndarray, sr: int, *args,
-                frame_size: int = None, hop_length: int = None,
-                return_metadata: bool = False, **kwargs) -> Dict[str, np.ndarray]:
-        if frame_size is None or hop_length is None:
-            # Pass hop_length explicitly if provided, even when frame_size is None
-            if hop_length is not None:
-                return feature_func(signal, sr, *args, hop_length=hop_length, return_metadata=return_metadata, **kwargs)
-            else:
-                return feature_func(signal, sr, *args, return_metadata=return_metadata, **kwargs)
-
-        signal = np.asarray(signal)
-        if len(signal) < frame_size:
-            frames = signal.reshape(-1, 1)
-        else:
-            frames = frame_signal(signal, frame_length=frame_size, hop_length=hop_length)
-
-        results = []
+    def wrapper(signal: np.ndarray, sr: int | None = None, *, frame_size: int | None = None,
+                hop_length: int | None = None, center: bool = False, return_metadata: bool = False,
+                **params) -> dict[str, Any]:
+        frames = analysis_frames(signal, frame_size, hop_length, center)
         key = None
-        for i in range(frames.shape[1]):
-            # Forward frame_size/hop_length so inner functions that depend on
-            # them (e.g. for FFT sizing) see the actual frame length instead
-            # of silently falling back to their own defaults.
-            res = feature_func(
-                frames[:, i], sr, *args,
-                frame_size=frame_size, hop_length=hop_length, **kwargs
-            )
+        results = []
+        for frame in frames:
+            res = feature_func(np.array(frame), sr, **params)
             if key is None:
-                keys = [k for k in res.keys() if k != 'metadata']
+                keys = [k for k in res if k != 'metadata']
                 if len(keys) != 1:
                     raise ValueError(
                         f'{feature_func.__name__} returned {len(keys)} feature '
                         f'keys {keys}; framewise extraction supports exactly one.'
                     )
                 key = keys[0]
-            results.append(res[key])
+            results.append(np.asarray(res[key]))
 
-        # Stack results and ensure we have the right shape
-
-        # Determine the shape of a single frame's result
-        first_shape = np.shape(results[0])
-        if len(first_shape) == 0 or first_shape == () or first_shape == (1,):
-            # Scalar per frame: stack as 1D (n_frames,)
+        first_shape = results[0].shape
+        if first_shape in ((), (1,)):
             stacked = np.array(results).reshape(-1)
         else:
-            # Vector per frame. If the per-frame result has a singleton
-            # trailing dimension (e.g. (n_features, 1)), squeeze it so that
-            # stacking produces (n_features, n_frames) rather than
-            # (n_features, 1, n_frames).
             if first_shape[-1] == 1:
                 results = [np.squeeze(r, axis=-1) for r in results]
             stacked = np.stack(results, axis=-1)
-        result = {key: stacked}
-
+        out: dict[str, Any] = {str(key): stacked}
         if return_metadata:
-            result['metadata'] = {
-                'times': frame_times(frames.shape[1], sr, hop_length, frames.shape[0])
-            }
+            if sr is None:
+                raise ValueError('sr is required when return_metadata=True')
+            centered = center and frame_size is not None and hop_length is not None
+            out['metadata'] = {'times': frame_times(len(frames), sr, hop_length or 0, frames.shape[1], centered)}
+        return out
 
-        return result
+    inner = [p for p in inspect.signature(feature_func).parameters.values()
+             if p.kind not in (p.VAR_KEYWORD, p.VAR_POSITIONAL)]
+    framing = [inspect.Parameter(name, inspect.Parameter.KEYWORD_ONLY, default=default)
+               for name, default in (('frame_size', None), ('hop_length', None), ('center', False),
+                                         ('return_metadata', False))]
+    inner = [p.replace(kind=inspect.Parameter.KEYWORD_ONLY) if i >= 2 else p for i, p in enumerate(inner)]
+    wrapper.__signature__ = inspect.Signature(inner[:2] + framing + inner[2:])  # type: ignore[attr-defined]
     return wrapper

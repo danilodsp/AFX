@@ -22,6 +22,9 @@
     "spectral_flux": {"frame_size": 2048, "hop_length": 512},
     "spectral_skewness": {"frame_size": 2048, "hop_length": 512},
     "spectral_slope": {"frame_size": 2048, "hop_length": 512},
+    "spectral_kurtosis": {"frame_size": 2048, "hop_length": 512},
+    "spectral_crest": {"frame_size": 2048, "hop_length": 512},
+    "spectral_decrease": {"frame_size": 2048, "hop_length": 512},
     "melspectrogram": {
         "n_mels": 128,
         "frame_size": 2048,
@@ -32,10 +35,14 @@
     "mfcc_delta_delta": {"n_mfcc": 13, "frame_size": 2048, "hop_length": 512},
     "chroma_stft": {"frame_size": 2048, "hop_length": 512},
     "chroma_cqt": {"frame_size": 2048, "hop_length": 512},
+    "tonnetz": {"frame_size": 2048, "hop_length": 512},
+    "onset_strength": {"frame_size": 2048, "hop_length": 512},
     "cqt": {"hop_length": 512},
     "pitch": {"frame_size": 2048, "hop_length": 512},
     "thd": {},
     "hnr": {"frame_size": 2048, "hop_length": 512},
+    "lpc": {"order": 12, "frame_size": 2048, "hop_length": 512},
+    "formants": {"frame_size": 1024, "hop_length": 512},
     "gfcc": {"n_gfcc": 13}
   },
   "aggregation": "mean"

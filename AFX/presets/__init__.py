@@ -29,7 +29,7 @@ from __future__ import annotations
 
 import json
 import os
-from typing import Any, Dict, List
+from typing import Any
 
 from AFX.utils.config_loader import load_config
 
@@ -40,7 +40,7 @@ def _preset_path(name: str) -> str:
     return os.path.join(_PRESET_DIR, f'{name}.json')
 
 
-def list_presets() -> List[str]:
+def list_presets() -> list[str]:
     """Return the sorted names of all available domain feature packs."""
     return sorted(
         os.path.splitext(f)[0]
@@ -49,7 +49,7 @@ def list_presets() -> List[str]:
     )
 
 
-def preset_info(name: str) -> Dict[str, str]:
+def preset_info(name: str) -> dict[str, str]:
     """
     Return the human-readable metadata for a preset without loading it as a
     full extraction config.
@@ -67,17 +67,17 @@ def preset_info(name: str) -> Dict[str, str]:
     }
 
 
-def _load_raw(name: str) -> Dict[str, Any]:
+def _load_raw(name: str) -> dict[str, Any]:
     path = _preset_path(name)
     if not os.path.exists(path):
         raise ValueError(
             f'Unknown preset: {name!r}. Available presets: {list_presets()}'
         )
-    with open(path, 'r', encoding='utf-8') as f:
+    with open(path, encoding='utf-8') as f:
         return json.load(f)
 
 
-def load_preset(name: str) -> Dict[str, Any]:
+def load_preset(name: str) -> dict[str, Any]:
     """
     Load a domain feature pack as a validated AFX config dict.
 

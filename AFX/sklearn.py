@@ -22,15 +22,22 @@ GridSearchCV and cross-validation::
 """
 import copy
 import os
-from typing import Any, Dict, List, Optional, Sequence, Union
+from collections.abc import Sequence
+from typing import Any
 
 import numpy as np
-from sklearn.base import BaseEstimator, TransformerMixin
 
-from AFX.extract_all import extract_all_features, FEATURE_MAP
+try:
+    from sklearn.base import BaseEstimator, TransformerMixin
+except ImportError as e:
+    raise ImportError('AFX.sklearn requires scikit-learn: pip install "afx-audio[sklearn]"') from e
+
+from AFX.extract_all import FEATURE_MAP, extract_all_features
 from AFX.io.io import load_audio
-from AFX.utils.batch_utils import features_to_vector
-from AFX.utils.config_loader import load_config
+from AFX.presets import list_presets, load_preset
+from AFX.registry import custom_features, restore_custom_features
+from AFX.utils.batch_utils import feature_names, features_to_vector
+from AFX.utils.config_loader import load_config, unknown_feature_error, validate_config
 
 _DEFAULT_CONFIG = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), 'config.json'
@@ -48,15 +55,19 @@ class AFXFeatureExtractor(BaseEstimator, TransformerMixin):
 
     Parameters:
         config: Config dict (``extract_all_features`` convention), path to
-            a config JSON, or None for the bundled default config.
-        features: Optional list of feature names to extract (subset of the
-            config's features block; unknown names raise at fit time).
+            a config JSON, a preset name ('speech', ...), or None for the
+            bundled default config.
+        features: Feature names to extract, in output order (names missing
+            from the config get default parameters), or a dict of names to
+            parameters that replaces the config's features block.
         sample_rate: Target sample rate for loading/assuming signals.
+            None takes the config's sample_rate (22050 if it has none).
         aggregation: Temporal aggregation per file ('mean', 'std',
             'summary', 'advanced_summary', 'skew', 'kurtosis', 'stack').
+            None takes the config's aggregation ('mean' if it has none).
         normalize: Per-sample normalization applied by AFX ('zscore',
             'minmax', or None). Note this normalizes each sample's feature
-            vector independently — for train/test consistent scaling,
+            vector independently; for train/test consistent scaling,
             prefer ``normalize=None`` and a ``StandardScaler`` step in the
             pipeline.
         n_jobs: Parallel extraction over samples via joblib
@@ -71,12 +82,12 @@ class AFXFeatureExtractor(BaseEstimator, TransformerMixin):
 
     def __init__(
         self,
-        config: Optional[Union[Dict[str, Any], str]] = None,
-        features: Optional[List[str]] = None,
-        sample_rate: int = 22050,
-        aggregation: str = 'mean',
-        normalize: Optional[str] = None,
-        n_jobs: Optional[int] = None,
+        config: dict[str, Any] | str | None = None,
+        features: list[str] | dict[str, dict[str, Any]] | None = None,
+        sample_rate: int | None = None,
+        aggregation: str | None = None,
+        normalize: str | None = None,
+        n_jobs: int | None = None,
     ):
         self.config = config
         self.features = features
@@ -87,56 +98,56 @@ class AFXFeatureExtractor(BaseEstimator, TransformerMixin):
 
     # -- config resolution --------------------------------------------------
 
-    def _resolve_config(self) -> Dict[str, Any]:
+    def _resolve_config(self) -> dict[str, Any]:
         if self.config is None:
             config = load_config(_DEFAULT_CONFIG)
         elif isinstance(self.config, dict):
-            config = copy.deepcopy(self.config)
+            config = validate_config(copy.deepcopy(self.config), require_sample_rate=False)
+        elif not os.path.isfile(self.config) and self.config in list_presets():
+            config = load_preset(self.config)
         else:
             config = load_config(self.config)
 
-        if self.features is not None:
-            known = set(config['features'])
-            unknown = [f for f in self.features if f not in known]
-            # Allow features that exist in FEATURE_MAP but not in the
-            # config: add them with default parameters.
-            addable = [f for f in unknown if f in FEATURE_MAP]
-            really_unknown = [f for f in unknown if f not in FEATURE_MAP]
-            if really_unknown:
-                raise ValueError(
-                    f'Unknown feature(s): {really_unknown}. '
-                    f'Available: {sorted(FEATURE_MAP)}'
-                )
-            config['features'] = {
-                **{k: v for k, v in config['features'].items()
-                   if k in self.features},
-                **{f: {} for f in addable},
-            }
+        if isinstance(self.features, dict):
+            config['features'] = copy.deepcopy(self.features)
+        elif self.features is not None:
+            for name in self.features:
+                if name not in FEATURE_MAP:
+                    raise unknown_feature_error(name)
+            # Output columns follow the order of `features`; names missing
+            # from the config get default parameters
+            config['features'] = {f: config['features'].get(f, {}) for f in self.features}
 
-        config['sample_rate'] = self.sample_rate
+        if self.sample_rate is not None:
+            config['sample_rate'] = self.sample_rate
+        config.setdefault('sample_rate', 22050)
+        if self.aggregation is not None:
+            config['aggregation'] = self.aggregation
+        config.setdefault('aggregation', 'mean')
         config['preserve_shape'] = False
-        config['aggregation'] = self.aggregation
         config['flatten'] = False  # flattening handled by features_to_vector
         config['normalize'] = self.normalize
-        return config
+        return validate_config(config)
 
     # -- per-sample extraction ----------------------------------------------
 
-    def _load_signal(self, item) -> np.ndarray:
+    def _load_signal(self, item, sr: int) -> np.ndarray:
         if isinstance(item, (str, os.PathLike)):
-            signal, _ = load_audio(os.fspath(item), sr=self.sample_rate)
+            signal, _ = load_audio(os.fspath(item), sr=sr)
             return signal
-        signal = np.asarray(item, dtype=np.float64).ravel()
-        return signal
+        # No cast or ravel: extract_all_features rejects multichannel and integer input
+        return np.asarray(item)
 
-    def _extract_dict(self, item, config) -> Dict[str, np.ndarray]:
-        signal = self._load_signal(item)
-        feats = extract_all_features(signal, self.sample_rate, config)
+    def _extract_dict(self, item, config) -> dict[str, np.ndarray]:
+        signal = self._load_signal(item, config['sample_rate'])
+        feats = extract_all_features(signal, config['sample_rate'], config)
         if isinstance(feats, np.ndarray):  # aggregation='stack'
             return {'stack': feats}
         return feats
 
-    def _extract_vector(self, item, config) -> np.ndarray:
+    def _extract_vector(self, item, config, custom=None) -> np.ndarray:
+        if custom:
+            restore_custom_features(custom)
         return features_to_vector(self._extract_dict(item, config),
                                   flatten=True)
 
@@ -152,14 +163,7 @@ class AFXFeatureExtractor(BaseEstimator, TransformerMixin):
 
         self.config_ = self._resolve_config()
 
-        probe = self._extract_dict(X[0], self.config_)
-        names: List[str] = []
-        for name, values in probe.items():
-            size = int(np.asarray(values).ravel().shape[0])
-            if size == 1:
-                names.append(name)
-            else:
-                names.extend(f'{name}_{i}' for i in range(size))
+        names = feature_names(self._extract_dict(X[0], self.config_))
         self.feature_names_out_ = np.asarray(names, dtype=object)
         self.n_features_out_ = len(names)
         return self
@@ -177,8 +181,10 @@ class AFXFeatureExtractor(BaseEstimator, TransformerMixin):
                        for item in X]
         else:
             from joblib import Parallel, delayed
+            # joblib's workers are fresh processes without registered custom features
+            custom = custom_features()
             vectors = Parallel(n_jobs=self.n_jobs)(
-                delayed(self._extract_vector)(item, self.config_)
+                delayed(self._extract_vector)(item, self.config_, custom)
                 for item in X
             )
 

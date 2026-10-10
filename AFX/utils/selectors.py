@@ -1,17 +1,21 @@
 """
 Feature selection and dimensionality reduction utilities for AFX.
 """
+
 import numpy as np
-from typing import Dict, Optional, List, Tuple
-from sklearn.decomposition import PCA
-from sklearn.feature_selection import mutual_info_classif
+
+try:
+    from sklearn.decomposition import PCA
+    from sklearn.feature_selection import mutual_info_classif
+except ImportError as e:
+    raise ImportError('AFX.utils.selectors requires scikit-learn: pip install "afx-audio[sklearn]"') from e
 
 
 def pca_reducer(
-    features: Dict[str, np.ndarray],
+    features: dict[str, np.ndarray],
     n_components: int = 2,
-    feature_keys: Optional[List[str]] = None
-    ) -> Tuple[np.ndarray, PCA]:
+    feature_keys: list[str] | None = None
+    ) -> tuple[np.ndarray, PCA]:
     """
     Reduce dimensionality of selected features using PCA.
 
@@ -69,8 +73,8 @@ def mutual_info_selector(
     X: np.ndarray,
     y: np.ndarray,
     k: int = 10,
-    random_state: Optional[int] = None
-    ) -> List[int]:
+    random_state: int | None = None
+    ) -> list[int]:
     """
     Select top-k features based on mutual information with target.
 
@@ -91,7 +95,7 @@ def mutual_info_selector(
 def correlation_selector(
     X: np.ndarray,
     threshold: float = 0.95
-    ) -> List[int]:
+    ) -> list[int]:
     """
     Select features by removing those highly correlated with earlier ones.
 

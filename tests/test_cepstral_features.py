@@ -1,10 +1,10 @@
 """
 Unit tests for cepstral_features extractors.
 """
-import numpy as np
-from AFX.extractors import cepstral_features
-
 import librosa
+import numpy as np
+
+from AFX.extractors import cepstral_features
 
 
 def test_extract_mfcc():
@@ -253,7 +253,7 @@ def test_extract_chroma_stft():
 
 def test_extract_chroma_stft_metadata():
     """Test that chroma_stft metadata is computed correctly."""
-    signal = np.random.randn(22050) 
+    signal = np.random.randn(22050)
     sr = 22050
     frame_size = 2048
     hop_length = 512
@@ -323,17 +323,8 @@ def test_extract_chroma_stft_librosa_compatibility():
     assert np.argmax(avg_energy_ours) == 9, "Our implementation should peak at A (index 9)"
     assert np.argmax(avg_energy_librosa) == 9, "Librosa should peak at A (index 9)"
 
-    # The correlation between the two implementations should be reasonable
-    # (they might differ due to implementation details, but should show similar patterns)
-    correlation_by_bin = []
-    for bin_idx in range(12):
-        corr = np.corrcoef(chroma_ours[bin_idx], chroma_librosa[bin_idx])[0, 1]
-        if not np.isnan(corr):  # Ignore bins with no energy
-            correlation_by_bin.append(corr)
-
-    if correlation_by_bin:  # Only check if we have valid correlations
-        avg_correlation = np.mean(correlation_by_bin)
-        assert avg_correlation > 0.5, f"Average correlation should be reasonable, got {avg_correlation}"
+    # librosa estimates the tuning of this exact A440 tone as ~0, so values agree closely
+    np.testing.assert_allclose(chroma_ours, chroma_librosa, atol=0.05)
 
 def test_extract_mfcc_delta_delta_basic():
     """Test basic functionality of extract_mfcc_delta_delta."""
@@ -429,7 +420,7 @@ def test_extract_melspectrogram_librosa_compatibility():
 
     # Our implementation
     result_ours = cepstral_features.extract_melspectrogram(
-        signal, sr=sr, n_mels=n_mels, frame_size=frame_size, 
+        signal, sr=sr, n_mels=n_mels, frame_size=frame_size,
         hop_length=hop_length, return_metadata=True
     )
     mel_ours = result_ours['melspectrogram']
@@ -565,7 +556,7 @@ def test_different_parameter_combinations():
     )
     assert mfcc_large['mfcc'].shape[0] == 20
 
-    # Test melspectrogram with different mel count  
+    # Test melspectrogram with different mel count
     mel_small = cepstral_features.extract_melspectrogram(
         signal, sr=sr, n_mels=64
     )

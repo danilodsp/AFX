@@ -5,9 +5,9 @@ import numpy as np
 import pytest
 
 from AFX.utils.selectors import (
+    correlation_selector,
     mutual_info_selector,
     pca_reducer,
-    correlation_selector,
 )
 
 

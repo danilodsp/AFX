@@ -1,17 +1,19 @@
 """
-Short-Time Fourier Transform (STFT) implementation.
+Short-time Fourier transform with a small result cache.
 
-The ``stft`` function memoizes its most recent results (keyed on the signal
-content and parameters), so multiple extractors analyzing the same signal
-with the same settings share a single STFT computation instead of each
-recomputing it.
+``stft`` keeps its last six results keyed on a digest of the samples and
+the parameters, so extractors that analyze the same signal with the same
+framing share one transform.
 """
 import hashlib
+import threading
 from collections import OrderedDict
 from functools import lru_cache
+from typing import Literal
 
 import numpy as np
-from scipy.signal import get_window
+
+from AFX.utils.validation import validate_signal
 
 # Result cache: maps (signal digest, dtype, params) -> read-only STFT matrix.
 # Keys hold a 32-byte BLAKE2b digest of the samples rather than the samples
@@ -19,13 +21,15 @@ from scipy.signal import get_window
 # copy as well.
 _STFT_CACHE: 'OrderedDict[tuple, np.ndarray]' = OrderedDict()
 _STFT_CACHE_MAX_ENTRIES = 6
+_STFT_CACHE_LOCK = threading.Lock()
 # Skip caching for very large signals to bound memory usage.
 _STFT_CACHE_MAX_SIGNAL_BYTES = 32 * 1024 * 1024
 
 
 def clear_stft_cache() -> None:
     """Clear the memoized STFT results."""
-    _STFT_CACHE.clear()
+    with _STFT_CACHE_LOCK:
+        _STFT_CACHE.clear()
 
 
 @lru_cache(maxsize=16)
@@ -34,6 +38,8 @@ def _get_window(window, frame_size: int) -> np.ndarray:
     if window is None:
         win = np.ones(frame_size)
     else:
+        from scipy.signal import get_window
+
         # fftbins=True gives the periodic variant used for spectral analysis
         win = get_window(window, frame_size, fftbins=True)
     win.flags.writeable = False
@@ -46,31 +52,20 @@ def stft(
     hop_length: int = 512,
     window: str = 'hann',
     center: bool = True,
-    pad_mode: str = 'constant',
+    pad_mode: Literal['constant', 'reflect', 'edge', 'symmetric'] = 'constant',
 ) -> np.ndarray:
     """
-    Compute the Short-Time Fourier Transform (STFT) of a signal.
+    Complex STFT, shape (frame_size // 2 + 1, n_frames), as librosa.stft with n_fft = win_length = frame_size.
 
-    Args:
-        signal: Input signal (1D array)
-        frame_size: Length of each frame (n_fft)
-        hop_length: Number of samples between adjacent frames
-        window: Window function name accepted by ``scipy.signal.get_window``
-            ('hann', 'hamming', 'blackman', ...) or None for rectangular
-        center: Whether to center frames around the signal
-        pad_mode: np.pad mode used for center padding (default 'constant',
-            matching librosa >= 0.10)
-
-    Returns:
-        Complex STFT matrix of shape (n_freq, n_frames) where
-        n_freq = frame_size // 2 + 1. The returned array is read-only
-        (results are shared through an internal cache).
+    ``window`` is any scipy.signal.get_window name, used in its periodic
+    form, or None for rectangular. ``center`` pads frame_size // 2 samples
+    on both sides with ``pad_mode`` ('constant' as in librosa >= 0.10;
+    'reflect' falls back to zeros for signals shorter than the pad). A
+    signal shorter than one frame is zero-padded to one frame. float32
+    input gives complex64 output (computed in double precision). The
+    result is read-only because it is shared through the cache.
     """
-    signal = np.asarray(signal)
-    if signal.ndim != 1:
-        raise ValueError(f'stft expects a 1-D signal, got shape {signal.shape}')
-    if len(signal) == 0:
-        raise ValueError('stft received an empty signal')
+    signal = validate_signal(signal)
 
     use_cache = signal.nbytes <= _STFT_CACHE_MAX_SIGNAL_BYTES
     if use_cache:
@@ -81,10 +76,11 @@ def stft(
             digest, signal.dtype.str, len(signal),
             frame_size, hop_length, window, center, pad_mode,
         )
-        cached = _STFT_CACHE.get(key)
-        if cached is not None:
-            _STFT_CACHE.move_to_end(key)
-            return cached
+        with _STFT_CACHE_LOCK:
+            cached = _STFT_CACHE.get(key)
+            if cached is not None:
+                _STFT_CACHE.move_to_end(key)
+                return cached
 
     # Center padding if requested
     if center:
@@ -106,45 +102,29 @@ def stft(
         signal, frame_size
     )[::hop_length]
 
-    # Preserve float32 precision as complex64 to halve memory
-    fft_input = frames * win
+    # Double precision even for float32 input: a single-precision FFT has a
+    # noise floor near -140 dB that moment-type features (skewness,
+    # kurtosis, bandwidth) weight heavily. The result is stored as complex64.
+    stft_matrix = np.fft.rfft(frames * win, n=frame_size, axis=1).T
     if signal.dtype == np.float32:
-        stft_matrix = np.fft.rfft(fft_input, n=frame_size, axis=1
-                                  ).astype(np.complex64).T
-    else:
-        stft_matrix = np.fft.rfft(fft_input, n=frame_size, axis=1).T
+        stft_matrix = stft_matrix.astype(np.complex64)
 
     stft_matrix.flags.writeable = False
 
     if use_cache:
-        _STFT_CACHE[key] = stft_matrix
-        while len(_STFT_CACHE) > _STFT_CACHE_MAX_ENTRIES:
-            _STFT_CACHE.popitem(last=False)
+        with _STFT_CACHE_LOCK:
+            _STFT_CACHE[key] = stft_matrix
+            while len(_STFT_CACHE) > _STFT_CACHE_MAX_ENTRIES:
+                _STFT_CACHE.popitem(last=False)
 
     return stft_matrix
 
 
 def magnitude_spectrogram(stft_matrix: np.ndarray) -> np.ndarray:
-    """
-    Compute magnitude spectrogram from STFT.
-
-    Args:
-        stft_matrix: Complex STFT matrix
-
-    Returns:
-        Magnitude spectrogram
-    """
+    """|X|."""
     return np.abs(stft_matrix)
 
 
 def power_spectrogram(stft_matrix: np.ndarray) -> np.ndarray:
-    """
-    Compute power spectrogram from STFT.
-
-    Args:
-        stft_matrix: Complex STFT matrix
-
-    Returns:
-        Power spectrogram
-    """
+    """|X|^2."""
     return np.abs(stft_matrix) ** 2

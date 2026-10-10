@@ -1,49 +1,15 @@
 """
-Discrete Cosine Transform (DCT) utilities.
+DCT-II for cepstral coefficients.
 """
 import numpy as np
 from scipy.fft import dct
 
 
-def dct_ii(
-    x: np.ndarray,
-    norm: str = 'ortho',
-    axis: int = -1
-) -> np.ndarray:
-    """
-    Compute DCT-II (Type 2 DCT) of input array.
-
-    This is a wrapper around scipy.fft.dct for consistency.
-
-    Args:
-        x: Input array
-        norm: Normalization ('ortho' for orthogonal normalization)
-        axis: Axis along which to compute DCT
-
-    Returns:
-        DCT-II transformed array
-    """
+def dct_ii(x: np.ndarray, norm: str = 'ortho', axis: int = -1) -> np.ndarray:
+    """scipy.fft.dct with type 2."""
     return dct(x, type=2, norm=norm, axis=axis)
 
 
-def extract_mfcc_coefficients(
-    log_mel_spec: np.ndarray,
-    n_mfcc: int = 13,
-    norm: str = 'ortho'
-) -> np.ndarray:
-    """
-    Extract MFCC coefficients from log mel spectrogram using DCT-II.
-
-    Args:
-        log_mel_spec: Log mel spectrogram of shape (n_mels, n_frames)
-        n_mfcc: Number of MFCC coefficients to extract
-        norm: Normalization for DCT
-
-    Returns:
-        MFCC coefficients of shape (n_mfcc, n_frames)
-    """
-    # Apply DCT-II along mel dimension (axis 0)
-    mfcc_full = dct_ii(log_mel_spec, norm=norm, axis=0)
-
-    # Extract first n_mfcc coefficients
-    return mfcc_full[:n_mfcc, :]
+def extract_mfcc_coefficients(log_mel_spec: np.ndarray, n_mfcc: int = 13, norm: str = 'ortho') -> np.ndarray:
+    """First ``n_mfcc`` rows of the DCT-II over the band axis of a (n_bands, n_frames) log spectrogram."""
+    return dct_ii(log_mel_spec, norm=norm, axis=0)[:n_mfcc, :]

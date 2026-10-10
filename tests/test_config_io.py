@@ -3,8 +3,10 @@ Unit tests for config_loader and io modules.
 """
 import numpy as np
 import pytest
-from AFX.utils import config_loader
+
 from AFX.io import io
+from AFX.utils import config_loader
+
 
 def test_load_config(tmp_path):
     config_data = {
@@ -121,3 +123,28 @@ def test_validate_config_accepts_presets():
     from AFX.presets import list_presets, load_preset
     for name in list_presets():
         config_loader.validate_config(load_preset(name))
+
+
+def test_load_audio_offset_and_duration(tmp_path):
+    import soundfile as sf
+    sr = 8000
+    x = np.arange(sr * 2, dtype=np.float32) / (sr * 2)
+    path = tmp_path / 'ramp.wav'
+    sf.write(path, x, sr, subtype='FLOAT')
+    seg, rate = io.load_audio(str(path), sr=None, offset=0.5, duration=0.25)
+    assert rate == sr and len(seg) == sr // 4
+    np.testing.assert_allclose(seg, x[sr // 2: sr // 2 + sr // 4])
+    tail, _ = io.load_audio(str(path), sr=None, offset=1.75)
+    assert len(tail) == sr // 4
+    with open(path, 'rb') as f:
+        whole, _ = io.load_audio(f, sr=None)
+    assert len(whole) == 2 * sr
+    with pytest.raises(ValueError, match='No audio samples'):
+        io.load_audio(str(path), sr=None, offset=5.0)
+    with pytest.raises(ValueError):
+        io.load_audio(str(path), offset=-1)
+
+
+def test_load_audio_missing_file(tmp_path):
+    with pytest.raises(FileNotFoundError):
+        io.load_audio(str(tmp_path / 'nope.wav'))

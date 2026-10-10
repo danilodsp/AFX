@@ -2,8 +2,10 @@
 Unit tests for harmonic_features extractors.
 """
 import numpy as np
+
 from AFX.extractors import harmonic_features
 from AFX.utils.pitch import yin
+
 
 def test_extract_pitch():
     signal = np.random.randn(22050)
@@ -39,7 +41,7 @@ def test_pitch_detection_accuracy():
     # Test our implementation
     frame_size = 2048
     hop_length = 512
-    pitches = yin(signal, frame_length=frame_size, hop_length=hop_length, 
+    pitches = yin(signal, frame_length=frame_size, hop_length=hop_length,
                   fmin=50.0, fmax=2000.0, sr=sr)
 
     # Get non-zero pitch values
