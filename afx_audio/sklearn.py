@@ -21,6 +21,7 @@ GridSearchCV and cross-validation::
     pipe.fit(signals, y)                   # ...or raw 1-D signals
 """
 import copy
+import json
 import os
 from collections.abc import Sequence
 from typing import Any
@@ -35,6 +36,7 @@ except ImportError as e:
 from afx_audio.extract_all import FEATURE_MAP, extract_all_features
 from afx_audio.io.io import load_audio
 from afx_audio.presets import list_presets, load_preset
+from afx_audio.provenance import canonical_json, config_hash, environment_record
 from afx_audio.registry import custom_features, restore_custom_features
 from afx_audio.utils.batch_utils import feature_names, features_to_vector
 from afx_audio.utils.config_loader import load_config, unknown_feature_error, validate_config
@@ -78,6 +80,9 @@ class AFXFeatureExtractor(BaseEstimator, TransformerMixin):
         feature_names_out_: Expanded output column names (vector features
             become ``name_0, name_1, ...``).
         n_features_out_: Output dimensionality.
+        provenance_: afx-audio, numpy, scipy and Python versions, the
+            resolved config and its ``afx_audio.config_hash``, the sample
+            rate and the fit time, as written next to batch outputs.
     """
 
     def __init__(
@@ -166,6 +171,17 @@ class AFXFeatureExtractor(BaseEstimator, TransformerMixin):
         names = feature_names(self._extract_dict(X[0], self.config_))
         self.feature_names_out_ = np.asarray(names, dtype=object)
         self.n_features_out_ = len(names)
+        import sklearn
+
+        environment = environment_record()
+        environment['versions']['scikit-learn'] = sklearn.__version__
+        self.provenance_ = {
+            'afx_version': environment['versions']['afx_audio'],
+            'config_hash': config_hash(self.config_),
+            'config': json.loads(canonical_json(self.config_)),
+            'sample_rate': self.config_['sample_rate'],
+            **environment,
+        }
         return self
 
     def transform(self, X: Sequence) -> np.ndarray:
@@ -219,3 +235,54 @@ class AFXFeatureExtractor(BaseEstimator, TransformerMixin):
         tags.input_tags.two_d_array = False
         tags.requires_fit = True
         return tags
+
+
+def scaler_from_stats(stats: dict[str, Any], columns: Sequence[str] | None = None):
+    """
+    A fitted ``StandardScaler`` from ``afx_audio.load_stats`` output.
+
+    Equivalent to ``StandardScaler().fit(X)`` on the matrix the statistics
+    came from (NaN ignored in fit, as sklearn does), without loading that
+    matrix. ``columns`` selects and orders a subset of ``stats['columns']``;
+    the scaler then expects data with those columns in that order. A
+    column with no non-NaN value has no mean or scale, so it raises
+    ValueError unless left out through ``columns``.
+    """
+    from sklearn.preprocessing import StandardScaler
+
+    all_columns = list(stats['columns'])
+    if columns is None:
+        idx = np.arange(len(all_columns))
+    else:
+        position = {name: i for i, name in enumerate(all_columns)}
+        missing = [c for c in columns if c not in position]
+        if missing:
+            raise ValueError(f'Columns not in the statistics: {missing[:5]}')
+        idx = np.array([position[c] for c in columns], dtype=np.intp)
+    count = np.asarray(stats['count'], dtype=np.int64)[idx]
+    mean = np.asarray(stats['mean'], dtype=np.float64)[idx]
+    var = np.asarray(stats['var'], dtype=np.float64)[idx]
+    empty = count == 0
+    if empty.any():
+        names = [all_columns[i] for i in idx[empty]]
+        raise ValueError(
+            f'{len(names)} column(s) have no non-NaN value in the dataset, e.g. {names[:5]}; '
+            'pass columns= without them and drop them from the data as well'
+        )
+
+    # Same rule as StandardScaler: a variance within rounding error of zero
+    # gives scale 1 (sklearn.preprocessing._data._is_constant_feature)
+    eps = np.finfo(np.float64).eps
+    constant = var <= count * eps * var + (count * mean * eps) ** 2
+    scale = np.sqrt(var)
+    scale[constant | (scale < 10 * eps)] = 1.0
+
+    scaler = StandardScaler()
+    scaler.mean_ = mean
+    scaler.var_ = var
+    scaler.scale_ = scale
+    scaler.n_features_in_ = len(idx)
+    # sklearn stores a per-column count only when the data had missing values
+    n_rows = int(stats['n_rows'])
+    scaler.n_samples_seen_ = count if (count != n_rows).any() else n_rows
+    return scaler

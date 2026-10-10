@@ -186,3 +186,17 @@ def test_cli_provenance_error(tmp_path, capsys):
     assert exc.value.code == 2
     assert 'No provenance record' in capsys.readouterr().err
 
+
+def test_sklearn_provenance(audio_folder):
+    pytest.importorskip('sklearn')
+    import sklearn
+
+    from afx_audio.sklearn import AFXFeatureExtractor
+
+    est = AFXFeatureExtractor(config=CONFIG).fit([str(audio_folder / 'a.wav')])
+    record = est.provenance_
+    assert record['config_hash'] == config_hash(est.config_)
+    assert record['config'] == json.loads(json.dumps(est.config_))
+    assert record['sample_rate'] == SR
+    assert record['versions']['scikit-learn'] == sklearn.__version__
+    assert record['afx_version'] == afx_audio.__version__
