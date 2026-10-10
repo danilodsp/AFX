@@ -48,7 +48,8 @@ _EPS = 1e-10
 
 
 def _result(name, values, frames, sr, frame_size, hop_length, center, return_metadata):
-    out = {name: np.asarray(values)}
+    # float64 even for counts, so every feature can mark a frame NaN
+    out = {name: np.asarray(values, dtype=np.float64)}
     if return_metadata:
         if sr is None:
             raise ValueError('sr is required when return_metadata=True')

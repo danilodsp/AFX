@@ -21,6 +21,7 @@ from afx_audio.methods.mel import apply_mel_filterbank, log_mel_spectrogram, mel
 from afx_audio.methods.stft import power_spectrogram, stft
 from afx_audio.utils.cache import cache_mel_filterbank, clear_feature_cache, get_cache_stats, get_cached_mel_filterbank
 from afx_audio.utils.frame_utils import frame_times
+from afx_audio.utils.validation import float64_signal
 
 __all__ = [
     'extract_mfcc',
@@ -48,6 +49,7 @@ def _get_mel_filterbank(n_mels, frame_size, sr, fmin, fmax):
 
 
 def _mel_power(signal, sr, frame_size, hop_length, n_mels, fmin, fmax, center):
+    signal = float64_signal(signal)
     power = power_spectrogram(stft(signal, frame_size=frame_size, hop_length=hop_length, window='hann', center=center))
     fmax = sr / 2.0 if fmax is None else fmax
     return apply_mel_filterbank(power, _get_mel_filterbank(n_mels, frame_size, sr, fmin, fmax))
@@ -179,6 +181,7 @@ def extract_gfcc(
     are not interchangeable with theirs.
     """
     fmax = sr / 2.0 if fmax is None else fmax
+    signal = float64_signal(signal)
     power = power_spectrogram(stft(signal, frame_size=frame_size, hop_length=hop_length, window='hann', center=center))
     gammatone_spec = apply_gammatone_filterbank(power, gammatone_filterbank(n_gammatone, frame_size, sr, fmin, fmax))
     # Same dB compression as the MFCC path, so the two families share a scale
@@ -207,7 +210,7 @@ def extract_chroma_cqt(
     each frame is L1-normalized.
     """
     chroma = extract_chroma_from_cqt(
-        signal, sr=sr, hop_length=hop_length, n_bins=n_bins, bins_per_octave=bins_per_octave,
+        float64_signal(signal), sr=sr, hop_length=hop_length, n_bins=n_bins, bins_per_octave=bins_per_octave,
         fmin=fmin, center=center, frame_size=frame_size,
     )
     return _with_times('chroma_cqt', chroma, sr, hop_length, frame_size, center, return_metadata)
@@ -234,7 +237,7 @@ def extract_chroma_stft(
     tuning when it is not given, AFX uses ``tuning`` (fractions of a
     semitone from A440) as is.
     """
-    spec = stft(signal, frame_size=frame_size, hop_length=hop_length, window='hann', center=center)
+    spec = stft(float64_signal(signal), frame_size=frame_size, hop_length=hop_length, window='hann', center=center)
     chroma = chroma_from_power(power_spectrogram(spec), sr=sr, n_fft=frame_size, tuning=tuning, normalize=normalize)
     return _with_times('chroma_stft', chroma, sr, hop_length, frame_size, center, return_metadata)
 
@@ -267,7 +270,7 @@ def extract_cqt(
     if n_fft is not None:
         frame_size = n_fft
     cqt_magnitude, _ = cqt_approximation(
-        signal, sr=sr, hop_length=hop_length, n_bins=n_bins, bins_per_octave=bins_per_octave,
+        float64_signal(signal), sr=sr, hop_length=hop_length, n_bins=n_bins, bins_per_octave=bins_per_octave,
         fmin=fmin, frame_size=frame_size, center=center,
     )
     return _with_times('cqt', cqt_magnitude, sr, hop_length, frame_size, center, return_metadata)
@@ -315,7 +318,7 @@ def extract_tonnetz(
     so pass it ``chroma=librosa.feature.chroma_stft(..., tuning=0)`` to
     compare.
     """
-    spec = stft(signal, frame_size=frame_size, hop_length=hop_length, window='hann', center=center)
+    spec = stft(float64_signal(signal), frame_size=frame_size, hop_length=hop_length, window='hann', center=center)
     chroma = chroma_from_power(power_spectrogram(spec), sr=sr, n_fft=frame_size, tuning=tuning, normalize=False)
     total = chroma.sum(axis=0, keepdims=True)
     chroma = chroma / np.where(total < np.finfo(chroma.dtype).tiny, 1.0, total)

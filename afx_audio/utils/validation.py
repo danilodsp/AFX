@@ -39,6 +39,11 @@ def validate_signal(signal) -> np.ndarray:
     return arr
 
 
+def float64_signal(signal) -> np.ndarray:
+    """validate_signal, then float64: extractors compute and return features in double precision."""
+    return validate_signal(signal).astype(np.float64, copy=False)
+
+
 def validate_sr(sr) -> None:
     """Raise unless ``sr`` is a positive finite number."""
     if isinstance(sr, bool) or not isinstance(sr, numbers.Real) or not 0 < float(sr) < math.inf:

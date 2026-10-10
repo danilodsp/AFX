@@ -127,6 +127,12 @@ integer PCM must be scaled by the caller (`x / 32768.0` for int16).
 polyphase filter, or the file's own rate with `sr=None`; `offset` and
 `duration` (seconds) read part of a file.
 
+Extractors compute in float64 and return float64 arrays for float32 and
+float64 input alike. Counts such as `autocorr_zero_crossings` are float64
+too, so any feature can mark a frame NaN. The torch functions and
+`AFXFeatureModule` return the dtype of the input tensor instead (float32
+in, float32 out); the module's filterbank buffers follow `.to(dtype)`.
+
 ## Presets
 
 `afx.list_presets()` returns `bioacoustics`, `machinery`, `music` and

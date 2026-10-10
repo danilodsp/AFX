@@ -16,7 +16,7 @@ import numpy as np
 
 from afx_audio.methods.stft import magnitude_spectrogram, stft
 from afx_audio.utils.frame_utils import frame_times
-from afx_audio.utils.validation import validate_signal
+from afx_audio.utils.validation import float64_signal
 
 __all__ = [
     'extract_spectral_centroid',
@@ -50,8 +50,8 @@ def _spectrum(
     (n_freq, n_frames). Whole-signal mode (either is None): single FFT of
     the Hann-windowed full signal, shape (n_freq, 1).
     """
+    signal = float64_signal(signal)
     if frame_size is None or hop_length is None:
-        signal = validate_signal(signal)
         n = len(signal)
         windowed = signal * _periodic_hann(n)
         mag = np.abs(np.fft.rfft(windowed, n=n))[:, np.newaxis]
@@ -380,7 +380,7 @@ def extract_spectral_contrast(
     20 log10 magnitude ratio.
     """
     stft_matrix = stft(
-        signal, frame_size=frame_size, hop_length=hop_length,
+        float64_signal(signal), frame_size=frame_size, hop_length=hop_length,
         window='hann', center=center, pad_mode='constant',
     )
     S_mag = magnitude_spectrogram(stft_matrix)
@@ -453,7 +453,7 @@ def extract_spectral_flux(
     carries the time of frame i + 1.
     """
     stft_matrix = stft(
-        signal, frame_size=frame_size, hop_length=hop_length,
+        float64_signal(signal), frame_size=frame_size, hop_length=hop_length,
         window='hann', center=center, pad_mode='reflect',
     )
     magnitude = magnitude_spectrogram(stft_matrix)
