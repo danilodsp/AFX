@@ -60,6 +60,8 @@ def _describe(name: str) -> None:
     info = feature_info(name)
     print(f"{info['name']} ({info['group']}, {info['units']}, rows per frame: {info['rows']})")
     print(info['summary'].replace('``', '`'))
+    if info['undefined']:
+        print(f"NaN for: {info['undefined']}")
     for key, value in info['parameters'].items():
         print(f'  {key} = {value!r}')
 

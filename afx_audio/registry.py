@@ -51,7 +51,7 @@ _INFO = {
     'mfcc_delta': ('cepstral', 'dB per frame', 'n_mfcc'),
     'mfcc_delta_delta': ('cepstral', 'dB per frame^2', 'n_mfcc'),
     'gfcc': ('cepstral', 'dB (DCT of log-gammatone)', 'n_gfcc'),
-    'pitch': ('harmonic', 'Hz (0 = unvoiced)', '1'),
+    'pitch': ('harmonic', 'Hz (NaN = unvoiced)', '1'),
     'thd': ('harmonic', 'ratio', '1'),
     'hnr': ('harmonic', 'dB', '1'),
     'lpc': ('linear prediction', 'dimensionless', 'order'),
@@ -59,6 +59,24 @@ _INFO = {
 }
 
 GROUPS = ('time', 'autocorrelation', 'spectral', 'spectrogram', 'cepstral', 'harmonic', 'linear prediction', 'custom')
+
+# When a built-in feature is NaN on a frame. Features not listed are finite
+# on every frame of valid input (silence gives 0 or the floor of a log).
+_UNDEFINED = {
+    'kurtosis': 'constant frame (zero variance), including digital silence',
+    'sample_entropy': 'no template matches (A or B is 0), or fewer than m + 2 samples',
+    'mobility': 'frame shorter than 2 samples',
+    'complexity': 'frame shorter than 3 samples',
+    'autocorr_decay_rate': 'fewer than 3 autocorrelation lags (max_lag or frame below 3)',
+    'max_peak_autocorr_envelope': 'only lag 0 available (max_lag or frame of 1)',
+    'spectral_kurtosis': 'silent frame or zero spectral variance (single bin)',
+    'pitch': 'unvoiced frames (no YIN dip below threshold and minimum not below 0.5) and f0 outside [fmin, fmax]',
+    'thd': 'zero-energy frame or fewer than 2 FFT bins',
+    'hnr': 'zero-energy frame; every frame when sr / fmax >= min(sr / fmin, frame_size - 1)',
+    'lpc': 'frame not longer than order',
+    'formants': 'fewer than n_formants LPC resonances above fmin and narrower than max_bandwidth '
+                '(silence, noise, unvoiced sounds), or frame not longer than order',
+}
 
 
 def list_features(group: str | None = None) -> list[str]:
@@ -73,7 +91,8 @@ def feature_info(name: str) -> dict[str, Any]:
     Group, units, output rows, parameters with defaults and a one-line summary for a feature.
 
     ``rows`` is the size of the first axis of the per-frame output ('1'
-    means the output is 1-D, one value per frame).
+    means the output is 1-D, one value per frame). ``undefined`` says when
+    a frame is NaN, None if never (or unknown, for custom features).
     """
     if name not in FEATURE_MAP:
         raise KeyError(f'Unknown feature: {name!r}. Available: {sorted(FEATURE_MAP)}')
@@ -89,6 +108,7 @@ def feature_info(name: str) -> dict[str, Any]:
         'parameters': feature_parameters(name),
         'summary': summary,
         'function': f'{func.__module__}.{func.__name__}',
+        'undefined': None if group == 'custom' else _UNDEFINED.get(name),
     }
 
 

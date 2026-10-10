@@ -26,6 +26,8 @@ def render() -> str:
             lines.append(f'### `{name}`\n')
             lines.append(f"{info['summary']}\n")
             lines.append(f"Units: {info['units']}. Rows: {info['rows']}. Function: `{info['function']}`.\n")
+            if info['undefined']:
+                lines.append(f"NaN for: {info['undefined']}.\n")
             params = ', '.join(f'`{k}={v!r}`' for k, v in info['parameters'].items())
             lines.append(f'Parameters: {params}.\n')
     return '\n'.join(lines)

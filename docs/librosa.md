@@ -30,7 +30,7 @@ both sides, as `librosa.feature.zero_crossing_rate` does.
 
 `pitch` agrees with `librosa.yin(center=False)` to within 2% on voiced
 frames (librosa 0.10 and 1.0 differ from each other by about 1%). AFX
-returns 0 for frames without a clear periodicity dip, where librosa
+returns NaN for frames without a clear periodicity dip, where librosa
 always reports its best lag, which can be anywhere in the range (about
 fmax on silence).
 

@@ -59,7 +59,10 @@ def test_preset_extracts_fixed_length_vector(name):
     rng = np.random.default_rng(0)
 
     def vec_for(seconds):
-        sig = (rng.standard_normal(int(seconds * sr)) * 0.1).astype('float32')
+        n = int(seconds * sr)
+        # A voiced component: pitch is NaN on frames without one
+        tone = 0.3 * np.sin(2 * np.pi * 150 * np.arange(n) / sr)
+        sig = (rng.standard_normal(n) * 0.1 + tone).astype('float32')
         feats = extract_all_features(sig, sr, cfg)
         return np.concatenate([np.asarray(v).ravel() for v in feats.values()])
 

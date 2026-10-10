@@ -54,6 +54,8 @@ Sample kurtosis m4 / m2^2 (biased moments), minus 3 when ``fisher``.
 
 Units: dimensionless. Rows: 1. Function: `afx_audio.extractors.time_domain.extract_kurtosis`.
 
+NaN for: constant frame (zero variance), including digital silence.
+
 Parameters: `frame_size=None`, `hop_length=None`, `center=False`, `fisher=True`.
 
 ### `short_time_energy`
@@ -78,6 +80,8 @@ Sample entropy -ln(A/B) (Richman and Moorman, 2000).
 
 Units: nats. Rows: 1. Function: `afx_audio.extractors.time_domain.extract_sample_entropy`.
 
+NaN for: no template matches (A or B is 0), or fewer than m + 2 samples.
+
 Parameters: `frame_size=None`, `hop_length=None`, `center=False`, `m=2`, `r=0.2`, `max_samples=20000`.
 
 ### `mobility`
@@ -86,6 +90,8 @@ Hjorth mobility, RMS(x') / RMS(x) with x' the first difference.
 
 Units: ratio. Rows: 1. Function: `afx_audio.extractors.time_domain.extract_mobility`.
 
+NaN for: frame shorter than 2 samples.
+
 Parameters: `frame_size=None`, `hop_length=None`, `center=False`.
 
 ### `complexity`
@@ -93,6 +99,8 @@ Parameters: `frame_size=None`, `hop_length=None`, `center=False`.
 RMS(x'') / RMS(x'), second- over first-difference RMS (the mobility of x').
 
 Units: ratio. Rows: 1. Function: `afx_audio.extractors.time_domain.extract_complexity`.
+
+NaN for: frame shorter than 3 samples.
 
 Parameters: `frame_size=None`, `hop_length=None`, `center=False`.
 
@@ -137,6 +145,8 @@ Negative least-squares slope of log|acf| over lags 1..max_lag-1. NaN with fewer 
 
 Units: log units per lag. Rows: 1. Function: `afx_audio.extractors.time_domain.extract_autocorr_decay_rate`.
 
+NaN for: fewer than 3 autocorrelation lags (max_lag or frame below 3).
+
 Parameters: `frame_size=None`, `hop_length=None`, `center=False`, `max_lag=100`.
 
 ### `autocorr_coeffs_deviation`
@@ -152,6 +162,8 @@ Parameters: `frame_size=None`, `hop_length=None`, `center=False`, `max_lag=100`.
 Largest autocorrelation value over lags 1..max_lag-1. NaN when only lag 0 exists.
 
 Units: amplitude^2. Rows: 1. Function: `afx_audio.extractors.time_domain.extract_max_peak_autocorr_envelope`.
+
+NaN for: only lag 0 available (max_lag or frame of 1).
 
 Parameters: `frame_size=None`, `hop_length=None`, `center=False`, `max_lag=100`.
 
@@ -235,6 +247,8 @@ Parameters: `frame_size=2048`, `hop_length=512`, `center=False`.
 Fourth standardized moment of frequency under the magnitude spectrum, minus 3 when ``fisher``.
 
 Units: dimensionless. Rows: 1. Function: `afx_audio.extractors.frequency_domain.extract_spectral_kurtosis`.
+
+NaN for: silent frame or zero spectral variance (single bin).
 
 Parameters: `frame_size=2048`, `hop_length=512`, `center=False`, `fisher=True`.
 
@@ -345,9 +359,11 @@ Parameters: `n_gfcc=13`, `frame_size=2048`, `hop_length=512`, `n_gammatone=64`, 
 
 ### `pitch`
 
-Fundamental frequency in Hz per frame by YIN, 0 for unvoiced frames.
+Fundamental frequency in Hz per frame by YIN, NaN for unvoiced frames.
 
-Units: Hz (0 = unvoiced). Rows: 1. Function: `afx_audio.extractors.harmonic_features.extract_pitch`.
+Units: Hz (NaN = unvoiced). Rows: 1. Function: `afx_audio.extractors.harmonic_features.extract_pitch`.
+
+NaN for: unvoiced frames (no YIN dip below threshold and minimum not below 0.5) and f0 outside [fmin, fmax].
 
 Parameters: `frame_size=2048`, `hop_length=512`, `fmin=50.0`, `fmax=2000.0`, `threshold=0.1`.
 
@@ -357,6 +373,8 @@ Total harmonic distortion sqrt(sum_h A_h^2) / A_1, as a ratio.
 
 Units: ratio. Rows: 1. Function: `afx_audio.extractors.harmonic_features.extract_thd`.
 
+NaN for: zero-energy frame or fewer than 2 FFT bins.
+
 Parameters: `frame_size=None`, `hop_length=None`, `center=False`, `n_harmonics=4`.
 
 ### `hnr`
@@ -364,6 +382,8 @@ Parameters: `frame_size=None`, `hop_length=None`, `center=False`, `n_harmonics=4
 Harmonics-to-noise ratio in dB per frame, 10 log10(r / (1 - r)).
 
 Units: dB. Rows: 1. Function: `afx_audio.extractors.harmonic_features.extract_hnr`.
+
+NaN for: zero-energy frame; every frame when sr / fmax >= min(sr / fmin, frame_size - 1).
 
 Parameters: `frame_size=2048`, `hop_length=512`, `fmin=50.0`, `fmax=2000.0`.
 
@@ -376,6 +396,8 @@ Linear prediction coefficients a_1..a_p per frame, shape (order, n_frames).
 
 Units: dimensionless. Rows: order. Function: `afx_audio.extractors.linear_prediction.extract_lpc`.
 
+NaN for: frame not longer than order.
+
 Parameters: `order=12`, `frame_size=None`, `hop_length=None`, `center=False`, `window='hamming'`, `pre_emphasis=0.0`.
 
 ### `formants`
@@ -383,5 +405,7 @@ Parameters: `order=12`, `frame_size=None`, `hop_length=None`, `center=False`, `w
 Formant frequencies F1..Fn in Hz per frame from LPC roots, shape (n_formants, n_frames).
 
 Units: Hz. Rows: n_formants. Function: `afx_audio.extractors.linear_prediction.extract_formants`.
+
+NaN for: fewer than n_formants LPC resonances above fmin and narrower than max_bandwidth (silence, noise, unvoiced sounds), or frame not longer than order.
 
 Parameters: `n_formants=3`, `frame_size=512`, `hop_length=128`, `center=False`, `order=None`, `pre_emphasis=0.97`, `fmin=90.0`, `max_bandwidth=400.0`.

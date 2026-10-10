@@ -33,17 +33,22 @@ def extract_pitch(
     return_metadata: bool = False,
 ) -> dict[str, Any]:
     """
-    Fundamental frequency in Hz per frame by YIN, 0 for unvoiced frames.
+    Fundamental frequency in Hz per frame by YIN, NaN for unvoiced frames.
 
-    The longest detectable period is frame_size // 2 samples, so fmin is
-    effectively max(fmin, 2 sr / frame_size). See afx_audio.utils.pitch.yin.
-    Shape (n_frames,), frames unpadded.
+    A frame is unvoiced when the cumulative mean normalized difference has
+    no dip below ``threshold`` and its minimum is not below 0.5, or when
+    the estimate falls outside [fmin, fmax] (see afx_audio.utils.pitch.yin,
+    which returns 0 for these frames). With return_metadata=True,
+    ``metadata['voiced']`` is the boolean voicing mask. The longest
+    detectable period is frame_size // 2 samples, so fmin is effectively
+    max(fmin, 2 sr / frame_size). Shape (n_frames,), frames unpadded.
     """
-    pitch = yin(validate_signal(signal), frame_length=frame_size, hop_length=hop_length, fmin=fmin, fmax=fmax, sr=sr,
-                threshold=threshold)
-    result: dict[str, Any] = {'pitch': pitch}
+    f0 = yin(validate_signal(signal), frame_length=frame_size, hop_length=hop_length, fmin=fmin, fmax=fmax, sr=sr,
+             threshold=threshold)
+    voiced = f0 > 0
+    result: dict[str, Any] = {'pitch': np.where(voiced, f0, np.nan)}
     if return_metadata:
-        result['metadata'] = {'times': frame_times(len(pitch), sr, hop_length, frame_size)}
+        result['metadata'] = {'times': frame_times(len(f0), sr, hop_length, frame_size), 'voiced': voiced}
     return result
 
 
@@ -115,7 +120,8 @@ def extract_hnr(
     estimate R(tau) / R(0) would cap r at (N - tau) / N, about 2 dB HNR for
     a pure tone with a 400-sample frame and a 160-sample period.
 
-    r is clipped to (1e-10, 1 - 1e-10). NaN for silent frames. A clip
+    r is clipped to (1e-10, 1 - 1e-10). NaN for silent frames (zero
+    energy); low-level noise still gives a finite, low HNR. A clip
     shorter than one frame is zero-padded to one frame. Shape (n_frames,).
     """
     signal = validate_signal(signal).astype(np.float64, copy=False)
