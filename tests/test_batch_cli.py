@@ -298,6 +298,15 @@ def test_library_call_is_silent_by_default(audio_folder, small_config, tmp_path,
     assert '[1/3] Processing' in capsys.readouterr().out
 
 
+def test_cli_default_output_is_csv(audio_folder, small_config, tmp_path, monkeypatch):
+    work = tmp_path / 'work'
+    work.mkdir()
+    monkeypatch.chdir(work)
+    assert cli.main([str(audio_folder), '--config', small_config, '-q']) == 0
+    assert set(pd.read_csv(work / 'features.csv', index_col='file').index) == {'root.wav', 'a/take1.wav', 'b/take1.wav'}
+    assert sorted(os.listdir(work)) == ['features.csv', 'features.csv.provenance.json']
+
+
 def test_default_extensions_cover_soundfile_formats_and_ext_restricts(tmp_path, capsys):
     from afx_audio.batch_extractor import default_extensions
 

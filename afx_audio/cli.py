@@ -40,8 +40,8 @@ def build_parser() -> argparse.ArgumentParser:
     source.add_argument('--preset', metavar='NAME[@VERSION]',
                         help=f"Use a bundled preset instead of a config file ({', '.join(list_presets())}); "
                              'NAME is the latest version, NAME@VERSION an exact one')
-    parser.add_argument('--output', '-o', default='features.npy',
-                        help='Output file; .npy, .json, .csv or .parquet sets the format (default: features.npy)')
+    parser.add_argument('--output', '-o', default='features.csv',
+                        help='Output file; .csv, .parquet, .json or .npy sets the format (default: features.csv)')
     parser.add_argument('--format', choices=FORMATS, default=None,
                         help='Output format, when the --output extension does not say it')
     parser.add_argument('--features', help='Comma-separated features to extract (default: all in the config)')

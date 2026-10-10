@@ -86,6 +86,8 @@ afx --list-features
 afx --describe spectral_rolloff
 ```
 
+Without `--output`, `afx` writes `features.csv` in the current folder.
+
 ## Custom features
 
 `afx.register_feature(name, func, units=..., rows=...)` adds a function
