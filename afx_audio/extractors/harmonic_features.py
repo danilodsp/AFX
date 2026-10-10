@@ -128,8 +128,13 @@ def extract_hnr(
     estimate R(tau) / R(0) would cap r at (N - tau) / N, about 2 dB HNR for
     a pure tone with a 400-sample frame and a 160-sample period.
 
-    r is clipped to (1e-10, 1 - 1e-10). NaN for silent frames (zero
-    energy); low-level noise still gives a finite, low HNR. ``center``
+    The longest lag searched is frame_size // 2, as in YIN, so every lag
+    keeps at least half the frame in the overlap and fmin is effectively
+    max(fmin, 2 sr / frame_size). Longer lags compare so few samples
+    that white noise reads as harmonic (r = 1 at a single-sample overlap).
+
+    r does not depend on signal level; it is clipped to (1e-10, 1 - 1e-10),
+    so HNR lies within +/-100 dB. NaN for silent frames (zero energy). ``center``
     zero-pads frame_size // 2 samples on both sides first; a clip still
     shorter than one frame is zero-padded to one frame. Shape (n_frames,).
     """
@@ -144,18 +149,24 @@ def extract_hnr(
         frames = np.lib.stride_tricks.sliding_window_view(signal, frame_size)[::hop_length]
 
     # Restrict the peak search to plausible pitch lags. Over all lags,
-    # r(1) ~ 1 for any smooth signal and HNR would be meaningless.
+    # r(1) ~ 1 for any smooth signal and HNR would be meaningless. Lags past
+    # frame_size // 2 (the YIN bound) correlate fewer than half the samples,
+    # and at frame_size - 1 a single product gives |r| = 1 even for noise.
     lag_min = max(1, int(sr / fmax)) if fmax > 0 else 1
-    lag_max = min(int(sr / fmin) if fmin > 0 else frame_size - 1, frame_size - 1)
+    lag_max = min(int(sr / fmin), frame_size // 2) if fmin > 0 else frame_size // 2
 
     hnr = np.full(n_frames, np.nan)
     if lag_min < lag_max:
         lags = np.arange(lag_max + 1)
         # Energies of x[0:N-tau] and x[tau:N] for every lag from one cumulative sum
         cum = np.concatenate([np.zeros((n_frames, 1)), np.cumsum(frames ** 2, axis=1)], axis=1)
-        e_lead = cum[:, frame_size - lags]
-        e_trail = cum[:, frame_size:] - cum[:, lags]
-        r = _autocorr(frames, lag_max + 1) / np.sqrt(np.maximum(e_lead * e_trail, _EPS))
+        e_lead = np.maximum(cum[:, frame_size - lags], 0.0)
+        e_trail = np.maximum(cum[:, frame_size:] - cum[:, lags], 0.0)
+        denom = np.sqrt(e_lead) * np.sqrt(e_trail)
+        # Floor relative to the frame energy, like the round-off snap in
+        # _autocorr, so r does not depend on the signal level
+        acf = _autocorr(frames, lag_max + 1)
+        r = np.divide(acf, denom, out=np.zeros_like(acf), where=denom > 1e-12 * e_lead[:, :1])
         r_max = np.clip(r[:, lag_min:lag_max + 1].max(axis=1), _EPS, 1.0 - _EPS)
         voiced = e_lead[:, 0] > 0
         hnr[voiced] = 10 * np.log10(r_max[voiced] / (1.0 - r_max[voiced]))

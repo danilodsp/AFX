@@ -89,7 +89,7 @@ _UNDEFINED = {
     'spectral_decrease': 'no magnitude above the DC bin (silence), or a single-bin spectrum',
     'pitch': 'unvoiced frames (no YIN dip below threshold and minimum not below 0.5) and f0 outside [fmin, fmax]',
     'thd': 'zero-energy frame or fewer than 2 FFT bins',
-    'hnr': 'zero-energy frame; every frame when sr / fmax >= min(sr / fmin, frame_size - 1)',
+    'hnr': 'zero-energy frame; every frame when sr / fmax >= min(sr / fmin, frame_size // 2)',
     'lpc': 'frame not longer than order',
     'formants': 'fewer than n_formants LPC resonances above fmin and narrower than max_bandwidth '
                 '(silence, noise, unvoiced sounds), or frame not longer than order',
