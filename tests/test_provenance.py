@@ -4,6 +4,7 @@ Provenance records of batch outputs, config hashing and the sklearn provenance_ 
 import hashlib
 import json
 import os
+import sys
 
 import numpy as np
 import pandas as pd
@@ -188,6 +189,31 @@ def test_cli_prints_hash_and_provenance(audio_folder, tmp_path, capsys):
     assert cli.main(['--provenance', out]) == 0
     printed = json.loads(capsys.readouterr().out)
     assert printed['config_hash'] == record['config_hash']
+
+
+def test_provenance_follows_the_format_not_the_name(audio_folder, tmp_path, capsys):
+    # Parquet under another name: the record is in the metadata and the CLI run ends cleanly
+    dat = str(tmp_path / 'x.dat')
+    assert cli.main([str(audio_folder), '--features', 'zcr', '-o', dat, '--format', 'parquet']) == 0
+    assert not os.path.exists(dat + '.provenance.json')
+    record = read_provenance(dat)
+    assert record['format'] == 'parquet'
+    assert capsys.readouterr().out.strip().endswith(f"config hash {record['config_hash']}")
+
+    # Another format under a .parquet name: the record is in the sidecar
+    named = str(tmp_path / 'y.parquet')
+    assert cli.main([str(audio_folder), '--features', 'zcr', '-o', named, '--format', 'csv', '-q']) == 0
+    assert read_provenance(named)['format'] == 'csv'
+    assert cli.main(['--provenance', named]) == 0
+    assert json.loads(capsys.readouterr().out)['format'] == 'csv'
+
+
+def test_read_provenance_names_the_parquet_extra(tmp_path, monkeypatch):
+    path = tmp_path / 'f.parquet'
+    pd.DataFrame({'x': [1.0]}).to_parquet(path)
+    monkeypatch.setitem(sys.modules, 'pyarrow.parquet', None)
+    with pytest.raises(ImportError, match=r'afx-audio\[parquet\]'):
+        read_provenance(path)
 
 
 def test_cli_provenance_error(tmp_path, capsys):

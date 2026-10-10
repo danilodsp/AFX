@@ -12,7 +12,7 @@ import sys
 import warnings
 
 from afx_audio import __version__
-from afx_audio.batch_extractor import FORMATS, extract_features_from_folder
+from afx_audio.batch_extractor import FORMATS, _extract_folder
 from afx_audio.extract_all import FEATURE_MAP
 from afx_audio.presets import list_presets, load_preset, preset_info
 from afx_audio.provenance import read_provenance
@@ -135,10 +135,11 @@ def _run(args, parser) -> int:
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter('always')
         try:
-            results = extract_features_from_folder(
+            results, record = _extract_folder(
                 args.input_folder,
                 config,
                 args.output,
+                file_exts=None,
                 save_format=args.format,
                 features=feature_list,
                 aggregation=args.aggregation,
@@ -162,7 +163,7 @@ def _run(args, parser) -> int:
         print('afx: no features were extracted', file=sys.stderr)
         return 1
     if not args.quiet:
-        record = read_provenance(args.output)
+        # The record of this run, not a re-read of the output that a name/format mismatch could break
         if record['preset_id']:
             print(f"preset {record['preset_id']}{' (modified)' if record['preset_modified'] else ''}")
         print(f"config hash {record['config_hash']}")

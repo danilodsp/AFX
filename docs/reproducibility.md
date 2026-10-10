@@ -5,7 +5,11 @@
 Every file written by `extract_features_from_folder` (and the `afx` CLI)
 records how it was made. Parquet outputs carry the record in the schema
 metadata under the key `afx`. The npy, json and csv outputs get a sidecar
-`<output>.provenance.json`, so their own layouts are unchanged.
+`<output>.provenance.json`, so their own layouts are unchanged. The format
+written decides where the record goes, not the file name:
+`afx_audio.read_provenance` recognises parquet by its `PAR1` magic bytes,
+so `-o features.dat --format parquet` reads back like `features.parquet`.
+Reading parquet provenance needs pyarrow (`pip install "afx-audio[parquet]"`).
 
 ```python
 import afx_audio as afx

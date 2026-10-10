@@ -253,6 +253,32 @@ def extract_features_from_folder(
           the key 'afx', otherwise in '<output_path>.provenance.json'.
           Read it with ``afx_audio.read_provenance``.
     """
+    return _extract_folder(
+        folder_path, config_path, output_path, file_exts=file_exts, save_format=save_format, features=features,
+        aggregation=aggregation, flatten=flatten, normalize=normalize, n_jobs=n_jobs, sample_rate=sample_rate,
+        verbose=verbose, coverage=coverage, hash_files=hash_files, dataset_stats=dataset_stats,
+    )[0]
+
+
+def _extract_folder(
+    folder_path: str,
+    config_path: str | dict[str, Any],
+    output_path: str,
+    *,
+    file_exts: Sequence[str] | None,
+    save_format: str | None,
+    features: list[str] | None,
+    aggregation: str | None,
+    flatten: bool | None,
+    normalize: str | None,
+    n_jobs: int | None,
+    sample_rate: int | None,
+    verbose: bool,
+    coverage: bool | None,
+    hash_files: bool,
+    dataset_stats: bool,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """extract_features_from_folder, also returning the provenance record it wrote."""
     if isinstance(config_path, dict):
         config = validate_config(copy.deepcopy(config_path))
     else:
@@ -385,4 +411,4 @@ def extract_features_from_folder(
     out = dict(results)
     if errors:
         out['errors'] = errors
-    return out
+    return out, provenance
