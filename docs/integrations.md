@@ -64,7 +64,8 @@ constructor.
 `afx.extract_features_from_folder(folder, config, output)` walks a folder
 recursively and writes one row per file as `npy` (a pickled dict), `json`,
 `csv` or `parquet` (extra `parquet`). Vector features expand to `name_0,
-name_1, ...` columns. `n_jobs` runs files in worker processes with output
+name_1, ...` columns, except `egemaps` and `egemaps_lld`, whose columns
+take openSMILE's names (see [eGeMAPS](egemaps.md)). `n_jobs` runs files in worker processes with output
 identical to a serial run. The workers never fork (fork deadlocks when the
 parent has threads): they start with forkserver on Linux and spawn on
 Windows and macOS, or with the method set by

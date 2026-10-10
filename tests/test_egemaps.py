@@ -5,6 +5,7 @@ import numpy as np
 import pytest
 
 import afx_audio
+import afx_audio.cli
 from afx_audio.extractors.egemaps import extract_egemaps, extract_egemaps_lld
 from tests.voice_synth import VOWELS, corpus, synthetic_voice
 
@@ -66,7 +67,7 @@ def test_config_integration(voice):
     feats = afx_audio.extract_all_features(voice, SR, {'features': ['egemaps', 'mfcc']})
     np.testing.assert_allclose(feats['egemaps'], extract_egemaps(voice, SR)['egemaps'][:, 0])
     names, values = afx_audio.flatten_features(feats)
-    assert names[:2] == ['egemaps_0', 'egemaps_1'] and len(values) == 88 + 13
+    assert names[:88] == NAMES and names[88:90] == ['mfcc_0', 'mfcc_1'] and len(values) == 88 + 13
     info = afx_audio.feature_info('egemaps')
     assert info['rows'] == '88' and info['parameters'] == {}
 
@@ -78,9 +79,45 @@ def test_preset_and_sklearn_front_end(voice):
     pytest.importorskip('sklearn')
     from afx_audio.sklearn import AFXFeatureExtractor
 
-    X = AFXFeatureExtractor(config='egemaps').fit_transform([voice, 0.5 * voice])
+    est = AFXFeatureExtractor(config='egemaps')
+    X = est.fit_transform([voice, 0.5 * voice])
     assert X.shape == (2, 88)
     np.testing.assert_allclose(X[0], expected)
+    assert list(est.get_feature_names_out()) == NAMES
+
+
+@pytest.mark.parametrize('fmt', ['csv', 'parquet'])
+def test_tables_carry_opensmile_names(voice, tmp_path, fmt):
+    import soundfile as sf
+
+    pd = pytest.importorskip('pandas')
+    if fmt == 'parquet':
+        pytest.importorskip('pyarrow')
+    (tmp_path / 'clips').mkdir()
+    sf.write(tmp_path / 'clips' / 'v.wav', voice, SR)
+    out = str(tmp_path / f'eg.{fmt}')
+    assert afx_audio.cli.main([str(tmp_path / 'clips'), '--preset', 'egemaps', '-o', out, '-q', '--stats']) == 0
+    table = pd.read_csv(out, index_col='file') if fmt == 'csv' else pd.read_parquet(out)
+    assert list(table.columns) == NAMES
+    np.testing.assert_allclose(table.loc['v.wav', NAMES[0]], afx_audio.egemaps(voice, SR)[NAMES[0]], rtol=1e-6)
+    assert afx_audio.load_stats(out)['columns'] == NAMES
+
+
+def test_names_under_other_aggregations(voice):
+    feats = afx_audio.extract_all_features(voice, SR, {'features': ['egemaps', 'egemaps_lld'],
+                                                       'aggregation': 'summary', 'coverage': True})
+    names = afx_audio.feature_names(feats)
+    assert names[:88] == [f'{n}_mean' for n in NAMES]
+    assert names[88:176] == [f'{n}_std' for n in NAMES]
+    assert names[176] == 'egemaps_valid_frac'
+    assert names[177:202] == [f'{n}_mean' for n in LLD]
+    assert names[-1] == 'egemaps_lld_valid_frac'
+    windows = afx_audio.extract_all_features(voice, SR, {
+        'features': ['egemaps_lld'], 'aggregation': 'sliding_window',
+        'aggregation_params': {'window_size': 50, 'hop_length': 50}})
+    n_windows = windows['egemaps_lld'].size // 25
+    assert afx_audio.feature_names(windows)[:n_windows + 1] == [
+        *(f'{LLD[0]}_{j}' for j in range(n_windows)), f'{LLD[1]}_0']
 
 
 @pytest.mark.parametrize('f0', [110.0, 220.0, 440.0])

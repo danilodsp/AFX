@@ -2,6 +2,7 @@
 Batch utilities for stacking and concatenating aggregated feature vectors.
 """
 
+import functools
 from collections.abc import Mapping
 
 import numpy as np
@@ -37,15 +38,55 @@ def stack_feature_vectors(batch_features: list[dict[str, np.ndarray]], flatten: 
     return np.stack(vectors, axis=0)
 
 
+# Aggregated keys '<feature>_<stat>' from 'summary' and 'advanced_summary'
+_SUMMARY_STATS = ('mean', 'std', 'skew', 'kurt')
+
+
+@functools.cache
+def _row_names() -> dict[str, tuple[str, ...]]:
+    # Imported on first use: the extractors import afx_audio.utils, which imports this module
+    from afx_audio.extractors.egemaps import EGEMAPS_LLD_NAMES, EGEMAPS_NAMES
+
+    return {'egemaps': EGEMAPS_NAMES, 'egemaps_lld': EGEMAPS_LLD_NAMES}
+
+
+def _named_columns(key: str, size: int) -> list[str] | None:
+    rows = _row_names()
+    base, stat = key, ''
+    if key not in rows:
+        base, _, stat = key.rpartition('_')
+        if base not in rows or stat not in _SUMMARY_STATS:
+            return None
+    names = rows[base]
+    if size % len(names):
+        return None
+    suffix = f'_{stat}' if stat else ''
+    per_row = size // len(names)
+    if per_row == 1:
+        return [f'{row}{suffix}' for row in names]
+    return [f'{row}{suffix}_{j}' for row in names for j in range(per_row)]
+
+
 def feature_names(features: Mapping[str, ArrayLike]) -> list[str]:
     """
     Column names for features_to_vector(features): ``name`` for a
     single value, ``name_0, name_1, ...`` (C order) for anything larger.
+
+    ``egemaps`` and ``egemaps_lld`` rows carry openSMILE's names
+    (EGEMAPS_NAMES, EGEMAPS_LLD_NAMES) in place of the index:
+    ``<row>`` for one value per row ('mean', 'std', 'skew', 'kurtosis'),
+    ``<row>_<stat>`` for the keys of 'summary' and 'advanced_summary',
+    and ``<row>_<j>`` for several values per row (windows of
+    'sliding_window', frames of preserve_shape).
     """
     names = []
     for name, value in features.items():
-        size = np.size(value)
-        names.extend([name] if size == 1 else [f'{name}_{i}' for i in range(size)])
+        size = int(np.size(value))
+        named = _named_columns(name, size)
+        if named is not None:
+            names.extend(named)
+        else:
+            names.extend([name] if size == 1 else [f'{name}_{i}' for i in range(size)])
     return names
 
 
