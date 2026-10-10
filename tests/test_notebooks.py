@@ -31,7 +31,7 @@ BUDGET = {
 REQUIRES = {
     '02_frames_and_aggregation.ipynb': ('matplotlib',),
     '03_long_recordings_and_custom_features.ipynb': ('matplotlib',),
-    '04_batch_and_parallel.ipynb': ('pandas', 'pyarrow'),
+    '04_batch_and_parallel.ipynb': ('pandas', 'pyarrow', 'sklearn'),
     '05_sklearn_and_selection.ipynb': ('sklearn', 'matplotlib'),
     '06_torch.ipynb': ('torch', 'matplotlib'),
     '07_domain_presets.ipynb': ('sklearn', 'matplotlib'),
