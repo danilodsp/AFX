@@ -144,7 +144,8 @@ Extractors compute in float64 and return float64 arrays for float32 and
 float64 input alike. Counts such as `autocorr_zero_crossings` are float64
 too, so any feature can mark a frame NaN. The torch functions and
 `AFXFeatureModule` return the dtype of the input tensor instead (float32
-in, float32 out); the module's filterbank buffers follow `.to(dtype)`.
+in, float32 out); the module keeps its filterbanks in float64 and casts
+them to the input dtype.
 
 ## Presets
 

@@ -54,10 +54,25 @@ columns as the NumPy path does, and the vector equals
 `flatten_features(extract_all_features(...))` with `aggregation='summary'`
 for `'mean_std'`.
 
-Windows, filterbanks and DCT matrices are buffers created in the default
-torch dtype, so they follow `.to(device)`; create the module under
-`torch.set_default_dtype(torch.float64)` for float64 constants. Parameters the torch path does not implement raise in the
-constructor.
+`AFXFeatureModule.from_config(config)` builds the module from a config
+dict, a JSON path or a preset id, with the config's per-feature
+parameters, `sample_rate`, `aggregation` and `coverage`
+(`preserve_shape` becomes `aggregation='none'`). Aggregations other than
+`mean`, `std` and `summary`, and `normalize`, raise ValueError. So do
+features without a torch implementation, unless `skip_unsupported=True`
+drops them with an `AFXWarning`. Of the presets only `bioacoustics` is
+fully on the torch path; `speech` loses pitch, HNR and formants.
+
+```python
+frontend = AFXFeatureModule.from_config('speech@1', output='vector', skip_unsupported=True)
+```
+
+Windows, filterbanks and DCT matrices are buffers, so they follow
+`.to(device)`. They are stored in float64 and cast to the input dtype at
+each forward: float64 input gives float64 output at the precision of the
+functions, and float32 input gives float32 output. `.float()` or `.half()`
+on the module lowers the stored constants as well. Parameters the torch
+path does not implement raise in the constructor.
 
 ## Folders and the CLI
 

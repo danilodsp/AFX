@@ -312,16 +312,23 @@ _MODULE_PARAMS = [
 def test_module_matches_numpy_extractor(signal, name, params):
     import afx_audio
 
-    default = torch.get_default_dtype()
-    torch.set_default_dtype(torch.float64)  # build the constant buffers in float64
-    try:
-        module = AFXFeatureModule({name: params}, sample_rate=SR)
-    finally:
-        torch.set_default_dtype(default)
+    # Default dtype float32: float64 input still gets float64 constants
+    module = AFXFeatureModule({name: params}, sample_rate=SR)
     out = module(_t(signal))[name].numpy()
     ref = afx_audio.FEATURE_MAP[name](signal, SR, **params)[name]
     assert out.shape == ref.shape
     np.testing.assert_allclose(out, ref, **_tol(name))
+
+
+@pytest.mark.parametrize('name', supported_features())
+def test_module_output_dtype_follows_input(signal, name):
+    module = AFXFeatureModule({name: {'frame_size': 512, 'hop_length': 256}}, sample_rate=SR, aggregation='mean')
+    x = _t(signal[:8000])
+    assert module(x)[name].dtype == torch.float64
+    out32 = module(x.float())[name]
+    assert out32.dtype == torch.float32
+    assert module.double()(x.float())[name].dtype == torch.float32
+    np.testing.assert_allclose(out32.numpy(), module(x)[name].numpy(), rtol=1e-3, atol=1e-3)
 
 
 @pytest.mark.parametrize('name', ['spectral_contrast', 'chroma_stft', 'gfcc', 'mfcc_delta', 'spectral_skewness'])
@@ -404,3 +411,33 @@ def test_aggregation_skips_undefined_frames_like_numpy():
     np.testing.assert_allclose(out.detach().numpy(), ref, rtol=1e-6)
     out.sum().backward()
     assert torch.isfinite(wav.grad).all()
+
+
+@pytest.mark.parametrize('preset', ['bioacoustics@1', 'speech@1'])
+def test_module_from_config_matches_numpy(preset, tmp_path):
+    import json
+    import warnings
+
+    import afx_audio
+
+    config = afx_audio.load_preset(preset)
+    sr = config['sample_rate']
+    x = np.random.default_rng(7).standard_normal(sr // 2)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter('always')
+        module = AFXFeatureModule.from_config(preset, output='vector', skip_unsupported=True)
+    skipped = [n for n in config['features'] if n not in supported_features()]
+    messages = [str(w.message) for w in caught if issubclass(w.category, afx_audio.AFXWarning)]
+    assert messages == ([f'Skipped feature(s) not available on the torch path: {skipped}'] if skipped else [])
+    assert module.sample_rate == sr and module.aggregation == 'mean_std'
+    assert module.feature_names() == [n for n in config['features'] if n in supported_features()]
+
+    kept = {**config, 'features': {n: config['features'][n] for n in module.feature_names()}}
+    names, values = afx_audio.flatten_features(afx_audio.extract_all_features(x, sr, kept))
+    assert module.get_feature_names_out() == names
+    np.testing.assert_allclose(module(_t(x)).numpy(), values, rtol=1e-6, atol=1e-6)
+
+    path = tmp_path / 'config.json'
+    path.write_text(json.dumps(kept))
+    for source in (kept, str(path), path):
+        assert AFXFeatureModule.from_config(source).feature_names() == module.feature_names()

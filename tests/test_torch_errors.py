@@ -36,3 +36,21 @@ def test_module_configuration_errors(kwargs, message):
 def test_names_need_an_aggregation():
     with pytest.raises(ValueError, match="depend on the input length when aggregation='none'"):
         AFXFeatureModule(['mfcc'], sample_rate=16000).get_feature_names_out()
+
+
+@pytest.mark.parametrize(('config', 'message'), [
+    ('speech@1', r"not available on the torch path: \['pitch', 'hnr', 'formants'\].*skip_unsupported=True"),
+    ({'features': ['mfcc'], 'aggregation': 'kurtosis'}, "aggregation 'kurtosis' is not available on the torch path"),
+    ({'features': ['mfcc'], 'normalize': 'zscore'}, "normalize 'zscore' is not available on the torch path"),
+    ({'features': ['hnr']}, r"No feature of this config is available on the torch path: \['hnr'\]"),
+    ({'features': ['not_a_feature']}, 'not_a_feature'),
+])
+def test_from_config_errors(config, message):
+    with pytest.raises(ValueError, match=message):
+        AFXFeatureModule.from_config(config, skip_unsupported=isinstance(config, dict))
+
+
+def test_from_config_defaults():
+    module = AFXFeatureModule.from_config({'features': {'zcr': {'frame_size': 512}}, 'coverage': True})
+    assert (module.sample_rate, module.aggregation, module.coverage) == (22050, 'mean', True)
+    assert AFXFeatureModule.from_config({'features': ['zcr'], 'preserve_shape': True}).aggregation == 'none'

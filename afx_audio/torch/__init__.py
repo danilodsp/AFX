@@ -1,8 +1,9 @@
 """
 Differentiable, GPU-capable feature extraction in PyTorch.
 
-PyTorch is an optional dependency: ``import afx_audio`` works without it, and
-this subpackage raises a clear ImportError only when actually used.
+PyTorch is an optional dependency: ``import afx_audio`` works without it and
+does not import this subpackage. Importing ``afx_audio.torch`` or any of its
+submodules without PyTorch raises an ImportError with the install command.
 
 Public API:
     - ``afx_audio.torch.functional``: differentiable transforms (stft, mfcc,
@@ -15,21 +16,16 @@ Public API:
 
 try:
     import torch as _torch  # noqa: F401
-    _TORCH_AVAILABLE = True
-except ImportError:  # pragma: no cover
-    _TORCH_AVAILABLE = False
+except ImportError as e:
+    # Raised at import, not on attribute access: `import afx_audio.torch.functional`
+    # runs this file first, and a lazy guard would let it fail later on a bare `import torch`.
+    raise ImportError(
+        'afx_audio.torch requires PyTorch, which is not installed. '
+        'Install it with `pip install torch` (or `pip install '
+        '"afx-audio[torch]"`).'
+    ) from e
 
-if _TORCH_AVAILABLE:
-    from afx_audio.torch import functional
-    from afx_audio.torch.module import AFXFeatureModule, supported_features
+from afx_audio.torch import functional
+from afx_audio.torch.module import AFXFeatureModule, supported_features
 
-    __all__ = ['functional', 'AFXFeatureModule', 'supported_features']
-else:  # pragma: no cover
-    __all__ = []
-
-    def __getattr__(name):
-        raise ImportError(
-            'afx_audio.torch requires PyTorch, which is not installed. '
-            'Install it with `pip install torch` (or `pip install '
-            '"afx-audio[torch]"`).'
-        )
+__all__ = ['functional', 'AFXFeatureModule', 'supported_features']
