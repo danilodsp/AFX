@@ -385,3 +385,22 @@ Formant frequencies F1..Fn in Hz per frame from LPC roots, shape (n_formants, n_
 Units: Hz. Rows: n_formants. Function: `afx_audio.extractors.linear_prediction.extract_formants`.
 
 Parameters: `n_formants=3`, `frame_size=512`, `hop_length=128`, `center=False`, `order=None`, `pre_emphasis=0.97`, `fmin=90.0`, `max_bandwidth=400.0`.
+
+
+## Parameter set
+
+### `egemaps_lld`
+
+The 25 eGeMAPS v02 low-level descriptors per 10 ms frame, shape (25, n_frames).
+
+Units: per row, see EGEMAPS_LLD_NAMES. Rows: 25. Function: `afx_audio.extractors.egemaps.extract_egemaps_lld`.
+
+Parameters: none.
+
+### `egemaps`
+
+The 88 eGeMAPS v02 functionals of the whole clip, shape (88, 1).
+
+Units: per row, see EGEMAPS_NAMES. Rows: 88. Function: `afx_audio.extractors.egemaps.extract_egemaps`.
+
+Parameters: none.

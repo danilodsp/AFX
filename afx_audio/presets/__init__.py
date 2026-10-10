@@ -8,7 +8,7 @@ inside the package, so it can be loaded without any external files::
     from afx_audio.presets import load_preset, list_presets
 
     list_presets()
-    # ['bioacoustics', 'machinery', 'music', 'speech']
+    # ['bioacoustics', 'egemaps', 'machinery', 'music', 'speech']
 
     config = load_preset('speech')
     feats = extract_all_features(signal, sr, config)
@@ -24,6 +24,7 @@ Available packs:
 - ``bioacoustics`` Animal / environmental sound classification.
 - ``music``        Music information retrieval (genre, instrument, key).
 - ``machinery``    Machinery condition monitoring (fault / anomaly detection).
+- ``egemaps``      The 88 eGeMAPS v02 functionals per clip (Eyben et al., 2016).
 """
 from __future__ import annotations
 

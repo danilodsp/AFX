@@ -56,9 +56,12 @@ _INFO = {
     'hnr': ('harmonic', 'dB', '1'),
     'lpc': ('linear prediction', 'dimensionless', 'order'),
     'formants': ('linear prediction', 'Hz', 'n_formants'),
+    'egemaps_lld': ('parameter set', 'per row, see EGEMAPS_LLD_NAMES', '25'),
+    'egemaps': ('parameter set', 'per row, see EGEMAPS_NAMES', '88'),
 }
 
-GROUPS = ('time', 'autocorrelation', 'spectral', 'spectrogram', 'cepstral', 'harmonic', 'linear prediction', 'custom')
+GROUPS = ('time', 'autocorrelation', 'spectral', 'spectrogram', 'cepstral', 'harmonic', 'linear prediction',
+          'parameter set', 'custom')
 
 
 def list_features(group: str | None = None) -> list[str]:

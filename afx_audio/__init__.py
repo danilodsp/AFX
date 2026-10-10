@@ -11,6 +11,7 @@ import importlib.metadata as _metadata
 from .batch_extractor import extract_features_from_folder
 from .extract_all import FEATURE_MAP, extract_all_features, extract_segments
 from .extractors.cepstral_features import clear_feature_cache, get_cache_stats
+from .extractors.egemaps import EGEMAPS_LLD_NAMES, EGEMAPS_NAMES, egemaps
 from .io.io import load_audio
 from .methods.stft import clear_stft_cache
 from .presets import list_presets, load_preset, preset_info
@@ -47,6 +48,9 @@ __all__ = [
     'get_cache_stats',
     'clear_stft_cache',
     'AFXFeatureExtractor',
+    'egemaps',
+    'EGEMAPS_NAMES',
+    'EGEMAPS_LLD_NAMES',
 ]
 
 
