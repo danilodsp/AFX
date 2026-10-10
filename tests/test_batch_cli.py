@@ -10,8 +10,8 @@ import pandas as pd
 import pytest
 import soundfile as sf
 
-from AFX import cli
-from AFX.batch_extractor import extract_features_from_folder
+from afx_audio import cli
+from afx_audio.batch_extractor import extract_features_from_folder
 
 SR = 22050
 
@@ -157,7 +157,7 @@ def test_cli_default_config_is_package_relative():
 
 
 def test_batch_accepts_config_dict(audio_folder, tmp_path):
-    from AFX.presets import load_preset
+    from afx_audio.presets import load_preset
     config = load_preset('speech')
     out = str(tmp_path / 'preset.csv')
     extract_features_from_folder(
@@ -201,12 +201,12 @@ def test_cli_describe(capsys):
 
 
 def test_cli_version(capsys):
-    import AFX
+    import afx_audio
 
     with pytest.raises(SystemExit) as exc:
         cli.main(['--version'])
     assert exc.value.code == 0
-    assert AFX.__version__ in capsys.readouterr().out
+    assert afx_audio.__version__ in capsys.readouterr().out
 
 
 def test_cli_errors_are_one_line_with_status_2(audio_folder, tmp_path, capsys):

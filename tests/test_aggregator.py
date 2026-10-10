@@ -4,7 +4,7 @@ Unit tests for the new aggregate_features API (flatten and normalization).
 import numpy as np
 import pytest
 
-from AFX.utils.aggregator import aggregate_features
+from afx_audio.utils.aggregator import aggregate_features
 
 
 def test_aggregate_features_flatten():
@@ -114,7 +114,7 @@ def test_sliding_window_1d_array():
 
 def test_scalar_normalization_skipped():
     """Test that normalization is skipped for scalar features (single value)."""
-    from AFX.utils.normalization import minmax_normalize, zscore_normalize
+    from afx_audio.utils.normalization import minmax_normalize, zscore_normalize
     # Scalar features
     features = {'a': np.array([42.0]), 'b': np.array([0.5])}
     z_norm = zscore_normalize(features)
@@ -127,7 +127,7 @@ def test_scalar_normalization_skipped():
 
 def test_zscore_normalize_vector():
     """Test z-score normalization for a vector (not scalar)."""
-    from AFX.utils.normalization import zscore_normalize
+    from afx_audio.utils.normalization import zscore_normalize
     arr = np.array([1.0, 2.0, 3.0])
     features = {'a': arr}
     normed = zscore_normalize(features)
@@ -136,7 +136,7 @@ def test_zscore_normalize_vector():
 
 def test_minmax_normalize_vector():
     """Test min-max normalization for a vector (not scalar)."""
-    from AFX.utils.normalization import minmax_normalize
+    from afx_audio.utils.normalization import minmax_normalize
     arr = np.array([1.0, 2.0, 3.0])
     features = {'a': arr}
     normed = minmax_normalize(features)
@@ -147,7 +147,7 @@ def test_minmax_normalize_vector():
 def test_sliding_window_reachable_from_config():
     """aggregation_params must be forwarded to aggregate_features; before,
     aggregation='sliding_window' in a config always raised."""
-    from AFX.extract_all import extract_all_features
+    from afx_audio.extract_all import extract_all_features
     sr = 22050
     signal = np.random.RandomState(0).randn(sr)
     config = {
@@ -167,25 +167,25 @@ def test_sliding_window_reachable_from_config():
 
 
 def test_extract_all_features_rejects_stereo():
-    from AFX.extract_all import extract_all_features
+    from afx_audio.extract_all import extract_all_features
     stereo = np.zeros((1000, 2))
     with pytest.raises(ValueError, match='1-D'):
         extract_all_features(stereo, 22050, {'features': {'zcr': {}}})
 
 
 def test_extract_segments():
-    import AFX
+    import afx_audio
 
     sr = 8000
     x = np.random.default_rng(0).standard_normal(sr * 3)
     config = {'features': {'rms_energy': {}, 'mfcc': {'n_mfcc': 5, 'frame_size': 512, 'hop_length': 256}},
               'aggregation': 'summary'}
-    names, X, starts = AFX.extract_segments(x, sr, config, segment_length=1.0, hop=0.5)
+    names, X, starts = afx_audio.extract_segments(x, sr, config, segment_length=1.0, hop=0.5)
     assert X.shape == (5, len(names)) and names[0] == 'rms_energy_mean'
     np.testing.assert_allclose(starts, [0, 0.5, 1.0, 1.5, 2.0])
-    second = AFX.flatten_features(AFX.extract_all_features(x[sr // 2: sr // 2 + sr], sr, config))[1]
+    second = afx_audio.flatten_features(afx_audio.extract_all_features(x[sr // 2: sr // 2 + sr], sr, config))[1]
     np.testing.assert_allclose(X[1], second)
-    _, X1, _ = AFX.extract_segments(x[:1000], sr, config, segment_length=1.0)
+    _, X1, _ = afx_audio.extract_segments(x[:1000], sr, config, segment_length=1.0)
     assert X1.shape[0] == 1
     with pytest.raises(ValueError):
-        AFX.extract_segments(x, sr, {**config, 'aggregation': 'stack'}, segment_length=1.0)
+        afx_audio.extract_segments(x, sr, {**config, 'aggregation': 'stack'}, segment_length=1.0)

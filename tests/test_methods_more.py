@@ -1,5 +1,5 @@
 """
-Coverage for AFX.methods modules previously untested directly:
+Coverage for afx_audio.methods modules previously untested directly:
 stft (incl. result cache), delta, gammatone, cqt, chroma, and the
 filterbank caches.
 """
@@ -7,13 +7,13 @@ import librosa
 import numpy as np
 import pytest
 
-from AFX.methods.chroma import chroma_from_stft, frequency_to_chroma_bin
-from AFX.methods.cqt import cqt_approximation, cqt_filterbank
-from AFX.methods.delta import compute_delta
-from AFX.methods.gammatone import erb_space, gammatone_filterbank
-from AFX.methods.mel import mel_filterbank
-from AFX.methods.stft import clear_stft_cache, stft
-from AFX.utils.cache import cache_mel_filterbank, clear_feature_cache, get_cached_mel_filterbank
+from afx_audio.methods.chroma import chroma_from_stft, frequency_to_chroma_bin
+from afx_audio.methods.cqt import cqt_approximation, cqt_filterbank
+from afx_audio.methods.delta import compute_delta
+from afx_audio.methods.gammatone import erb_space, gammatone_filterbank
+from afx_audio.methods.mel import mel_filterbank
+from afx_audio.methods.stft import clear_stft_cache, stft
+from afx_audio.utils.cache import cache_mel_filterbank, clear_feature_cache, get_cached_mel_filterbank
 
 SR = 22050
 
@@ -178,7 +178,7 @@ def test_stft_cache_is_thread_safe():
 
 
 def test_delta_kernel_values_and_checks():
-    from AFX.methods.delta import delta_kernel
+    from afx_audio.methods.delta import delta_kernel
 
     np.testing.assert_allclose(delta_kernel(5), [-0.2, -0.1, 0.0, 0.1, 0.2])
     for bad in (1, 4):
@@ -187,7 +187,7 @@ def test_delta_kernel_values_and_checks():
 
 
 def test_frame_signal_matches_stft_framing():
-    from AFX.utils.frame_utils import frame_signal
+    from afx_audio.utils.frame_utils import frame_signal
 
     x = np.arange(10.0)
     frames = frame_signal(x, frame_length=4, hop_length=3)

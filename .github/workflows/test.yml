@@ -16,7 +16,7 @@ jobs:
         python-version: "3.12"
     - run: pip install ruff mypy numpy scipy
     - run: ruff check .
-    - run: mypy AFX
+    - run: mypy afx_audio
 
   test:
     runs-on: ${{ matrix.os }}
@@ -45,7 +45,7 @@ jobs:
         python -m pip install --upgrade pip
         pip install -e ".[test]"
 
-    - name: Install PyTorch (CPU) for the AFX.torch tests
+    - name: Install PyTorch (CPU) for the afx_audio.torch tests
       if: runner.os == 'Linux'
       run: pip install torch --index-url https://download.pytorch.org/whl/cpu
 
@@ -93,4 +93,4 @@ jobs:
         /tmp/venv/bin/pip install dist/*.whl
         /tmp/venv/bin/afx --list-features
         /tmp/venv/bin/afx --list-presets
-        /tmp/venv/bin/python -c "import numpy as np, AFX; f = AFX.extract_all_features(np.random.default_rng(0).standard_normal(16000), 16000, AFX.load_preset('speech')); print(len(AFX.flatten_features(f)[1]))"
+        /tmp/venv/bin/python -c "import numpy as np, afx_audio; f = afx_audio.extract_all_features(np.random.default_rng(0).standard_normal(16000), 16000, afx_audio.load_preset('speech')); print(len(afx_audio.flatten_features(f)[1]))"

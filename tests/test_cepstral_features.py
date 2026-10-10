@@ -4,7 +4,7 @@ Unit tests for cepstral_features extractors.
 import librosa
 import numpy as np
 
-from AFX.extractors import cepstral_features
+from afx_audio.extractors import cepstral_features
 
 
 def test_extract_mfcc():

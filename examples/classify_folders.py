@@ -20,8 +20,8 @@ from sklearn.model_selection import StratifiedKFold, cross_val_score
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
-import AFX
-from AFX.sklearn import AFXFeatureExtractor
+import afx_audio as afx
+from afx_audio.sklearn import AFXFeatureExtractor
 
 AUDIO_EXTS = ('.wav', '.flac', '.ogg', '.mp3')
 
@@ -42,7 +42,7 @@ def labelled_files(root):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.strip().splitlines()[0])
     parser.add_argument('dataset')
-    parser.add_argument('--preset', default='speech', choices=AFX.list_presets())
+    parser.add_argument('--preset', default='speech', choices=afx.list_presets())
     parser.add_argument('--folds', type=int, default=5)
     parser.add_argument('--jobs', type=int, default=1)
     args = parser.parse_args(argv)
@@ -50,7 +50,7 @@ def main(argv=None):
     paths, labels = labelled_files(args.dataset)
     if len(set(labels)) < 2:
         parser.error('need at least two class subfolders with audio files')
-    config = AFX.load_preset(args.preset)
+    config = afx.load_preset(args.preset)
     model = make_pipeline(
         AFXFeatureExtractor(config=config, n_jobs=args.jobs),
         SimpleImputer(strategy='median'),

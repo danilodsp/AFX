@@ -4,10 +4,10 @@
 
 ### Breaking changes
 
-- The PyPI distribution is `afx-audio` (`AFX` is taken on PyPI). The import name is still `AFX`.
+- The package is `afx-audio` on PyPI and imports as `afx_audio` (`import afx_audio as afx`); `import AFX` no longer works. The PyPI project `afx` is unrelated, and its `afx/` package collides with `AFX/` on case-insensitive file systems.
 - Python 3.10 or newer is required.
 - The core install is numpy, scipy and soundfile. scikit-learn, pandas and matplotlib moved to the `sklearn`, `parquet` and `plot` extras; `all` installs them with torch.
-- Extractor arguments after `signal` and `sr` are keyword-only, as in librosa, in both `AFX.extractors` and `AFX.torch.functional`: `extract_mfcc(y, sr, n_mfcc=20)` works, `extract_mfcc(y, sr, 20)` raises. Several signatures gained parameters in the middle, so positional calls would otherwise have changed meaning silently.
+- Extractor arguments after `signal` and `sr` are keyword-only, as in librosa, in both `afx.extractors` and `afx.torch.functional`: `extract_mfcc(y, sr, n_mfcc=20)` works, `extract_mfcc(y, sr, 20)` raises. Several signatures gained parameters in the middle, so positional calls would otherwise have changed meaning silently.
 - Unknown feature parameters raise instead of being ignored, both at config validation and when calling an extractor directly (`TypeError`). Non-positive frame sizes and counts are rejected, and so are unknown top-level config keys (`agregation`) and `sliding_window` without its window sizes.
 - An unknown feature name raises `ValueError` (it was `KeyError` from `extract_all_features`), with the closest valid name in the message.
 - scikit-learn 1.3 or newer for the `sklearn` extra.
@@ -30,7 +30,7 @@
 - `spectral_flatness` returned 0 or 1 for silent frames depending on rounding; it is 1, as in librosa.
 - On the torch path, silent frames gave NaN gradients through `spectral_bandwidth` and `spectral_flux` (the derivative of sqrt at 0).
 - `AFXFeatureModule(aggregation='mean_std')` concatenated along the batch axis for per-frame features (shape `(2B,)` instead of `(B, 2)`) and raised on unbatched input.
-- Frame-time metadata added `frame_size // 2` for `center=True` and nothing for `center=False`, the reverse of the librosa convention. All extractors now report frame centers through `AFX.utils.frame_utils.frame_times`, so features with the same framing share one time axis.
+- Frame-time metadata added `frame_size // 2` for `center=True` and nothing for `center=False`, the reverse of the librosa convention. All extractors now report frame centers through `afx.utils.frame_utils.frame_times`, so features with the same framing share one time axis.
 - `aggregation: "sliding_window"` could not be used from a config because `window_size` and `hop_length` were never forwarded; pass them under `aggregation_params`.
 - Frame-wise time-domain features on a clip shorter than one frame were computed on the zero-padded frame. The clip is now analyzed as one unpadded frame.
 - FFT round-off in the autocorrelation made `autocorr_zero_crossings` count random sign flips where the exact value is 0.
@@ -44,32 +44,32 @@
 ### Added
 
 - `center` for the time-domain, autocorrelation and THD extractors, giving the same frames and times as a centered STFT; centered `zcr` and `rms_energy` match librosa.
-- `AFX.list_features(group)`, `AFX.feature_info(name)` (group, units, rows, parameters, definition) and `afx --describe FEATURE`.
+- `afx.list_features(group)`, `afx.feature_info(name)` (group, units, rows, parameters, definition) and `afx --describe FEATURE`.
 - `tonnetz` and `onset_strength`, equal to librosa's `feature.tonnetz` (on chroma_stft) and `onset.onset_strength`.
 - `AFXFeatureExtractor` accepts a preset name as `config` and a dict of per-feature parameters as `features`. `AFXFeatureModule` accepts `aggregation='summary'`, rejects integer tensors, and names its vector columns with `get_feature_names_out()`.
-- `AFX.extract_segments` returns one aggregated vector per fixed-length segment of a long signal.
-- `AFX.register_feature` and `unregister_feature` add custom extractors that configs, validation, `feature_info` and every front end accept.
-- `AFX.feature_names` and `AFX.flatten_features` for the `name` / `name_i` columns used by every tabular output.
+- `afx.extract_segments` returns one aggregated vector per fixed-length segment of a long signal.
+- `afx.register_feature` and `unregister_feature` add custom extractors that configs, validation, `feature_info` and every front end accept.
+- `afx.feature_names` and `afx.flatten_features` for the `name` / `name_i` columns used by every tabular output.
 - `load_audio(path, sr, offset, duration)` reads part of a file and accepts file objects.
 - A config's `features` may be a list of names.
 - Parameters that were hidden in `**kwargs` are named: `mfcc` `top_db`; `mfcc_delta` `width`, `n_mels`, `fmin`, `fmax`; `pitch` `threshold`; `thd` `frame_size`, `hop_length`, `n_harmonics`; `chroma_stft` `tuning`, `normalize`; `cqt` and `chroma_cqt` `n_bins`, `bins_per_octave`, `fmin`.
-- `AFX.methods.chroma_filterbank` and `chroma_from_power`.
+- `afx.methods.chroma_filterbank` and `chroma_from_power`.
 - `spectral_kurtosis`, `spectral_crest` and `spectral_decrease` (Peeters, 2004), on both the NumPy and torch paths.
-- `lpc` (autocorrelation method, Levinson-Durbin over all frames at once) and `formants` (LPC root solving with bandwidth and frequency limits), with `AFX.methods.lpc` and `lpc_roots`. The speech preset includes F1 to F3.
-- The torch path covers 20 features: MFCC deltas, GFCC, chroma_stft, spectral skewness, kurtosis, slope, crest, decrease and contrast were added, `rms_energy` and `zcr` take framing and `center`, and `AFX.torch.functional.delta` reproduces `compute_delta`.
+- `lpc` (autocorrelation method, Levinson-Durbin over all frames at once) and `formants` (LPC root solving with bandwidth and frequency limits), with `afx.methods.lpc` and `lpc_roots`. The speech preset includes F1 to F3.
+- The torch path covers 20 features: MFCC deltas, GFCC, chroma_stft, spectral skewness, kurtosis, slope, crest, decrease and contrast were added, `rms_energy` and `zcr` take framing and `center`, and `afx.torch.functional.delta` reproduces `compute_delta`.
 - `tests/test_librosa_parity.py` (fourteen features against librosa), edge-case tests for every feature, a documentation site (`mkdocs`, `docs/`), a mypy job, `py.typed`, and `benchmarks/bench_features.py`.
 - `melspectrogram`, `chroma_stft` and `cqt` accept `center`; `melspectrogram` accepts `fmin` and `fmax` as named parameters.
 - `validate_config` (also run by `load_config`, `extract_all_features`, the batch extractor and the scikit-learn transformer) rejects unknown feature names and parameters, bad `aggregation` or `normalize` values and non-object feature parameters.
 - `extract_features_from_folder` accepts a config dict, `sample_rate` and `verbose`.
 - The batch extractor checks the output folder and the Parquet dependencies before extracting, and `--features` may name features that are not in the config (they get default parameters).
 - CLI: `--preset`, `-o`, `--version`, `--sample-rate`, `--quiet`, `--list-features`, `--list-presets`, `--describe`; the output format follows the `--output` extension when `--format` is omitted.
-- `AFX.methods.autocorrelation` (FFT autocorrelation shared by the time-domain, pitch and HNR code), `AFX.__version__`, ruff configuration, Windows and macOS CI jobs, wheel build check.
+- `afx.methods.autocorrelation` (FFT autocorrelation shared by the time-domain, pitch and HNR code), `afx.__version__`, ruff configuration, Windows and macOS CI jobs, wheel build check.
 
 ### Changed
 
 - Time-domain extractors, YIN, HNR, THD, chroma folding and sliding-window aggregation are vectorized over frames. On 10 s at 22.05 kHz: pitch 88 to 50 ms, hnr 77 to 45 ms, entropy 88 to 40 ms, autocorr_variance 66 to 20 ms, chroma_stft 48 to 21 ms.
 - Sample entropy checks the candidate template pairs found by sorting directly when there are few of them (frames up to about 1500 samples of noise-like audio) and keeps the KD-tree count otherwise; results are the same.
-- `import AFX` takes about 0.4 s instead of 1.3 s (scipy submodules are imported where used).
+- `import afx_audio as afx` takes about 0.4 s instead of 1.3 s (scipy submodules are imported where used).
 - CSV output no longer needs pandas. Batch output keys use forward slashes on every OS, and failed or missing files are reported with warnings instead of prints.
 - Whole-clip spectral features use the periodic Hann window, like the STFT.
 - `extract_all_features` rejects non-1-D signals with a clear error.

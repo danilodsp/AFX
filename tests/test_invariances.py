@@ -2,10 +2,10 @@
 import numpy as np
 import pytest
 
-import AFX
+import afx_audio
 
 SR = 16000
-F = AFX.FEATURE_MAP
+F = afx_audio.FEATURE_MAP
 RNG = np.random.default_rng(11)
 T = np.arange(SR) / SR
 SIGNAL = 0.5 * np.sin(2 * np.pi * 220 * T) + 0.2 * np.sin(2 * np.pi * 1330 * T) + 0.05 * RNG.standard_normal(SR)

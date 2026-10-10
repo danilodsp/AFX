@@ -1,5 +1,5 @@
 """
-Unit tests for AFX.utils.torch_utils.
+Unit tests for afx_audio.utils.torch_utils.
 
 The conversion tests skip cleanly when torch is not installed; the
 ImportError-message test runs only when torch is absent.
@@ -9,7 +9,7 @@ import importlib.util
 import numpy as np
 import pytest
 
-from AFX.utils.torch_utils import to_torch
+from afx_audio.utils.torch_utils import to_torch
 
 TORCH_AVAILABLE = importlib.util.find_spec('torch') is not None
 

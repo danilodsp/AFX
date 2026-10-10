@@ -3,7 +3,7 @@ Unit tests for aggregator and shape_utils utilities.
 """
 import numpy as np
 
-from AFX.utils import aggregator, shape_utils
+from afx_audio.utils import aggregator, shape_utils
 
 
 def test_mean_pooling():

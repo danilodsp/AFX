@@ -9,12 +9,12 @@ Audio feature extraction for machine learning. 45 time-domain, autocorrelation, 
 Documentation: [danilodsp.github.io/AFX](https://danilodsp.github.io/AFX/), built from [docs/](https://github.com/danilodsp/AFX/tree/main/docs/).
 
 ```python
-import AFX
+import afx_audio as afx
 
-config = AFX.load_preset('speech')                       # or AFX.load_config('my_config.json')
-signal, sr = AFX.load_audio('clip.wav', sr=config['sample_rate'])
-features = AFX.extract_all_features(signal, sr, config)  # {'mfcc_mean': (20,), 'mfcc_std': (20,), ...}
-names, vector = AFX.flatten_features(features)           # column names and one float vector
+config = afx.load_preset('speech')                       # or afx.load_config('my_config.json')
+signal, sr = afx.load_audio('clip.wav', sr=config['sample_rate'])
+features = afx.extract_all_features(signal, sr, config)  # {'mfcc_mean': (20,), 'mfcc_std': (20,), ...}
+names, vector = afx.flatten_features(features)           # column names and one float vector
 ```
 
 ## Install
@@ -23,7 +23,7 @@ names, vector = AFX.flatten_features(features)           # column names and one 
 pip install afx-audio
 ```
 
-The distribution is `afx-audio`, the import name is `AFX`. The core install needs only NumPy, SciPy and soundfile. Extras: `sklearn` for `AFXFeatureExtractor` and the selectors, `torch` for the PyTorch path, `parquet` (pandas and pyarrow) for Parquet output, `plot` for `AFX.utils.visualization`, `all` for those four, `docs`, `notebooks`, and `dev` for everything plus pytest and ruff. From a checkout: `pip install -e ".[dev]"`.
+The distribution is `afx-audio` and the import name is `afx_audio`; the examples use `import afx_audio as afx`. The core install needs only NumPy, SciPy and soundfile. Extras: `sklearn` for `AFXFeatureExtractor` and the selectors, `torch` for the PyTorch path, `parquet` (pandas and pyarrow) for Parquet output, `plot` for `afx.utils.visualization`, `all` for those four, `docs`, `notebooks`, and `dev` for everything plus pytest and ruff. From a checkout: `pip install -e ".[dev]"`.
 
 ## Why AFX
 
@@ -31,7 +31,7 @@ librosa, torchaudio and openSMILE each cover part of this space. AFX is for the 
 
 ## Features
 
-Every feature is a function `extract_<name>(signal, sr, **params)` returning `{name: ndarray}`, registered in `AFX.FEATURE_MAP`. Per-frame shapes are `(n_frames,)` or `(n_dims, n_frames)`. `AFX.feature_info(name)` gives a feature's definition, units and parameters with defaults; [docs/features.md](https://github.com/danilodsp/AFX/blob/main/docs/features.md) lists them all. `AFX.register_feature(name, func)` adds your own extractor to configs and every front end.
+Every feature is a function `extract_<name>(signal, sr, **params)` returning `{name: ndarray}`, registered in `afx.FEATURE_MAP`. Per-frame shapes are `(n_frames,)` or `(n_dims, n_frames)`. `afx.feature_info(name)` gives a feature's definition, units and parameters with defaults; [docs/features.md](https://github.com/danilodsp/AFX/blob/main/docs/features.md) lists them all. `afx.register_feature(name, func)` adds your own extractor to configs and every front end.
 
 | Group | Features |
 |-------|----------|
@@ -59,12 +59,12 @@ Time-domain and autocorrelation features take `frame_size`, `hop_length` and `ce
 }
 ```
 
-`aggregation` is `mean`, `std`, `summary` (mean and std), `advanced_summary` (plus skewness and kurtosis), `skew`, `kurtosis`, `sliding_window` or `stack`. Frames where a feature is undefined (HNR on silence) are NaN and skipped by the statistics. `AFX.validate_config` rejects unknown features, unknown parameters and non-positive sizes before any audio is read. Bundled presets: `speech`, `bioacoustics`, `music`, `machinery` (`AFX.list_presets()`). See [docs/configuration.md](https://github.com/danilodsp/AFX/blob/main/docs/configuration.md) for framing, aggregation and normalization details.
+`aggregation` is `mean`, `std`, `summary` (mean and std), `advanced_summary` (plus skewness and kurtosis), `skew`, `kurtosis`, `sliding_window` or `stack`. Frames where a feature is undefined (HNR on silence) are NaN and skipped by the statistics. `afx.validate_config` rejects unknown features, unknown parameters and non-positive sizes before any audio is read. Bundled presets: `speech`, `bioacoustics`, `music`, `machinery` (`afx.list_presets()`). See [docs/configuration.md](https://github.com/danilodsp/AFX/blob/main/docs/configuration.md) for framing, aggregation and normalization details.
 
 ## scikit-learn
 
 ```python
-from AFX.sklearn import AFXFeatureExtractor
+from afx_audio.sklearn import AFXFeatureExtractor
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.svm import SVC
@@ -84,14 +84,14 @@ Features that can be undefined for a whole clip (HNR of silence, formants of noi
 ## PyTorch
 
 ```python
-from AFX.torch import AFXFeatureModule, functional as F_afx
+from afx_audio.torch import AFXFeatureModule, functional as F_afx
 
 mfcc = F_afx.mfcc(waveform, sr=16000, n_mfcc=13)   # (time,) or (batch, time), any device
 frontend = AFXFeatureModule(features={'mfcc': {'n_mfcc': 13}, 'spectral_centroid': {}},
                             sample_rate=16000, aggregation='mean_std', output='vector')
 ```
 
-Twenty features (mel spectrogram, MFCC and deltas, GFCC, chroma_stft, the twelve spectral descriptors, zcr and RMS) are implemented in torch with the same conventions as the NumPy path, tested against it to 1e-6 in float64, batched, and differentiable with respect to the waveform except through the counting in `zcr` and the bin selection in `spectral_rolloff`. `AFX.torch.supported_features()` lists them. `import AFX` does not import torch.
+Twenty features (mel spectrogram, MFCC and deltas, GFCC, chroma_stft, the twelve spectral descriptors, zcr and RMS) are implemented in torch with the same conventions as the NumPy path, tested against it to 1e-6 in float64, batched, and differentiable with respect to the waveform except through the counting in `zcr` and the bin selection in `spectral_rolloff`. `afx.torch.supported_features()` lists them. `import afx_audio as afx` does not import torch.
 
 ## Batch extraction and CLI
 
@@ -102,7 +102,7 @@ afx --list-features
 afx --describe spectral_rolloff
 ```
 
-or `AFX.extract_features_from_folder(folder, config, output, n_jobs=8)`. The output format follows the extension (`npy`, `json`, `csv`, `parquet`), rows are keyed by the path relative to the folder, in CSV and Parquet vector features expand to `name_0, name_1, ...` columns (JSON and npy keep one list per feature), and files that fail are listed in `<output>.errors.json` instead of aborting the run. Parallel output is identical to serial output. Worker processes use the platform's default start method, so on Windows, macOS and Python 3.14+ a script that calls it with `n_jobs > 1` needs an `if __name__ == '__main__':` guard.
+or `afx.extract_features_from_folder(folder, config, output, n_jobs=8)`. The output format follows the extension (`npy`, `json`, `csv`, `parquet`), rows are keyed by the path relative to the folder, in CSV and Parquet vector features expand to `name_0, name_1, ...` columns (JSON and npy keep one list per feature), and files that fail are listed in `<output>.errors.json` instead of aborting the run. Parallel output is identical to serial output. Worker processes use the platform's default start method, so on Windows, macOS and Python 3.14+ a script that calls it with `n_jobs > 1` needs an `if __name__ == '__main__':` guard.
 
 ## Performance
 

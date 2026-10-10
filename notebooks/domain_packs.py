@@ -5,7 +5,7 @@ This module keeps the heavy lifting (dataset download, label parsing, feature
 matrix construction) out of ``domain_feature_packs_demo.ipynb`` so the notebook
 stays a thin, readable driver and the logic can be unit-tested.
 
-Each supported domain maps a curated AFX preset (``AFX.presets``) to a small,
+Each supported domain maps a curated AFX preset (``afx_audio.presets``) to a small,
 openly-licensed dataset and a tiny end-to-end classification task:
 
     ============  =========================  ==============================
@@ -35,8 +35,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from AFX.extract_all import extract_all_features
-from AFX.io.io import load_audio
+from afx_audio.extract_all import extract_all_features
+from afx_audio.io.io import load_audio
 
 
 # --------------------------------------------------------------------------- #
@@ -331,7 +331,7 @@ def build_feature_matrix(examples: Sequence[tuple[str, str]],
 
     Args:
         examples: list of (audio_path, label).
-        config: an AFX config dict (e.g. from ``AFX.presets.load_preset``).
+        config: an AFX config dict (e.g. from ``afx_audio.presets.load_preset``).
         max_seconds: optionally truncate each clip for speed (None = full).
         verbose: print progress.
     Returns:

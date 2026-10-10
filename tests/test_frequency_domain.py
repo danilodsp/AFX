@@ -3,7 +3,7 @@ Unit tests for frequency_domain feature extractors.
 """
 import numpy as np
 
-from AFX.extractors import frequency_domain
+from afx_audio.extractors import frequency_domain
 
 
 def test_extract_spectral_centroid():
@@ -44,7 +44,7 @@ def test_extract_spectral_slope():
 
 
 def _mag(signal, n_fft=1024, hop=256):
-    from AFX.methods.stft import stft
+    from afx_audio.methods.stft import stft
     return np.abs(stft(signal, frame_size=n_fft, hop_length=hop, center=False))
 
 

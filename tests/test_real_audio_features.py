@@ -14,9 +14,9 @@ import numpy as np
 import pytest
 import soundfile as sf
 
-from AFX.methods.dct import extract_mfcc_coefficients
-from AFX.methods.mel import apply_mel_filterbank, log_mel_spectrogram, mel_filterbank
-from AFX.methods.stft import power_spectrogram, stft
+from afx_audio.methods.dct import extract_mfcc_coefficients
+from afx_audio.methods.mel import apply_mel_filterbank, log_mel_spectrogram, mel_filterbank
+from afx_audio.methods.stft import power_spectrogram, stft
 
 TEST_WAV = "tests/data/116-288045-0000.wav"
 

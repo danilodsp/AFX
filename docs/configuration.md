@@ -1,6 +1,6 @@
 # Configuration
 
-A config is a dict (or a JSON file loaded with `AFX.load_config`):
+A config is a dict (or a JSON file loaded with `afx.load_config`):
 
 ```json
 {
@@ -18,13 +18,13 @@ A config is a dict (or a JSON file loaded with `AFX.load_config`):
 
 `features` maps feature names to the keyword arguments of their
 extractors; a list of names (`"features": ["mfcc", "zcr"]`) uses the
-defaults. `AFX.validate_config` (called by `load_config`,
+defaults. `afx.validate_config` (called by `load_config`,
 `extract_all_features`, the batch extractor and the scikit-learn
 transformer) rejects unknown keys, feature names and parameters (with
 the closest valid name in the message), non-positive frame sizes and
 counts, unknown `aggregation` or `normalize` values, and `sliding_window`
 without its window sizes, so a typo fails before any audio is read.
-`AFX.feature_info(name)['parameters']` lists what each feature accepts.
+`afx.feature_info(name)['parameters']` lists what each feature accepts.
 `sample_rate` is required in config files; `extract_all_features` takes
 the rate as an argument and only warns when it differs from the config's.
 
@@ -92,16 +92,16 @@ leave it `null` and scale in scikit-learn.
 
 Signals must be 1-D floating-point arrays without NaN or infinity;
 integer PCM must be scaled by the caller (`x / 32768.0` for int16).
-`AFX.load_audio(path, sr)` returns mono float32 audio resampled with a
+`afx.load_audio(path, sr)` returns mono float32 audio resampled with a
 polyphase filter, or the file's own rate with `sr=None`; `offset` and
 `duration` (seconds) read part of a file.
 
 ## Presets
 
-`AFX.list_presets()` returns `bioacoustics`, `machinery`, `music` and
-`speech`; `AFX.load_preset(name)` returns a validated config and
-`AFX.preset_info(name)` its description. The JSON files are in
-`AFX/presets/`; copy one as a starting point.
+`afx.list_presets()` returns `bioacoustics`, `machinery`, `music` and
+`speech`; `afx.load_preset(name)` returns a validated config and
+`afx.preset_info(name)` its description. The JSON files are in
+`afx_audio/presets/`; copy one as a starting point.
 
 | Preset | Sample rate | Contents |
 |---|---|---|

@@ -80,7 +80,7 @@ dev = [
 ]
 
 [project.scripts]
-afx = "AFX.cli:main"
+afx = "afx_audio.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/danilodsp/AFX"
@@ -90,10 +90,10 @@ Repository = "https://github.com/danilodsp/AFX"
 Issues = "https://github.com/danilodsp/AFX/issues"
 
 [tool.setuptools.packages.find]
-include = ["AFX*"]
+include = ["afx_audio*"]
 
 [tool.setuptools.package-data]
-AFX = ["config.json", "presets/*.json", "py.typed"]
+afx_audio = ["config.json", "presets/*.json", "py.typed"]
 
 [tool.ruff]
 line-length = 120

@@ -4,7 +4,7 @@ Compare frequency domain extractors against librosa implementations.
 import librosa
 import numpy as np
 
-from AFX.extractors import frequency_domain
+from afx_audio.extractors import frequency_domain
 
 
 def test_extract_spectral_centroid_against_librosa():

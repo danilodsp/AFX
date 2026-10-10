@@ -1,5 +1,5 @@
 """
-Unit tests for AFX.utils.visualization.
+Unit tests for afx_audio.utils.visualization.
 """
 import matplotlib
 
@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 
-from AFX.utils.visualization import (
+from afx_audio.utils.visualization import (
     plot_feature_distribution,
     plot_mfcc,
     plot_spectrogram,

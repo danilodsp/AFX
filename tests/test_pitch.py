@@ -5,7 +5,7 @@ import librosa
 import numpy as np
 import pytest
 
-from AFX.utils.pitch import yin
+from afx_audio.utils.pitch import yin
 
 
 def test_yin_against_librosa():

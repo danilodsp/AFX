@@ -9,8 +9,8 @@ These tests pin the fixed behavior.
 import numpy as np
 import pytest
 
-from AFX.extract_all import FEATURE_MAP, extract_all_features
-from AFX.extractors import frequency_domain, harmonic_features, time_domain
+from afx_audio.extract_all import FEATURE_MAP, extract_all_features
+from afx_audio.extractors import frequency_domain, harmonic_features, time_domain
 
 SR = 22050
 
@@ -21,7 +21,7 @@ def _tone(freq=440.0, duration=1.0, sr=SR):
 
 
 def expected_n_frames(n_samples, frame_size, hop_length):
-    """Matches AFX.utils.frame_utils.frame_signal's framing convention."""
+    """Matches afx_audio.utils.frame_utils.frame_signal's framing convention."""
     return max(1, 1 + (n_samples - frame_size) // hop_length)
 
 
@@ -102,7 +102,7 @@ def test_extract_all_features_covers_default_config():
     import os
     config_path = os.path.join(
         os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-        'AFX', 'config.json'
+        'afx_audio', 'config.json'
     )
     with open(config_path) as f:
         config = json.load(f)
@@ -129,7 +129,7 @@ def test_feature_map_covers_default_config():
     import os
     config_path = os.path.join(
         os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-        'AFX', 'config.json'
+        'afx_audio', 'config.json'
     )
     with open(config_path) as f:
         config = json.load(f)

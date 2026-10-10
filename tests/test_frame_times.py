@@ -9,13 +9,13 @@ import librosa
 import numpy as np
 import pytest
 
-from AFX.extractors import (
+from afx_audio.extractors import (
     cepstral_features,
     frequency_domain,
     harmonic_features,
     time_domain,
 )
-from AFX.utils.frame_utils import frame_times
+from afx_audio.utils.frame_utils import frame_times
 
 SR = 22050
 FRAME = 2048

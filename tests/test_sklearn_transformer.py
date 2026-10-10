@@ -1,5 +1,5 @@
 """
-Tests for AFX.sklearn.AFXFeatureExtractor: fit/transform semantics,
+Tests for afx_audio.sklearn.AFXFeatureExtractor: fit/transform semantics,
 pipeline integration, feature names, and parallel extraction.
 """
 
@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 import soundfile as sf
 
-from AFX.sklearn import AFXFeatureExtractor
+from afx_audio.sklearn import AFXFeatureExtractor
 
 SR = 16000
 RNG = np.random.default_rng(0)
@@ -160,7 +160,7 @@ def test_default_config_loads(signals):
 
 
 def test_output_columns_follow_requested_feature_order():
-    from AFX.sklearn import AFXFeatureExtractor
+    from afx_audio.sklearn import AFXFeatureExtractor
 
     x = [np.random.default_rng(0).standard_normal(8000)]
     ext = AFXFeatureExtractor(features=['mfcc', 'zcr'], sample_rate=16000, aggregation='summary').fit(x)
@@ -170,23 +170,23 @@ def test_output_columns_follow_requested_feature_order():
 
 @pytest.mark.parametrize('bad', [np.zeros((8000, 2)), np.zeros(8000, dtype=np.int16)])
 def test_raw_signals_are_validated(bad):
-    from AFX.sklearn import AFXFeatureExtractor
+    from afx_audio.sklearn import AFXFeatureExtractor
 
     with pytest.raises((ValueError, TypeError)):
         AFXFeatureExtractor(features=['zcr'], sample_rate=16000).fit([bad])
 
 
 def test_bad_aggregation_fails_before_extraction():
-    from AFX.sklearn import AFXFeatureExtractor
+    from afx_audio.sklearn import AFXFeatureExtractor
 
     with pytest.raises(ValueError, match='aggregation'):
         AFXFeatureExtractor(features=['zcr'], aggregation='bogus').fit([np.zeros(100)])
 
 
 def test_config_sample_rate_and_aggregation_are_used_by_default():
-    import AFX
+    import afx_audio
 
-    preset = AFX.load_preset('speech')
+    preset = afx_audio.load_preset('speech')
     ext = AFXFeatureExtractor(config=preset).fit([np.zeros(SR)])
     assert ext.config_['sample_rate'] == preset['sample_rate'] == SR
     assert ext.config_['aggregation'] == 'summary'

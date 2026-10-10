@@ -1,5 +1,5 @@
-include AFX/config.json
-include AFX/presets/*.json
+include afx_audio/config.json
+include afx_audio/presets/*.json
 include LICENSE
 include README.md
 include CHANGELOG.md

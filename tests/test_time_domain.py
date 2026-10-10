@@ -4,8 +4,8 @@ Unit tests for time_domain feature extractors.
 import librosa
 import numpy as np
 
-from AFX.extractors import time_domain
-from AFX.extractors.time_domain import (
+from afx_audio.extractors import time_domain
+from afx_audio.extractors.time_domain import (
     extract_energy_ratio,
     extract_kurtosis,
     extract_mobility,

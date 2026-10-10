@@ -1,12 +1,12 @@
 """
-Tests for the AFX domain feature packs (``AFX.presets``).
+Tests for the AFX domain feature packs (``afx_audio.presets``).
 """
 import numpy as np
 import pytest
 
-import AFX
-from AFX import extract_all_features
-from AFX.presets import list_presets, load_preset, preset_info
+import afx_audio
+from afx_audio import extract_all_features
+from afx_audio.presets import list_presets, load_preset, preset_info
 
 EXPECTED = {'speech', 'bioacoustics', 'music', 'machinery'}
 
@@ -17,8 +17,8 @@ def test_list_presets_contains_all_domains():
 
 
 def test_presets_exposed_at_package_level():
-    assert AFX.load_preset('speech') == load_preset('speech')
-    assert set(AFX.list_presets()) >= EXPECTED
+    assert afx_audio.load_preset('speech') == load_preset('speech')
+    assert set(afx_audio.list_presets()) >= EXPECTED
 
 
 @pytest.mark.parametrize('name', sorted(EXPECTED))
@@ -35,7 +35,7 @@ def test_preset_is_valid_config(name):
 @pytest.mark.parametrize('name', sorted(EXPECTED))
 def test_preset_features_are_known_extractors(name):
     cfg = load_preset(name)
-    unknown = set(cfg['features']) - set(AFX.FEATURE_MAP)
+    unknown = set(cfg['features']) - set(afx_audio.FEATURE_MAP)
     assert not unknown, f'{name} references unknown features: {unknown}'
 
 

@@ -11,18 +11,18 @@ import time
 
 import numpy as np
 
-import AFX
+import afx_audio
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config', default=os.path.join(os.path.dirname(AFX.__file__), 'config.json'))
+    parser.add_argument('--config', default=os.path.join(os.path.dirname(afx_audio.__file__), 'config.json'))
     parser.add_argument('--seconds', type=float, default=10.0)
     parser.add_argument('--repeat', type=int, default=5)
     parser.add_argument('--features', help='comma-separated subset')
     args = parser.parse_args()
 
-    config = AFX.load_config(args.config)
+    config = afx_audio.load_config(args.config)
     sr = config['sample_rate']
     rng = np.random.default_rng(0)
     t = np.arange(int(args.seconds * sr)) / sr
@@ -34,9 +34,9 @@ def main():
         params = config['features'].get(name, {})
         times = []
         for _ in range(args.repeat):
-            AFX.clear_stft_cache()
+            afx_audio.clear_stft_cache()
             t0 = time.perf_counter()
-            AFX.FEATURE_MAP[name](signal, sr, **params)
+            afx_audio.FEATURE_MAP[name](signal, sr, **params)
             times.append(time.perf_counter() - t0)
         ms = 1000 * float(np.median(times))
         total += ms

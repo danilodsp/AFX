@@ -4,7 +4,7 @@ Test the spectral flatness implementation against librosa.
 import librosa
 import numpy as np
 
-from AFX.extractors import frequency_domain
+from afx_audio.extractors import frequency_domain
 
 
 def test_extract_spectral_flatness_against_librosa():

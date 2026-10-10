@@ -1,6 +1,6 @@
 """
 Tests for parallel batch extraction and parquet output in
-AFX.batch_extractor.
+afx_audio.batch_extractor.
 """
 import json
 import os
@@ -10,7 +10,7 @@ import pandas as pd
 import pytest
 import soundfile as sf
 
-from AFX.batch_extractor import extract_features_from_folder
+from afx_audio.batch_extractor import extract_features_from_folder
 
 SR = 16000
 RNG = np.random.default_rng(7)

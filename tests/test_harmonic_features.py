@@ -3,8 +3,8 @@ Unit tests for harmonic_features extractors.
 """
 import numpy as np
 
-from AFX.extractors import harmonic_features
-from AFX.utils.pitch import yin
+from afx_audio.extractors import harmonic_features
+from afx_audio.utils.pitch import yin
 
 
 def test_extract_pitch():

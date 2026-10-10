@@ -2,64 +2,64 @@
 
 ## Extraction
 
-::: AFX.extract_all.extract_all_features
+::: afx_audio.extract_all.extract_all_features
 
-::: AFX.extract_all.extract_segments
+::: afx_audio.extract_all.extract_segments
 
-::: AFX.registry.register_feature
+::: afx_audio.registry.register_feature
 
-::: AFX.batch_extractor.extract_features_from_folder
+::: afx_audio.batch_extractor.extract_features_from_folder
 
-::: AFX.io.io.load_audio
+::: afx_audio.io.io.load_audio
 
 ## Configuration
 
-::: AFX.utils.config_loader.load_config
+::: afx_audio.utils.config_loader.load_config
 
-::: AFX.utils.config_loader.validate_config
+::: afx_audio.utils.config_loader.validate_config
 
-::: AFX.presets.load_preset
+::: afx_audio.presets.load_preset
 
-::: AFX.registry.feature_info
+::: afx_audio.registry.feature_info
 
-::: AFX.registry.list_features
+::: afx_audio.registry.list_features
 
-::: AFX.utils.batch_utils.flatten_features
+::: afx_audio.utils.batch_utils.flatten_features
 
 ## Aggregation
 
-::: AFX.utils.aggregator.aggregate_features
+::: afx_audio.utils.aggregator.aggregate_features
 
 ## Extractors
 
-::: AFX.extractors.time_domain
+::: afx_audio.extractors.time_domain
 
-::: AFX.extractors.frequency_domain
+::: afx_audio.extractors.frequency_domain
 
-::: AFX.extractors.cepstral_features
+::: afx_audio.extractors.cepstral_features
 
-::: AFX.extractors.harmonic_features
+::: afx_audio.extractors.harmonic_features
 
-::: AFX.extractors.linear_prediction
+::: afx_audio.extractors.linear_prediction
 
 ## Signal processing building blocks
 
-::: AFX.methods.stft.stft
+::: afx_audio.methods.stft.stft
 
-::: AFX.methods.mel.mel_filterbank
+::: afx_audio.methods.mel.mel_filterbank
 
-::: AFX.methods.chroma.chroma_filterbank
+::: afx_audio.methods.chroma.chroma_filterbank
 
-::: AFX.methods.delta.compute_delta
+::: afx_audio.methods.delta.compute_delta
 
-::: AFX.methods.lpc.lpc
+::: afx_audio.methods.lpc.lpc
 
-::: AFX.utils.pitch.yin
+::: afx_audio.utils.pitch.yin
 
 ## scikit-learn
 
-::: AFX.sklearn.AFXFeatureExtractor
+::: afx_audio.sklearn.AFXFeatureExtractor
 
 ## PyTorch
 
-::: AFX.torch.module.AFXFeatureModule
+::: afx_audio.torch.module.AFXFeatureModule

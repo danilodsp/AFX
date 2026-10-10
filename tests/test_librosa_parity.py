@@ -4,9 +4,9 @@ import pytest
 
 librosa = pytest.importorskip('librosa')
 
-import AFX  # noqa: E402
+import afx_audio  # noqa: E402
 
-F = AFX.FEATURE_MAP
+F = afx_audio.FEATURE_MAP
 
 
 def _signal(sr, seconds=1.5, seed=0):

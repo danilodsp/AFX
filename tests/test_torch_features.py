@@ -1,5 +1,5 @@
 """
-Tests for AFX.torch: numerical parity with the NumPy path, gradient flow,
+Tests for afx_audio.torch: numerical parity with the NumPy path, gradient flow,
 batching, and the AFXFeatureModule wrapper.
 """
 import numpy as np
@@ -9,12 +9,12 @@ torch = pytest.importorskip('torch')
 
 import importlib
 
-from AFX.extractors import cepstral_features, frequency_domain, time_domain
+from afx_audio.extractors import cepstral_features, frequency_domain, time_domain
 
-# AFX.methods re-exports the stft *function*; get the module explicitly
-np_stft_mod = importlib.import_module('AFX.methods.stft')
-from AFX.torch import AFXFeatureModule, supported_features
-from AFX.torch import functional as F_afx
+# afx_audio.methods re-exports the stft *function*; get the module explicitly
+np_stft_mod = importlib.import_module('afx_audio.methods.stft')
+from afx_audio.torch import AFXFeatureModule, supported_features
+from afx_audio.torch import functional as F_afx
 
 SR = 22050
 RNG = np.random.default_rng(42)
@@ -191,7 +191,7 @@ def test_module_vector_output_batched(signal):
 
 def test_module_matches_numpy_mean_aggregation(signal):
     """module(aggregation='mean') == extract_all_features + mean pooling."""
-    from AFX.extract_all import extract_all_features
+    from afx_audio.extract_all import extract_all_features
     config = {
         'sample_rate': SR,
         'features': {
@@ -296,7 +296,7 @@ _MODULE_PARAMS = [
 @pytest.mark.parametrize('params', _MODULE_PARAMS)
 @pytest.mark.parametrize('name', supported_features())
 def test_module_matches_numpy_extractor(signal, name, params):
-    import AFX
+    import afx_audio
 
     default = torch.get_default_dtype()
     torch.set_default_dtype(torch.float64)  # build the constant buffers in float64
@@ -305,7 +305,7 @@ def test_module_matches_numpy_extractor(signal, name, params):
     finally:
         torch.set_default_dtype(default)
     out = module(_t(signal))[name].numpy()
-    ref = AFX.FEATURE_MAP[name](signal, SR, **params)[name]
+    ref = afx_audio.FEATURE_MAP[name](signal, SR, **params)[name]
     assert out.shape == ref.shape
     np.testing.assert_allclose(out, ref, rtol=1e-6, atol=1e-6 * max(1.0, np.abs(ref).max()))
 
@@ -324,7 +324,7 @@ def test_new_features_are_differentiable_and_batched(signal, name):
 
 @pytest.mark.parametrize('width, order', [(3, 1), (5, 2), (9, 1), (9, 2)])
 def test_torch_delta_matches_numpy(width, order):
-    from AFX.methods.delta import compute_delta
+    from afx_audio.methods.delta import compute_delta
 
     feats = np.random.default_rng(3).standard_normal((4, 30))
     np.testing.assert_allclose(F_afx.delta(_t(feats), width, order=order).numpy(), compute_delta(feats, width, order),
@@ -365,26 +365,27 @@ def test_module_input_checks_and_summary_alias(signal):
 
 @pytest.mark.parametrize('aggregation, numpy_aggregation', [('mean_std', 'summary'), ('mean', 'mean')])
 def test_module_column_names_match_numpy(signal, aggregation, numpy_aggregation):
-    import AFX
+    import afx_audio
 
     features = {'mfcc': {'n_mfcc': 4}, 'spectral_centroid': {}, 'zcr': {}}
     module = AFXFeatureModule(features, sample_rate=SR, aggregation=aggregation, output='vector').double()
     names = module.get_feature_names_out()
-    ref = AFX.extract_all_features(signal, SR, {'features': features, 'aggregation': numpy_aggregation})
-    ref_names, ref_values = AFX.flatten_features(ref)
+    ref = afx_audio.extract_all_features(signal, SR, {'features': features, 'aggregation': numpy_aggregation})
+    ref_names, ref_values = afx_audio.flatten_features(ref)
     assert names == ref_names
     np.testing.assert_allclose(module(_t(signal)).numpy(), ref_values, rtol=1e-6, atol=1e-6)
 
 
 def test_aggregation_skips_undefined_frames_like_numpy():
-    import AFX
+    import afx_audio
 
     x = np.concatenate([np.zeros(SR), np.random.default_rng(4).standard_normal(SR)])
     features = {'spectral_kurtosis': {}, 'rms_energy': {'frame_size': 1024, 'hop_length': 512}}
     module = AFXFeatureModule(features, sample_rate=SR, aggregation='mean_std', output='vector').double()
     wav = _t(x).requires_grad_(True)
     out = module(wav)
-    ref = AFX.flatten_features(AFX.extract_all_features(x, SR, {'features': features, 'aggregation': 'summary'}))[1]
+    feats = afx_audio.extract_all_features(x, SR, {'features': features, 'aggregation': 'summary'})
+    ref = afx_audio.flatten_features(feats)[1]
     np.testing.assert_allclose(out.detach().numpy(), ref, rtol=1e-6)
     out.sum().backward()
     assert torch.isfinite(wav.grad).all()
