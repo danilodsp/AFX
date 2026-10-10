@@ -200,7 +200,7 @@ def extract_features_from_folder(
     normalize: str | None = None,
     n_jobs: int | None = None,
     sample_rate: int | None = None,
-    verbose: bool = True,
+    verbose: bool = False,
     coverage: bool | None = None,
     hash_files: bool = True,
     dataset_stats: bool = False,
@@ -238,7 +238,8 @@ def extract_features_from_folder(
             script (not a lambda, nor defined in a notebook).
         sample_rate: Override the config's sample_rate (audio is resampled
             to this rate on load).
-        verbose: Print per-file progress to stdout.
+        verbose: Print per-file progress to stdout. Off by default; the
+            ``afx`` command turns it on unless given ``--quiet``.
         coverage: Add a <feature>_valid_frac column per feature (fraction
             of frames with a finite value). None keeps the config's setting.
         hash_files: Record the sha256 of every audio file in the

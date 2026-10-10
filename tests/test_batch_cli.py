@@ -288,3 +288,11 @@ def test_rerun_removes_sidecars_it_does_not_write(audio_folder, small_config, tm
     pytest.importorskip('pyarrow')
     extract_features_from_folder(str(audio_folder), small_config, str(out), save_format='parquet', verbose=False)
     assert not (tmp_path / 'f.csv.provenance.json').exists()
+
+
+def test_library_call_is_silent_by_default(audio_folder, small_config, tmp_path, capsys):
+    extract_features_from_folder(str(audio_folder), small_config, str(tmp_path / 'f.json'))
+    extract_features_from_folder(str(audio_folder), small_config, str(tmp_path / 'f.json'), n_jobs=2)
+    assert capsys.readouterr().out == ''
+    assert cli.main([str(audio_folder), '--config', small_config, '-o', str(tmp_path / 'f.json')]) == 0
+    assert '[1/3] Processing' in capsys.readouterr().out
