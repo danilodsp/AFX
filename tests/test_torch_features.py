@@ -312,16 +312,23 @@ _MODULE_PARAMS = [
 def test_module_matches_numpy_extractor(signal, name, params):
     import afx_audio
 
-    default = torch.get_default_dtype()
-    torch.set_default_dtype(torch.float64)  # build the constant buffers in float64
-    try:
-        module = AFXFeatureModule({name: params}, sample_rate=SR)
-    finally:
-        torch.set_default_dtype(default)
+    # Default dtype float32: float64 input still gets float64 constants
+    module = AFXFeatureModule({name: params}, sample_rate=SR)
     out = module(_t(signal))[name].numpy()
     ref = afx_audio.FEATURE_MAP[name](signal, SR, **params)[name]
     assert out.shape == ref.shape
     np.testing.assert_allclose(out, ref, **_tol(name))
+
+
+@pytest.mark.parametrize('name', supported_features())
+def test_module_output_dtype_follows_input(signal, name):
+    module = AFXFeatureModule({name: {'frame_size': 512, 'hop_length': 256}}, sample_rate=SR, aggregation='mean')
+    x = _t(signal[:8000])
+    assert module(x)[name].dtype == torch.float64
+    out32 = module(x.float())[name]
+    assert out32.dtype == torch.float32
+    assert module.double()(x.float())[name].dtype == torch.float32
+    np.testing.assert_allclose(out32.numpy(), module(x)[name].numpy(), rtol=1e-3, atol=1e-3)
 
 
 @pytest.mark.parametrize('name', ['spectral_contrast', 'chroma_stft', 'gfcc', 'mfcc_delta', 'spectral_skewness'])

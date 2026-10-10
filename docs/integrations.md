@@ -54,10 +54,12 @@ columns as the NumPy path does, and the vector equals
 `flatten_features(extract_all_features(...))` with `aggregation='summary'`
 for `'mean_std'`.
 
-Windows, filterbanks and DCT matrices are buffers created in the default
-torch dtype, so they follow `.to(device)`; create the module under
-`torch.set_default_dtype(torch.float64)` for float64 constants. Parameters the torch path does not implement raise in the
-constructor.
+Windows, filterbanks and DCT matrices are buffers, so they follow
+`.to(device)`. They are stored in float64 and cast to the input dtype at
+each forward: float64 input gives float64 output at the precision of the
+functions, and float32 input gives float32 output. `.float()` or `.half()`
+on the module lowers the stored constants as well. Parameters the torch
+path does not implement raise in the constructor.
 
 ## Folders and the CLI
 

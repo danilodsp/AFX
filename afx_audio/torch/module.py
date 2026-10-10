@@ -82,9 +82,13 @@ class AFXFeatureModule(nn.Module):
 
     Mirrors the ``extract_all_features`` config convention: ``features``
     maps feature names to parameter dicts. Constant tensors (Hann windows,
-    mel filterbanks, DCT matrices) are precomputed in ``__init__`` and
-    registered as buffers, so the module moves correctly with
-    ``.to(device)`` and adds no per-forward construction overhead.
+    mel, gammatone and chroma filterbanks, DCT matrices) are precomputed in
+    ``__init__`` and registered as buffers, so the module moves with
+    ``.to(device)`` and builds no filterbank per forward. The buffers are
+    stored in float64 and cast to the input dtype in ``forward``: the
+    output has the dtype of the input, float64 input gets float64
+    constants, and float32 input keeps float32 math. ``.float()`` or
+    ``.half()`` on the module lowers the stored precision.
 
     Args:
         features: Dict like ``config['features']``, e.g.
@@ -165,28 +169,31 @@ class AFXFeatureModule(nn.Module):
                 raise ValueError(f"{name}: order must be 1 or 2, got {params['order']}")
             self._feature_params[name] = params
 
-            # Precompute constants as buffers so they follow .to(device)
+            # Constants are buffers so they follow .to(device). They are stored in
+            # float64 and cast to the input dtype in forward, so float64 input gets
+            # float64 constants without torch.set_default_dtype.
             frame_size = params.get('frame_size', 2048)
+            f64 = torch.float64
             if name in _SPECTRAL:
-                self.register_buffer(f'_window_{name}', F_afx.hann_window(frame_size), persistent=False)
+                self.register_buffer(f'_window_{name}', F_afx.hann_window(frame_size, dtype=f64), persistent=False)
             if name in ('melspectrogram', 'mfcc', *_DELTAS):
                 fb = F_afx.mel_filterbank(params.get('n_mels', 128), frame_size, sr=sample_rate,
-                                          fmin=params.get('fmin', 0.0), fmax=params.get('fmax'))
+                                          fmin=params.get('fmin', 0.0), fmax=params.get('fmax'), dtype=f64)
                 self.register_buffer(f'_melfb_{name}', fb, persistent=False)
             if name in ('mfcc', *_DELTAS):
-                dct = F_afx.dct_matrix(params.get('n_mfcc', 13), params.get('n_mels', 128))
+                dct = F_afx.dct_matrix(params.get('n_mfcc', 13), params.get('n_mels', 128), dtype=f64)
                 self.register_buffer(f'_dct_{name}', dct, persistent=False)
             if name == 'gfcc':
                 n_gammatone = params.get('n_gammatone', 64)
                 fmax = params.get('fmax')
                 gammatone = _np_gammatone_filterbank(n_gammatone, frame_size, sample_rate, params.get('fmin', 50.0),
                                                      sample_rate / 2.0 if fmax is None else fmax)
-                gammatone_t = torch.as_tensor(np.array(gammatone), dtype=torch.get_default_dtype())
-                self.register_buffer('_gammatone_gfcc', gammatone_t, persistent=False)
-                self.register_buffer('_dct_gfcc', F_afx.dct_matrix(params.get('n_gfcc', 13), n_gammatone),
+                self.register_buffer('_gammatone_gfcc', torch.as_tensor(np.array(gammatone), dtype=f64),
+                                     persistent=False)
+                self.register_buffer('_dct_gfcc', F_afx.dct_matrix(params.get('n_gfcc', 13), n_gammatone, dtype=f64),
                                      persistent=False)
             if name == 'chroma_stft':
-                fb = F_afx.chroma_filterbank(sample_rate, frame_size, params.get('tuning', 0.0))
+                fb = F_afx.chroma_filterbank(sample_rate, frame_size, params.get('tuning', 0.0), dtype=f64)
                 self.register_buffer('_chroma_chroma_stft', fb, persistent=False)
 
     # -- introspection ------------------------------------------------------
@@ -226,16 +233,21 @@ class AFXFeatureModule(nn.Module):
 
     def _extract_one(self, name: str, x: torch.Tensor) -> torch.Tensor:
         params = dict(self._feature_params[name])
+
+        def const(buffer: str) -> torch.Tensor:
+            # The output dtype follows the input, as in the functional API
+            return getattr(self, buffer).to(x.dtype)
+
         if name in _SPECTRAL:
-            params['window'] = getattr(self, f'_window_{name}')
+            params['window'] = const(f'_window_{name}')
         if name in ('melspectrogram', 'mfcc', *_DELTAS):
-            params['mel_fb'] = getattr(self, f'_melfb_{name}')
+            params['mel_fb'] = const(f'_melfb_{name}')
         if name in ('mfcc', *_DELTAS, 'gfcc'):
-            params['dct_mat'] = getattr(self, f'_dct_{name}')
+            params['dct_mat'] = const(f'_dct_{name}')
         if name == 'gfcc':
-            params['gammatone_fb'] = self._gammatone_gfcc
+            params['gammatone_fb'] = const('_gammatone_gfcc')
         if name == 'chroma_stft':
-            params['chroma_fb'] = self._chroma_chroma_stft
+            params['chroma_fb'] = const('_chroma_chroma_stft')
             params.pop('tuning', None)
         if name in _DELTAS:
             width = params.pop('width', 9)
@@ -279,7 +291,7 @@ class AFXFeatureModule(nn.Module):
         """
         Features of a (time,) or (batch, time) waveform at ``sample_rate``.
 
-        A dict of tensors for output='dict', otherwise one (batch, dim) or
+        Tensors have the waveform's dtype. A dict of tensors for output='dict', otherwise one (batch, dim) or
         (dim,) tensor.
         """
         if not isinstance(waveform, torch.Tensor):
