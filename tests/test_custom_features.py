@@ -115,6 +115,21 @@ def test_unused_unpicklable_registration_does_not_reach_workers(tmp_path):
         afx_audio.unregister_feature('unused')
 
 
+def test_restore_in_a_worker_repeats_registrations_once():
+    from afx_audio.registry import custom_features, restore_custom_features
+
+    afx_audio.register_feature('mean_abs', mean_abs, units='amplitude')
+    shipped = custom_features()
+    afx_audio.unregister_feature('mean_abs')
+    try:
+        restore_custom_features(shipped)
+        assert afx_audio.feature_info('mean_abs')['units'] == 'amplitude'
+        restore_custom_features(shipped)
+        assert custom_features() == shipped
+    finally:
+        afx_audio.unregister_feature('mean_abs')
+
+
 def test_kwargs_function_accepts_any_parameter():
     def scaled(signal, sr, **params):
         return {'scaled': np.array([params.get('k', 1) * np.max(signal)])}
