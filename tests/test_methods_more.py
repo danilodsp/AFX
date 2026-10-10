@@ -93,13 +93,16 @@ def test_compute_delta_clips_width_to_sequence():
 
 # ---------- gammatone ----------
 
-def test_gammatone_filters_peak_at_center_frequencies():
-    fb = gammatone_filterbank(24, 2048, SR, 50.0, None)
-    freqs = np.linspace(0, SR / 2, 1025)
+@pytest.mark.parametrize('n_fft', [2048, 551])
+def test_gammatone_filters_peak_at_center_frequencies(n_fft):
+    # 551 is 25 ms at 22050 Hz: for odd n_fft the bins are k sr / n_fft and
+    # the top one is below sr / 2, so a linspace(0, sr / 2) axis drifts by up
+    # to sr / (2 n_fft) and the peaks land a bin off
+    fb = gammatone_filterbank(24, n_fft, SR, 50.0, None)
+    freqs = np.fft.rfftfreq(n_fft, 1.0 / SR)
     cf = erb_space(50.0, SR / 2.0, 24)
-    peak_freqs = freqs[np.argmax(fb, axis=1)]
-    bin_width = freqs[1] - freqs[0]
-    assert np.all(np.abs(peak_freqs - cf) <= bin_width)
+    nearest = np.argmin(np.abs(freqs[np.newaxis, :] - cf[:, np.newaxis]), axis=1)
+    np.testing.assert_array_equal(np.argmax(fb, axis=1), nearest)
 
 
 def test_gammatone_unit_area_and_cached():

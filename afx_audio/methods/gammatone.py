@@ -36,7 +36,9 @@ def gammatone_filterbank(
     if fmax is None:
         fmax = sr / 2.0
     cf = erb_space(fmin, fmax, n_filters)
-    freqs = np.linspace(0, sr / 2, n_fft // 2 + 1)
+    # rfftfreq, not linspace: bins are k sr / n_fft, so for odd n_fft the
+    # top bin sits below sr / 2
+    freqs = np.fft.rfftfreq(n_fft, 1.0 / sr)
     order = 4
     bandwidth = 1.019 * (cf / EAR_Q + MIN_BW)
     filterbank = (
