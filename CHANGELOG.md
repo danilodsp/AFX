@@ -23,11 +23,19 @@
 - `afx` prints one-line `afx: error:` messages with exit status 2 for usage and configuration errors, and exits with 1 when no features were extracted. `--aggregation` no longer offers `sliding_window`, which needs window sizes from a config file.
 - `framewise_extractor` takes `frame_size`, `hop_length`, `center` and `return_metadata` as keyword-only arguments and no longer forwards them to the wrapped function.
 - `pitch` is NaN on unvoiced frames instead of 0, so pitch statistics cover voiced frames only and a clip with no voiced frame gives NaN `pitch_*`. `afx_audio.utils.pitch.yin` still returns 0.
+- Every framed feature defaults to `center=True` (librosa's convention) on the NumPy and torch paths, so features with the same `frame_size` and `hop_length` share frame count and frame times. Pass `center=False` for the previous framing of MFCC, GFCC, deltas, the spectral shape, time-domain, autocorrelation, THD, LPC, formant and chroma_cqt features. `pitch` and `hnr` gained `center`.
+- On an all-zero frame these features are NaN instead of 0 or 1: `crest_factor`, `energy_ratio`, `mobility`, `complexity` (any constant frame), `autocorr_snr`, `autocorr_peak_width`, `autocorr_decay_rate`, `spectral_entropy`, `spectral_skewness`, `spectral_slope`, `spectral_crest`, `spectral_decrease`. Features with a librosa equivalent keep librosa's value on silence. `feature_info(name)['undefined']` states each condition.
+- Every extractor returns float64, including for float32 input and for the counts `autocorr_zero_crossings` and `autocorr_peak_width`. Torch functions return the input tensor's dtype.
+- Presets are versioned files `afx_audio/presets/<name>@<version>.json` with a `"preset": {"name": ..., "version": ...}` block instead of the top-level `"name"`, and spell out every parameter. `speech` and `music` frame `rms_energy` like their other features (it was one value per clip), and the `speech` pitch and HNR search stops at 600 Hz.
+- `afx_audio.utils.shape_utils` and `afx_audio.utils.torch_utils` are removed; nothing used them.
 - `from afx_audio import *` no longer exports `AFXFeatureExtractor`, so it works without scikit-learn; use `from afx_audio.sklearn import AFXFeatureExtractor` or `afx.AFXFeatureExtractor`.
 - `AFXFeatureExtractor(features=[...])` orders output columns as `features`, and its `sample_rate` and `aggregation` default to None, meaning the config's values, instead of overriding a preset with 22050 Hz and `mean`.
 
 ### Fixed
 
+- `plot_mfcc` and `plot_spectrogram` placed frame i at its start instead of at the frame time in `metadata['times']`.
+- Float32 input to the spectral and cepstral extractors went through a complex64 STFT; it is now computed in double precision.
+- `afx -j N` on Linux could print Python's "use of fork() may lead to deadlocks" warning. Batch workers never fork: forkserver on Linux, spawn on Windows and macOS, or the method set with `multiprocessing.set_start_method`. A custom feature defined in a notebook raises a ValueError before workers start instead of `BrokenProcessPool`, and registered features that the config does not use are not sent to workers.
 - HNR used the biased autocorrelation, so r_max could not exceed (N - lag)/N: a pure tone read about 13 dB at 2048/22050 and about 2 dB with the speech preset framing. It now uses the normalized cross-correlation of the overlapping segments (NCCF) and tracks SNR within 1 dB on tone-plus-noise tests.
 - `spectral_flatness` returned 0 or 1 for silent frames depending on rounding; it is 1, as in librosa.
 - On the torch path, silent frames gave NaN gradients through `spectral_bandwidth` and `spectral_flux` (the derivative of sqrt at 0).
@@ -52,6 +60,11 @@
 - Numbered notebooks `01_quickstart` to `07_domain_presets` that run on synthetic audio without a dataset, `notebooks/demo_data.py`, and `tests/test_notebooks.py` (runs them with `AFX_RUN_NOTEBOOKS=1`).
 - `benchmarks/bench_features.py --librosa --torch-batch N --markdown` and the `docs/benchmarks.md` page; `docs/reproducibility.md`; a JOSS paper draft in `paper/`.
 - `afx_audio.methods.lpc.levinson`.
+- Versioned preset ids: `load_preset('speech@1')`, `afx --preset speech@1`, `AFXFeatureExtractor(config='speech@1')`, `list_presets(versions=True)`, `resolve_preset`. Provenance records carry `preset_id` and `preset_modified`, and a test pins the config hash of every released preset version.
+- `feature_info(name)['torch']`: the torch function and the rtol and atol of its float64 parity test against NumPy (also in `afx --describe` and `docs/features.md`). The parity tests read the same table and were tightened to rtol 1e-9.
+- `afx.AFXWarning`, the category of every warning AFX emits, and `afx.AFXDeprecationWarning`.
+- `frame_size` and `center` for `plot_mfcc` and `plot_spectrogram`.
+- A `slow` pytest marker (`pytest -m "not slow"`).
 - `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`, issue and pull request templates, a pre-commit configuration, Dependabot, and coverage upload in CI.
 - The sdist contains the tests, examples, docs sources, benchmarks and `CITATION.cff`, and the test suite passes from it. Releases install the built sdist and wheel in clean environments and run the tests before publishing.
 - `center` for the time-domain, autocorrelation and THD extractors, giving the same frames and times as a centered STFT; centered `zcr` and `rms_energy` match librosa.
