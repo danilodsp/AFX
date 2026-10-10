@@ -18,10 +18,16 @@ def lpc(frames: np.ndarray, order: int) -> tuple[np.ndarray, np.ndarray]:
     A silent frame gives A(z) = 1.
     """
     frames = np.atleast_2d(np.asarray(frames, dtype=np.float64))
-    n_frames, n = frames.shape
+    n = frames.shape[1]
     if order < 1 or order >= n:
         raise ValueError(f'order must be between 1 and frame length - 1 ({n - 1}), got {order}')
-    r = autocorrelation(frames, order + 1)
+    return levinson(autocorrelation(frames, order + 1), order)
+
+
+def levinson(r: np.ndarray, order: int) -> tuple[np.ndarray, np.ndarray]:
+    """Levinson-Durbin recursion on autocorrelations r[:, 0..order], returning (a, err) as lpc does."""
+    r = np.atleast_2d(np.asarray(r, dtype=np.float64))
+    n_frames = len(r)
     a = np.zeros((n_frames, order + 1))
     a[:, 0] = 1.0
     err = r[:, 0].copy()

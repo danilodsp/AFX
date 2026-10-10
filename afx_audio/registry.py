@@ -56,9 +56,12 @@ _INFO = {
     'hnr': ('harmonic', 'dB', '1'),
     'lpc': ('linear prediction', 'dimensionless', 'order'),
     'formants': ('linear prediction', 'Hz', 'n_formants'),
+    'egemaps_lld': ('parameter set', 'per row, see EGEMAPS_LLD_NAMES', '25'),
+    'egemaps': ('parameter set', 'per row, see EGEMAPS_NAMES', '88'),
 }
 
-GROUPS = ('time', 'autocorrelation', 'spectral', 'spectrogram', 'cepstral', 'harmonic', 'linear prediction', 'custom')
+GROUPS = ('time', 'autocorrelation', 'spectral', 'spectrogram', 'cepstral', 'harmonic', 'linear prediction',
+          'parameter set', 'custom')
 
 # When a built-in feature is NaN on a frame. Features not listed are finite
 # on every frame of valid input (silence gives 0 or the floor of a log).
@@ -76,6 +79,8 @@ _UNDEFINED = {
     'lpc': 'frame not longer than order',
     'formants': 'fewer than n_formants LPC resonances above fmin and narrower than max_bandwidth '
                 '(silence, noise, unvoiced sounds), or frame not longer than order',
+    'egemaps_lld': 'voice-dependent rows (F0, jitter, shimmer, HNR, formants, H1-H2, H1-A3) on unvoiced frames',
+    'egemaps': 'statistics over voiced or unvoiced segments when the clip has none',
 }
 
 

@@ -13,6 +13,7 @@ from .batch_extractor import extract_features_from_folder
 from .dataset_stats import load_stats
 from .extract_all import FEATURE_MAP, extract_all_features, extract_segments
 from .extractors.cepstral_features import clear_feature_cache, get_cache_stats
+from .extractors.egemaps import EGEMAPS_LLD_NAMES, EGEMAPS_NAMES, egemaps
 from .io.io import load_audio
 from .methods.stft import clear_stft_cache
 from .presets import list_presets, load_preset, preset_info
@@ -53,6 +54,9 @@ __all__ = [
     'config_hash',
     'read_provenance',
     'load_stats',
+    'egemaps',
+    'EGEMAPS_NAMES',
+    'EGEMAPS_LLD_NAMES',
 ]
 
 # Names resolved on first access so `import afx_audio` stays light and works

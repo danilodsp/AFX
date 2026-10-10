@@ -76,7 +76,7 @@ Parameters: `frame_size=None`, `hop_length=None`, `center=False`, `split=0.5`.
 
 ### `sample_entropy`
 
-Sample entropy -ln(A/B) (Richman and Moorman, 2000).
+Sample entropy -ln(A/B) (Richman and Moorman, 2000, Am. J. Physiol. 278(6)).
 
 Units: nats. Rows: 1. Function: `afx_audio.extractors.time_domain.extract_sample_entropy`.
 
@@ -196,7 +196,7 @@ Parameters: `frame_size=2048`, `hop_length=512`, `roll_percent=0.85`, `center=Fa
 
 ### `spectral_contrast`
 
-Spectral contrast (Jiang et al., 2002), shape (n_bands + 1, n_frames).
+Spectral contrast (Jiang et al., 2002, Proc. IEEE ICME), shape (n_bands + 1, n_frames).
 
 Units: dB. Rows: n_bands + 1. Function: `afx_audio.extractors.frequency_domain.extract_spectral_contrast`.
 
@@ -305,7 +305,7 @@ Parameters: `n_mels=128`, `frame_size=2048`, `hop_length=512`, `fmin=0.0`, `fmax
 
 ### `tonnetz`
 
-Tonal centroid features (Harte et al., 2006), shape (6, n_frames).
+Tonal centroid features (Harte, Sandler and Gasser, 2006), shape (6, n_frames).
 
 Units: dimensionless. Rows: 6. Function: `afx_audio.extractors.cepstral_features.extract_tonnetz`.
 
@@ -409,3 +409,26 @@ Units: Hz. Rows: n_formants. Function: `afx_audio.extractors.linear_prediction.e
 NaN for: fewer than n_formants LPC resonances above fmin and narrower than max_bandwidth (silence, noise, unvoiced sounds), or frame not longer than order.
 
 Parameters: `n_formants=3`, `frame_size=512`, `hop_length=128`, `center=False`, `order=None`, `pre_emphasis=0.97`, `fmin=90.0`, `max_bandwidth=400.0`.
+
+
+## Parameter set
+
+### `egemaps_lld`
+
+The 25 eGeMAPS v02 low-level descriptors per 10 ms frame, shape (25, n_frames).
+
+Units: per row, see EGEMAPS_LLD_NAMES. Rows: 25. Function: `afx_audio.extractors.egemaps.extract_egemaps_lld`.
+
+NaN for: voice-dependent rows (F0, jitter, shimmer, HNR, formants, H1-H2, H1-A3) on unvoiced frames.
+
+Parameters: none.
+
+### `egemaps`
+
+The 88 eGeMAPS v02 functionals of the whole clip, shape (88, 1).
+
+Units: per row, see EGEMAPS_NAMES. Rows: 88. Function: `afx_audio.extractors.egemaps.extract_egemaps`.
+
+NaN for: statistics over voiced or unvoiced segments when the clip has none.
+
+Parameters: none.

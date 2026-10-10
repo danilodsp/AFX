@@ -8,7 +8,7 @@ from typing import Any, cast
 
 import numpy as np
 
-from .extractors import cepstral_features, frequency_domain, harmonic_features, linear_prediction, time_domain
+from .extractors import cepstral_features, egemaps, frequency_domain, harmonic_features, linear_prediction, time_domain
 from .utils.aggregator import aggregate_features
 from .utils.config_loader import validate_config
 from .utils.validation import validate_signal, validate_sr
@@ -64,6 +64,9 @@ FEATURE_MAP: dict[str, Callable[..., dict[str, Any]]] = {
     # Linear prediction
     'lpc': linear_prediction.extract_lpc,
     'formants': linear_prediction.extract_formants,
+    # Parameter sets
+    'egemaps_lld': egemaps.extract_egemaps_lld,
+    'egemaps': egemaps.extract_egemaps,
 }
 
 def extract_all_features(

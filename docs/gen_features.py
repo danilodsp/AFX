@@ -2,8 +2,11 @@
 import os
 import sys
 
-import afx_audio
-from afx_audio.registry import GROUPS
+# Document the checkout this script sits in, not whichever afx_audio is installed
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+import afx_audio  # noqa: E402
+from afx_audio.registry import GROUPS  # noqa: E402
 
 HEADER = """# Feature reference
 
@@ -28,7 +31,7 @@ def render() -> str:
             lines.append(f"Units: {info['units']}. Rows: {info['rows']}. Function: `{info['function']}`.\n")
             if info['undefined']:
                 lines.append(f"NaN for: {info['undefined']}.\n")
-            params = ', '.join(f'`{k}={v!r}`' for k, v in info['parameters'].items())
+            params = ', '.join(f'`{k}={v!r}`' for k, v in info['parameters'].items()) or 'none'
             lines.append(f'Parameters: {params}.\n')
     return '\n'.join(lines)
 
