@@ -47,14 +47,16 @@ $ afx --provenance features.parquet
 ## Config hash
 
 `afx.config_hash(config)` is the first 12 hex characters of the sha256 of
-the config's canonical JSON (sorted keys, no whitespace, NaN rejected).
-Key order does not change it, and numpy scalars hash like the Python
-numbers they hold. Batch outputs hash the validated config they record,
-so `afx.config_hash(record['config']) == record['config_hash']` holds for
-every output and two outputs with equal hashes were extracted with the
-same parameters. A raw config that relies on defaults (for example a
-`features` list instead of a dict) hashes differently from its validated
-form; compare against `record['config']` rather than the file on disk.
+`afx_audio.provenance.computed_config(config)` as canonical JSON (sorted
+keys, no whitespace, NaN rejected). `computed_config` keeps what decides
+the values: every feature parameter merged over the extractor's defaults,
+and `sample_rate`, `aggregation`, `aggregation_params`, `normalize`,
+`preserve_shape` and `coverage` with their defaults filled in. It drops
+labels (`title`, `description`, the `preset` block) and `flatten`, which
+only changes the output layout. So a preset, the same preset saved to a
+file, a features list relying on defaults and the config the scikit-learn
+transformer builds all hash alike, and two outputs with equal hashes were
+computed with the same parameters by the same AFX version.
 
 `AFXFeatureExtractor` exposes the same information after `fit` as
 `provenance_`, with the scikit-learn version added and no file hashes,
@@ -78,7 +80,7 @@ parquet outputs (`mfcc_mean_0`, ...), whatever the output format.
 
 Means and variances use Welford's single-value update. `DatasetStats.merge`
 combines shards with the pairwise formula of Chan, Golub and LeVeque
-(1979), so statistics of a dataset extracted in several runs can be
+(1983, The American Statistician 37(3)), so statistics of a dataset extracted in several runs can be
 combined without the feature matrices:
 
 ```python
@@ -124,12 +126,9 @@ equals the training statistics' `config_hash` before applying the scaler.
 
 ## API
 
-::: afx_audio.provenance.config_hash
+`config_hash`, `read_provenance`, `load_stats` and `scaler_from_stats` are
+in the [API reference](api.md).
 
-::: afx_audio.provenance.read_provenance
-
-::: afx_audio.dataset_stats.load_stats
+::: afx_audio.provenance.computed_config
 
 ::: afx_audio.dataset_stats.DatasetStats
-
-::: afx_audio.sklearn.scaler_from_stats

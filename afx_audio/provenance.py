@@ -34,17 +34,52 @@ def canonical_json(obj: Any) -> str:
                       allow_nan=False, default=_json_default)
 
 
-def config_hash(config: dict[str, Any]) -> str:
-    """
-    First 12 hex characters of the sha256 of the config's canonical JSON.
+# Values a config takes when it leaves a key out; filled in before hashing.
+_COMPUTE_DEFAULTS: dict[str, Any] = {
+    'aggregation': 'mean',
+    'aggregation_params': {},
+    'normalize': None,
+    'preserve_shape': False,
+    'coverage': False,
+}
+# Labels and output layout, not what is computed.
+_NOT_HASHED = ('title', 'description', 'preset', 'flatten')
 
-    Key order does not change the hash. Batch outputs hash the validated
-    config they record, so ``config_hash(read_provenance(p)['config'])``
-    equals ``read_provenance(p)['config_hash']``.
+
+def computed_config(config: dict[str, Any]) -> dict[str, Any]:
     """
+    The part of a config that decides the feature values, with every default written out.
+
+    Feature parameters are merged over the extractor's defaults and the
+    top-level options over theirs; labels (title, description, the preset
+    block) and ``flatten`` are dropped. Two configs that compute the same
+    values give the same dict, whichever front end filled them in.
+    """
+    from afx_audio.registry import feature_parameters
+
     if not isinstance(config, dict):
         raise TypeError(f'config must be a dict, got {type(config).__name__}')
-    return hashlib.sha256(canonical_json(config).encode('utf-8')).hexdigest()[:12]
+    out = {k: v for k, v in config.items() if k not in _NOT_HASHED}
+    for key, default in _COMPUTE_DEFAULTS.items():
+        if out.get(key) is None:
+            out[key] = default
+    features = config.get('features', {})
+    if isinstance(features, list):
+        features = {name: {} for name in features}
+    out['features'] = {name: {**feature_parameters(name), **(params or {})} for name, params in features.items()}
+    return out
+
+
+def config_hash(config: dict[str, Any]) -> str:
+    """
+    First 12 hex characters of the sha256 of ``computed_config(config)`` as canonical JSON.
+
+    Key order, labels, ``flatten`` and parameters written at their default
+    value do not change the hash, so a preset, the same preset copied into
+    a file, and the config the scikit-learn transformer builds from it all
+    hash alike.
+    """
+    return hashlib.sha256(canonical_json(computed_config(config)).encode('utf-8')).hexdigest()[:12]
 
 
 def preset_record(config: dict[str, Any]) -> dict[str, Any]:

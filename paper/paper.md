@@ -177,7 +177,8 @@ openSMILE.
 
 Batch outputs carry a provenance record: AFX, NumPy, SciPy, soundfile
 and Python versions, the validated configuration and its hash (the first
-12 hex characters of the SHA-256 of its canonical JSON), the preset id
+12 hex characters of the SHA-256 of the configuration with every default
+written out, so equal hashes mean equal parameters), the preset id
 and whether an override changed it, resampling details and the SHA-256
 of every input file. Parquet files keep it in the schema metadata, other
 formats in a sidecar file, and the scikit-learn transformer exposes the

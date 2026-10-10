@@ -17,6 +17,7 @@ nav:
   - eGeMAPS: egemaps.md
   - librosa equivalence: librosa.md
   - Benchmarks: benchmarks.md
+  - ESC-50 baselines: baselines.md
   - scikit-learn, PyTorch and batch: integrations.md
   - Reproducibility: reproducibility.md
   - Notebooks: notebooks.md

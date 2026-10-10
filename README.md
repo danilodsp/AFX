@@ -79,7 +79,7 @@ Framed features take `frame_size`, `hop_length` and `center` (default True, as i
 
 `aggregation` is `mean`, `std`, `summary` (mean and std), `advanced_summary` (plus skewness and kurtosis), `skew`, `kurtosis`, `sliding_window` or `stack`. Frames where a feature is undefined (pitch on unvoiced frames, spectral entropy on silence) are NaN and skipped by the statistics, and `coverage` adds `<feature>_valid_frac`. `afx.validate_config` rejects unknown features, unknown parameters and non-positive sizes before any audio is read.
 
-Bundled presets: `speech`, `bioacoustics`, `music`, `machinery` and `egemaps` (`afx.list_presets(versions=True)`). A preset id such as `speech@1` names a frozen file that spells out every parameter; cite it with the package version and the config hash from the output's provenance record. See [Configuration](https://danilopena.com/AFX/configuration/) for framing, aggregation, normalization and presets.
+Bundled presets: `speech`, `bioacoustics`, `music`, `machinery` and `egemaps` (`afx.list_presets(versions=True)`). A preset id such as `speech@1` names a frozen file that spells out every parameter; cite it with the package version and the config hash from the output's provenance record. [ESC-50 baselines](https://danilopena.com/AFX/baselines/) give reference accuracies for each preset. See [Configuration](https://danilopena.com/AFX/configuration/) for framing, aggregation, normalization and presets.
 
 ## scikit-learn
 
@@ -133,7 +133,7 @@ Workers never fork (forkserver on Linux, spawn on Windows and macOS), so a scrip
 
 ## Notebooks
 
-[notebooks/](https://github.com/danilodsp/AFX/tree/main/notebooks) has a numbered tutorial from `01_quickstart` to `07_domain_presets`, each runnable on synthetic audio without a dataset, and `benchmark_validation`, which compares AFX with librosa, torchaudio, openSMILE, spafe and Praat.
+[notebooks/](https://github.com/danilodsp/AFX/tree/main/notebooks) has a numbered tutorial from `01_quickstart` to `08_egemaps`, each runnable on synthetic audio without a dataset, and `benchmark_validation`, which compares AFX with librosa, torchaudio, openSMILE, spafe and Praat.
 
 ## Performance
 

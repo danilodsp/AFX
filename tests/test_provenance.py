@@ -146,8 +146,18 @@ def test_config_hash_ignores_key_order():
 
 def test_config_hash_is_pinned():
     # A change here silently breaks the link between old outputs and their configs
-    assert config_hash({'sample_rate': 16000, 'features': {'zcr': {}}}) == hashlib.sha256(
-        b'{"features":{"zcr":{}},"sample_rate":16000}').hexdigest()[:12]
+    canonical = (b'{"aggregation":"mean","aggregation_params":{},"coverage":false,'
+                 b'"features":{"zcr":{"center":true,"frame_size":2048,"hop_length":512,"threshold":1e-10}},'
+                 b'"normalize":null,"preserve_shape":false,"sample_rate":16000}')
+    assert config_hash({'sample_rate': 16000, 'features': {'zcr': {}}}) == hashlib.sha256(canonical).hexdigest()[:12]
+
+
+def test_config_hash_ignores_defaults_labels_and_layout():
+    plain = {'sample_rate': 16000, 'features': ['zcr']}
+    spelled = {'sample_rate': 16000, 'title': 'x', 'flatten': False, 'aggregation': 'mean',
+               'features': {'zcr': {'center': True, 'threshold': 1e-10}}}
+    assert config_hash(plain) == config_hash(spelled)
+    assert config_hash(plain) != config_hash({**plain, 'features': {'zcr': {'center': False}}})
 
 
 def test_config_hash_rejects_bad_input():

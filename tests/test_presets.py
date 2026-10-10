@@ -17,11 +17,11 @@ EXPECTED = {'speech', 'bioacoustics', 'music', 'machinery'}
 # config_hash of every released preset version. A released version is never
 # edited: change a preset by adding name@<next>.json and a line here.
 FROZEN = {
-    'bioacoustics@1': '7a56fb8e5830',
-    'egemaps@1': '47d2d6af7e38',
-    'machinery@1': '48c663f10cfd',
-    'music@1': 'bef75d833cb2',
-    'speech@1': '744654c89bf9',
+    'bioacoustics@1': 'f2fbc8a2bb11',
+    'egemaps@1': 'cd530990145e',
+    'machinery@1': '563073e5d310',
+    'music@1': 'cef990b7ffe1',
+    'speech@1': '2d57da580d18',
 }
 
 
