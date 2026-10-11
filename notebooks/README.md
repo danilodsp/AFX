@@ -1,51 +1,48 @@
 # Notebooks
 
-Install the dependencies with `pip install -e ".[notebooks]"` (add `torch` for the PyTorch notebook).
+Run them in order; each one runs on synthesized audio when no dataset is configured. Install the extras with `pip install "afx-audio[notebooks]"` (plus `"afx-audio[torch]"` for 06).
 
-| Notebook | Content | Audio |
-|---|---|---|
-| `feature_benchmark_validation.ipynb` | AFX against librosa, torchaudio, openSMILE, spafe and Praat, with a PASS/FAIL tolerance report (`feature_benchmark_report.csv`, git-ignored) | synthetic |
-| `domain_feature_packs_demo.ipynb` | each preset end to end: download a small open dataset, extract, train a classifier, plot the confusion matrix, importances and a PCA view (helpers in `domain_packs.py`) | downloads |
-| `torch_features_demo.ipynb` | NumPy/torch parity, batched extraction, gradients, `AFXFeatureModule` as a front end | synthetic fallback |
-| `sklearn_pipeline_demo.ipynb` | `AFXFeatureExtractor` in pipelines, cross-validation, `GridSearchCV` over extraction settings | synthetic fallback |
-| `parallel_batch_extraction_demo.ipynb` | `n_jobs` batch extraction, serial vs parallel timing, Parquet output | synthetic fallback |
-| `feature_modules_demo.ipynb` | one extractor at a time | dataset |
-| `feature_aggregation_demo.ipynb` | frame-level vs clip-level aggregation | dataset |
-| `feature_selection_demo.ipynb` | selecting feature subsets; reads `batch_features.npy` from the batch notebook | dataset |
-| `feature_2d_visualization_demo.ipynb` | plotting 2-D features | ESC-50 |
-| `batch_feature_extraction_demo.ipynb` | folder extraction with `extract_features_from_folder` | dataset |
+| Notebook | Covers |
+|---|---|
+| `01_quickstart.ipynb` | `load_audio` (with `offset`/`duration`), keyword-only extractor parameters, configs, `extract_all_features`, `flatten_features`, preset ids (`speech@1`, `list_presets(versions=True)`, `preset_info`), `list_features`/`feature_info` with its `undefined` and `torch` entries, `validate_config` |
+| `02_frames_and_aggregation.ipynb` | per-frame arrays (`preserve_shape`), frame times shared by every feature with `center=True` (`return_metadata`), plots with `afx_audio.utils.visualization`, NaN frames, `"coverage": true` and `<feature>_valid_frac` on a half-silent clip, every aggregation method, normalization |
+| `03_long_recordings_and_custom_features.ipynb` | `extract_segments`, reading a window of a long file, `register_feature`/`unregister_feature`, picklable features for worker processes, the `__main__` guard |
+| `04_batch_and_parallel.ipynb` | `extract_features_from_folder`, output formats, `errors.json`, filtering `AFXWarning`, provenance (`read_provenance`, `config_hash`, file hashes, `afx --provenance`), dataset statistics (`dataset_stats=True`, `--stats`, `load_stats`, `scaler_from_stats`), serial vs `n_jobs`, the `afx` command |
+| `05_sklearn_and_selection.ipynb` | `AFXFeatureExtractor` in a Pipeline, `config='speech@1'` and `provenance_`, cross-validation, `GridSearchCV` over extraction settings, `get_feature_names_out`, `afx_audio.utils.selectors` |
+| `06_torch.ipynb` | `afx_audio.torch`: parity with NumPy, batches, gradients, `AFXFeatureModule` in a model |
+| `07_domain_presets.ipynb` | a preset end to end on its domain dataset (`speech@1`, `bioacoustics@1`, `music@1`, `machinery@1`), ending with the preset id and config hash behind the result |
+| `08_egemaps.ipynb` | eGeMAPS v02 on synthetic vowels with known F0, jitter and shimmer: the 88 functionals by name (`afx.egemaps`, `EGEMAPS_NAMES`), the 25 LLDs over time (`egemaps_lld`), the `egemaps@1` preset in a pipeline, an optional openSMILE comparison |
+| `benchmark_validation.ipynb` | numerical agreement with librosa, torchaudio, openSMILE, spafe and Praat, with PASS/FAIL tolerances |
+
+`demo_data.py` (dataset discovery, synthetic clips and synthetic voices) and `domain_packs.py` (dataset downloads for 07) sit next to the notebooks and are imported by them. Notebooks write only to temporary folders.
 
 ## Datasets
 
-Notebooks marked "dataset" read audio from the folder in one of these environment variables, searched recursively, so any folder of `.wav`, `.ogg` or `.flac` files works:
+01 to 06 use a local environmental-sound dataset when one of these points at its root, and synthetic tones, sweeps, noise bursts and AM/FM tones otherwise:
 
 ```bash
-export ESC_50_dataset=/path/to/ESC-50          # folder with audio/ and meta/esc50.csv
+export ESC_50_dataset=/path/to/ESC-50
 export UrbanSound8K_dataset=/path/to/UrbanSound8K
-export dataset_nonspeech7k=/path/to/Nonspeech7k  # or nonspeech7k_dataset
+export dataset_nonspeech7k=/path/to/Nonspeech7k
 ```
 
-The three "synthetic fallback" notebooks synthesize clips when none is set.
+The first one set wins. Labels come from the dataset's metadata CSV.
 
-## Domain packs
+07 downloads RAVDESS (210 MB), ESC-50 (600 MB), GTZAN (1.2 GB) or the DCASE 2020 pump set (1 GB) into `$DATASETS` on first use. Without `DATASETS`, with `AFX_SYNTHETIC=1`, or when the download fails, it runs on synthetic clips.
 
-`domain_feature_packs_demo.ipynb` runs one preset per `DOMAIN` value:
+08 always runs on synthetic voices. Its openSMILE cell runs when `opensmile` is installed and is skipped otherwise; openSMILE's licence allows research use only, so it is not an AFX dependency.
 
-| `DOMAIN` | Dataset | Task |
-|---|---|---|
-| `speech` | RAVDESS speech | emotion classification |
-| `bioacoustics` | ESC-50, animal classes | animal sound classification |
-| `music` | GTZAN | genre classification |
-| `machinery` | DCASE 2020 Task 2 dev, pump | normal vs anomaly |
-
-Datasets download into `$DATASETS` (default `./datasets`); with the default per-class subsets they stay under about 4 GB and each domain runs in a few minutes on a CPU:
+`benchmark_validation.ipynb` needs `librosa`; its torchaudio, openSMILE, spafe and Praat sections skip when those packages are missing:
 
 ```bash
-DATASETS=/path/to/datasets jupyter nbconvert --to notebook --execute notebooks/domain_feature_packs_demo.ipynb
+pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
+pip install opensmile spafe praat-parselmouth
 ```
 
-The benchmark notebook needs librosa; torchaudio, openSMILE, spafe and parselmouth sections are skipped when those packages are missing:
+## Running them as tests
 
 ```bash
-jupyter nbconvert --to notebook --execute notebooks/feature_benchmark_validation.ipynb
+AFX_RUN_NOTEBOOKS=1 python -m pytest tests/test_notebooks.py
 ```
+
+executes 01 to 08 on synthetic data with a time budget per notebook.

@@ -4,9 +4,9 @@ import pytest
 
 librosa = pytest.importorskip('librosa')
 
-import AFX  # noqa: E402
+import afx_audio  # noqa: E402
 
-F = AFX.FEATURE_MAP
+F = afx_audio.FEATURE_MAP
 
 
 def _signal(sr, seconds=1.5, seed=0):
@@ -114,6 +114,11 @@ def test_yin_close_to_librosa():
     f0 = 120 + 80 * t  # slow glide
     y = np.sin(2 * np.pi * np.cumsum(f0) / sr) + 0.01 * np.random.default_rng(1).standard_normal(len(t))
     ours = F['pitch'](y, sr, frame_size=2048, hop_length=512, fmin=60, fmax=800)['pitch']
-    ref = librosa.yin(y, fmin=60, fmax=800, sr=sr, frame_length=2048, hop_length=512, center=False)
+    ref = librosa.yin(y, fmin=60, fmax=800, sr=sr, frame_length=2048, hop_length=512, pad_mode='constant')
     assert ours.shape == ref.shape
-    np.testing.assert_allclose(ours, ref, rtol=0.02)  # librosa 0.10 and 1.0 differ by about 1%
+    if tuple(int(p) for p in librosa.__version__.split('.')[:2]) < (0, 11):
+        # librosa 0.10 returns 204 Hz on the first, half zero-padded frame (122 Hz in 0.11)
+        # and sits about 1.2% below 0.11 elsewhere
+        np.testing.assert_allclose(ours[1:], ref[1:], rtol=0.02)
+    else:
+        np.testing.assert_allclose(ours, ref, rtol=0.01)

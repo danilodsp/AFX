@@ -7,10 +7,10 @@ Usage: python examples/example_extract_and_plot.py <audio_file> [--no-plot]
 import os
 import sys
 
-import AFX
-from AFX.utils.visualization import plot_mfcc
+import afx_audio as afx
+from afx_audio.utils.visualization import plot_mfcc
 
-CONFIG_PATH = os.path.join(os.path.dirname(AFX.__file__), 'config.json')
+CONFIG_PATH = os.path.join(os.path.dirname(afx.__file__), 'config.json')
 
 
 def main(argv):
@@ -20,23 +20,23 @@ def main(argv):
     audio_path = argv[0]
     show_plot = '--no-plot' not in argv
 
-    config = AFX.load_config(CONFIG_PATH)
-    signal, sr = AFX.load_audio(audio_path, sr=config['sample_rate'])
+    config = afx.load_config(CONFIG_PATH)
+    signal, sr = afx.load_audio(audio_path, sr=config['sample_rate'])
 
     # File-level vector: mean over frames, one entry per feature dimension
-    aggregated = AFX.extract_all_features(signal, sr, config)
+    aggregated = afx.extract_all_features(signal, sr, config)
     for name, values in aggregated.items():
         print(f'{name:28s} shape={values.shape}')
 
     # Per-frame arrays for plotting
     config['preserve_shape'] = True
-    per_frame = AFX.extract_all_features(signal, sr, config)
+    per_frame = afx.extract_all_features(signal, sr, config)
     mfcc = per_frame['mfcc']
     print(f'mfcc per-frame shape: {mfcc.shape}')
 
     if show_plot:
-        hop_length = config['features']['mfcc'].get('hop_length', 512)
-        plot_mfcc(mfcc, sr, hop_length=hop_length)
+        params = config['features']['mfcc']
+        plot_mfcc(mfcc, sr, hop_length=params.get('hop_length', 512), frame_size=params.get('frame_size', 2048))
     return 0
 
 

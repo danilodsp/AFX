@@ -1,6 +1,5 @@
 # Personal
 .idea
-.github/*.md
 .gitkeep
 .vscode/
 
@@ -183,10 +182,13 @@ cython_debug/
 # PyPI configuration file
 .pypirc
 
-# AFX domain feature packs — downloaded datasets & extracted caches
+# AFX domain feature packs: downloaded datasets and extracted caches
 /datasets/
 datasets/
 notebooks/datasets/
 
 # mkdocs output
 site/
+
+# Paper drafts are kept outside version control until submission
+paper/

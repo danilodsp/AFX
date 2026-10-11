@@ -1,5 +1,5 @@
 """
-Unit tests for AFX.utils.visualization.
+Unit tests for afx_audio.utils.visualization.
 """
 import matplotlib
 
@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 
-from AFX.utils.visualization import (
+from afx_audio.utils.visualization import (
     plot_feature_distribution,
     plot_mfcc,
     plot_spectrogram,
@@ -68,3 +68,23 @@ def test_plot_feature_distribution_returns_axes():
 def test_plot_feature_distribution_empty_raises():
     with pytest.raises(ValueError):
         plot_feature_distribution(np.array([]), show=False)
+
+
+@pytest.mark.parametrize('center', [True, False])
+def test_plot_columns_sit_at_metadata_times(center):
+    from afx_audio.extractors.cepstral_features import extract_melspectrogram, extract_mfcc
+
+    sr, frame_size, hop = 16000, 512, 128
+    signal = np.random.RandomState(3).randn(sr // 4)
+    kw = dict(frame_size=frame_size, hop_length=hop, center=center, return_metadata=True)
+    mfcc = extract_mfcc(signal, sr, **kw)
+    ax = plot_mfcc(mfcc['mfcc'], sr, hop_length=hop, frame_size=frame_size, center=center, show=False)
+    left, right = ax.images[0].get_extent()[:2]
+    n = mfcc['mfcc'].shape[1]
+    np.testing.assert_allclose(left + (np.arange(n) + 0.5) * (right - left) / n, mfcc['metadata']['times'])
+
+    mel = extract_melspectrogram(signal, sr, **kw)
+    ax = plot_spectrogram(mel['melspectrogram'], sr, hop_length=hop, frame_size=frame_size, center=center,
+                          show=False)
+    edges = ax.collections[0].get_coordinates()[0, :, 0]
+    np.testing.assert_allclose(0.5 * (edges[:-1] + edges[1:]), mel['metadata']['times'])

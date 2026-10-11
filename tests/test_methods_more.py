@@ -1,5 +1,5 @@
 """
-Coverage for AFX.methods modules previously untested directly:
+Coverage for afx_audio.methods modules previously untested directly:
 stft (incl. result cache), delta, gammatone, cqt, chroma, and the
 filterbank caches.
 """
@@ -7,13 +7,13 @@ import librosa
 import numpy as np
 import pytest
 
-from AFX.methods.chroma import chroma_from_stft, frequency_to_chroma_bin
-from AFX.methods.cqt import cqt_approximation, cqt_filterbank
-from AFX.methods.delta import compute_delta
-from AFX.methods.gammatone import erb_space, gammatone_filterbank
-from AFX.methods.mel import mel_filterbank
-from AFX.methods.stft import clear_stft_cache, stft
-from AFX.utils.cache import cache_mel_filterbank, clear_feature_cache, get_cached_mel_filterbank
+from afx_audio.methods.chroma import chroma_from_stft, frequency_to_chroma_bin
+from afx_audio.methods.cqt import cqt_approximation, cqt_filterbank
+from afx_audio.methods.delta import compute_delta
+from afx_audio.methods.gammatone import erb_space, gammatone_filterbank
+from afx_audio.methods.mel import mel_filterbank
+from afx_audio.methods.stft import clear_stft_cache, stft
+from afx_audio.utils.cache import cache_mel_filterbank, clear_feature_cache, get_cached_mel_filterbank
 
 SR = 22050
 
@@ -93,13 +93,16 @@ def test_compute_delta_clips_width_to_sequence():
 
 # ---------- gammatone ----------
 
-def test_gammatone_filters_peak_at_center_frequencies():
-    fb = gammatone_filterbank(24, 2048, SR, 50.0, None)
-    freqs = np.linspace(0, SR / 2, 1025)
+@pytest.mark.parametrize('n_fft', [2048, 551])
+def test_gammatone_filters_peak_at_center_frequencies(n_fft):
+    # 551 is 25 ms at 22050 Hz: for odd n_fft the bins are k sr / n_fft and
+    # the top one is below sr / 2, so a linspace(0, sr / 2) axis drifts by up
+    # to sr / (2 n_fft) and the peaks land a bin off
+    fb = gammatone_filterbank(24, n_fft, SR, 50.0, None)
+    freqs = np.fft.rfftfreq(n_fft, 1.0 / SR)
     cf = erb_space(50.0, SR / 2.0, 24)
-    peak_freqs = freqs[np.argmax(fb, axis=1)]
-    bin_width = freqs[1] - freqs[0]
-    assert np.all(np.abs(peak_freqs - cf) <= bin_width)
+    nearest = np.argmin(np.abs(freqs[np.newaxis, :] - cf[:, np.newaxis]), axis=1)
+    np.testing.assert_array_equal(np.argmax(fb, axis=1), nearest)
 
 
 def test_gammatone_unit_area_and_cached():
@@ -178,7 +181,7 @@ def test_stft_cache_is_thread_safe():
 
 
 def test_delta_kernel_values_and_checks():
-    from AFX.methods.delta import delta_kernel
+    from afx_audio.methods.delta import delta_kernel
 
     np.testing.assert_allclose(delta_kernel(5), [-0.2, -0.1, 0.0, 0.1, 0.2])
     for bad in (1, 4):
@@ -187,7 +190,7 @@ def test_delta_kernel_values_and_checks():
 
 
 def test_frame_signal_matches_stft_framing():
-    from AFX.utils.frame_utils import frame_signal
+    from afx_audio.utils.frame_utils import frame_signal
 
     x = np.arange(10.0)
     frames = frame_signal(x, frame_length=4, hop_length=3)

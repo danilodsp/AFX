@@ -10,8 +10,8 @@ import pandas as pd
 import pytest
 import soundfile as sf
 
-from AFX import cli
-from AFX.batch_extractor import extract_features_from_folder
+from afx_audio import cli
+from afx_audio.batch_extractor import extract_features_from_folder
 
 SR = 22050
 
@@ -53,10 +53,10 @@ def test_batch_npy_roundtrip_and_relpath_keys(audio_folder, small_config, tmp_pa
     results = extract_features_from_folder(
         str(audio_folder), small_config, out, save_format='npy'
     )
-    # Same-named files in different subfolders must NOT collide
+    # Same-named files in different subfolders must not collide; keys use '/' on every OS
     keys = set(results)
-    assert os.path.join('a', 'take1.wav') in keys
-    assert os.path.join('b', 'take1.wav') in keys
+    assert 'a/take1.wav' in keys
+    assert 'b/take1.wav' in keys
     assert 'root.wav' in keys
     assert len(keys) == 3
     # Documented load procedure works
@@ -117,7 +117,6 @@ def test_batch_stack_aggregation(audio_folder, small_config, tmp_path):
 
 
 def test_batch_errors_separated(audio_folder, small_config, tmp_path):
-    # Add a corrupt "wav"
     bad = audio_folder / 'broken.wav'
     bad.write_bytes(b'this is not audio')
     out = str(tmp_path / 'features.csv')
@@ -157,7 +156,7 @@ def test_cli_default_config_is_package_relative():
 
 
 def test_batch_accepts_config_dict(audio_folder, tmp_path):
-    from AFX.presets import load_preset
+    from afx_audio.presets import load_preset
     config = load_preset('speech')
     out = str(tmp_path / 'preset.csv')
     extract_features_from_folder(
@@ -184,7 +183,14 @@ def test_cli_list_options(capsys):
     assert cli.main(['--list-features']) == 0
     assert 'mfcc' in capsys.readouterr().out.split()
     assert cli.main(['--list-presets']) == 0
-    assert 'speech' in capsys.readouterr().out.split()
+    assert 'speech@1' in capsys.readouterr().out.split()
+
+
+def test_cli_rejects_unknown_preset_version(audio_folder, capsys):
+    with pytest.raises(SystemExit) as exc:
+        cli.main([str(audio_folder), '--preset', 'speech@9'])
+    assert exc.value.code == 2
+    assert "Available: ['speech@1']" in capsys.readouterr().err
 
 
 def test_cli_rejects_missing_folder(tmp_path):
@@ -196,20 +202,23 @@ def test_cli_describe(capsys):
     assert cli.main(['--describe', 'spectral_rolloff']) == 0
     out = capsys.readouterr().out
     assert 'roll_percent = 0.85' in out and 'Hz' in out
+    assert 'Torch: afx_audio.torch.functional.spectral_rolloff, equal to NumPy within rtol=1e-09' in out
+    assert cli.main(['--describe', 'hnr']) == 0
+    assert 'Torch: none' in capsys.readouterr().out
     with pytest.raises(SystemExit):
         cli.main(['--describe', 'nope'])
 
 
 def test_cli_version(capsys):
-    import AFX
+    import afx_audio
 
     with pytest.raises(SystemExit) as exc:
         cli.main(['--version'])
     assert exc.value.code == 0
-    assert AFX.__version__ in capsys.readouterr().out
+    assert afx_audio.__version__ in capsys.readouterr().out
 
 
-def test_cli_errors_are_one_line_with_status_2(audio_folder, tmp_path, capsys):
+def test_cli_config_errors_are_one_line_with_status_2(audio_folder, tmp_path, capsys):
     cases = [
         (['--features', 'mfccs'], "Did you mean 'mfcc'"),
         (['--output', str(tmp_path / 'missing' / 'x.csv')], 'Output folder does not exist'),
@@ -222,6 +231,22 @@ def test_cli_errors_are_one_line_with_status_2(audio_folder, tmp_path, capsys):
         assert exc.value.code == 2
         err = capsys.readouterr().err
         assert err.startswith('afx: error:') and message in err and 'Traceback' not in err
+        assert err.count('\n') == 1
+
+
+def test_cli_argument_errors_print_usage_then_status_2(tmp_path, capsys):
+    cases = [
+        ([str(tmp_path / 'nope')], 'input folder not found'),
+        ([str(tmp_path), '--preset', 'nosuch'], 'nosuch'),
+        (['--describe', 'mfccs'], "Did you mean 'mfcc'"),
+    ]
+    for argv, message in cases:
+        with pytest.raises(SystemExit) as exc:
+            cli.main(argv)
+        assert exc.value.code == 2
+        err = capsys.readouterr().err
+        assert err.startswith('usage: afx')
+        assert err.splitlines()[-1].startswith('afx: error:') and message in err
 
 
 def test_cli_status_1_when_nothing_extracted(tmp_path, capsys):
@@ -259,3 +284,70 @@ def test_api_infers_format_and_keeps_the_exact_path(audio_folder, tmp_path):
     extract_features_from_folder(str(audio_folder), {'sample_rate': 16000, 'features': ['zcr']}, str(out_csv),
                                  verbose=False)
     assert out_csv.read_text().startswith('file,zcr')
+
+
+def test_rerun_removes_sidecars_it_does_not_write(audio_folder, small_config, tmp_path):
+    out = tmp_path / 'f.csv'
+    (audio_folder / 'broken.wav').write_bytes(b'not audio')
+    with pytest.warns(UserWarning, match='1 file'):
+        extract_features_from_folder(str(audio_folder), small_config, str(out), dataset_stats=True, verbose=False)
+    assert (tmp_path / 'f.csv.errors.json').exists() and (tmp_path / 'f.csv.stats.json').exists()
+
+    (audio_folder / 'broken.wav').unlink()
+    extract_features_from_folder(str(audio_folder), small_config, str(out), verbose=False)
+    assert not (tmp_path / 'f.csv.errors.json').exists()
+    assert not (tmp_path / 'f.csv.stats.json').exists()
+    assert (tmp_path / 'f.csv.provenance.json').exists()
+
+    # Parquet carries its record inside, so a sidecar from an earlier csv run under the same name goes
+    pytest.importorskip('pyarrow')
+    extract_features_from_folder(str(audio_folder), small_config, str(out), save_format='parquet', verbose=False)
+    assert not (tmp_path / 'f.csv.provenance.json').exists()
+
+
+def test_library_call_is_silent_by_default(audio_folder, small_config, tmp_path, capsys):
+    extract_features_from_folder(str(audio_folder), small_config, str(tmp_path / 'f.json'))
+    extract_features_from_folder(str(audio_folder), small_config, str(tmp_path / 'f.json'), n_jobs=2)
+    assert capsys.readouterr().out == ''
+    assert cli.main([str(audio_folder), '--config', small_config, '-o', str(tmp_path / 'f.json')]) == 0
+    assert '[1/3] Processing' in capsys.readouterr().out
+
+
+def test_cli_default_output_is_csv(audio_folder, small_config, tmp_path, monkeypatch):
+    work = tmp_path / 'work'
+    work.mkdir()
+    monkeypatch.chdir(work)
+    assert cli.main([str(audio_folder), '--config', small_config, '-q']) == 0
+    assert set(pd.read_csv(work / 'features.csv', index_col='file').index) == {'root.wav', 'a/take1.wav', 'b/take1.wav'}
+    assert sorted(os.listdir(work)) == ['features.csv', 'features.csv.provenance.json']
+
+
+def test_default_extensions_cover_soundfile_formats_and_ext_restricts(tmp_path, capsys):
+    from afx_audio.batch_extractor import default_extensions
+
+    assert {'.wav', '.flac', '.ogg', '.aif', '.aiff', '.au', '.caf', '.w64'} <= set(default_extensions())
+    folder = tmp_path / 'ext'
+    folder.mkdir()
+    x = (0.1 * np.sin(np.arange(8000) / 5)).astype(np.float32)
+    sf.write(folder / 'a.WAV', x, 16000)
+    sf.write(folder / 'b.aiff', x, 16000)
+    sf.write(folder / 'c.FLAC', x, 16000)
+    sf.write(folder / 'd.wav', x, 16000)
+    (folder / 'notes.txt').write_text('not audio')
+    expected = {'a.WAV', 'b.aiff', 'c.FLAC', 'd.wav'}
+    if 'OPUS' in sf.available_subtypes('OGG'):
+        sf.write(folder / 'e.opus', x, 48000, format='OGG', subtype='OPUS')
+        expected.add('e.opus')
+
+    out = tmp_path / 'f.csv'
+    assert cli.main([str(folder), '--features', 'zcr', '-o', str(out), '-q']) == 0
+    assert set(pd.read_csv(out, index_col='file').index) == expected
+    assert cli.main([str(folder), '--features', 'zcr', '-o', str(out), '-q', '--ext', 'wav, .AIFF']) == 0
+    assert set(pd.read_csv(out, index_col='file').index) == {'a.WAV', 'b.aiff', 'd.wav'}
+    extract_features_from_folder(str(folder), {'sample_rate': 16000, 'features': ['zcr']}, str(out),
+                                 file_exts='FLAC')
+    assert set(pd.read_csv(out, index_col='file').index) == {'c.FLAC'}
+    with pytest.raises(SystemExit) as exc:
+        cli.main([str(folder), '--features', 'zcr', '-o', str(out), '--ext', ' , .'])
+    assert exc.value.code == 2
+    assert '--ext needs at least one extension' in capsys.readouterr().err

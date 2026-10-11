@@ -4,8 +4,8 @@ Unit tests for config_loader and io modules.
 import numpy as np
 import pytest
 
-from AFX.io import io
-from AFX.utils import config_loader
+from afx_audio.io import io
+from afx_audio.utils import config_loader
 
 
 def test_load_config(tmp_path):
@@ -23,7 +23,6 @@ def test_load_config(tmp_path):
     assert 'zcr' in config['features']
 
 def test_load_audio(tmp_path):
-    # Generate a short sine wave and save as wav
     import soundfile as sf
     sr = 22050
     t = np.linspace(0, 1, sr, endpoint=False)
@@ -120,7 +119,7 @@ def test_load_config_rejects_non_dict_feature_params(tmp_path):
 
 
 def test_validate_config_accepts_presets():
-    from AFX.presets import list_presets, load_preset
+    from afx_audio.presets import list_presets, load_preset
     for name in list_presets():
         config_loader.validate_config(load_preset(name))
 

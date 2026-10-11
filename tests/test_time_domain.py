@@ -4,8 +4,8 @@ Unit tests for time_domain feature extractors.
 import librosa
 import numpy as np
 
-from AFX.extractors import time_domain
-from AFX.extractors.time_domain import (
+from afx_audio.extractors import time_domain
+from afx_audio.extractors.time_domain import (
     extract_energy_ratio,
     extract_kurtosis,
     extract_mobility,
@@ -77,9 +77,7 @@ def test_extract_rms_energy():
 
 def test_extract_zero_crossing_rate_compare_with_librosa():
     """Test that our implementation closely matches librosa's implementation."""
-
-    # Create a test signal with known zero-crossings
-    np.random.seed(42)  # for reproducibility
+    np.random.seed(42)
     signal = np.random.randn(10000)
     frame_size = 2048
     hop_length = 512
@@ -89,12 +87,11 @@ def test_extract_zero_crossing_rate_compare_with_librosa():
         signal, sr=sr, frame_size=frame_size, hop_length=hop_length
     )
     zcr_librosa = librosa.feature.zero_crossing_rate(
-        signal, frame_length=frame_size, hop_length=hop_length, center=False
+        signal, frame_length=frame_size, hop_length=hop_length
     )[0]
     np.testing.assert_allclose(result['zcr'], zcr_librosa, atol=1e-12)
     zcr_custom = result['zcr']
 
-    # Check metadata return
     result_with_meta = time_domain.extract_zero_crossing_rate(
         signal, sr=sr, frame_size=frame_size, hop_length=hop_length,
         return_metadata=True
@@ -102,8 +99,6 @@ def test_extract_zero_crossing_rate_compare_with_librosa():
     assert 'metadata' in result_with_meta
     assert 'times' in result_with_meta['metadata']
 
-    # Frame centers (no center padding): librosa's n_fft offset convention
-    expected_times = librosa.frames_to_time(
-        np.arange(len(zcr_custom)), sr=sr, hop_length=hop_length, n_fft=frame_size
-    )
+    # Centered frames, as librosa's default
+    expected_times = librosa.frames_to_time(np.arange(len(zcr_custom)), sr=sr, hop_length=hop_length)
     assert np.allclose(result_with_meta['metadata']['times'], expected_times)

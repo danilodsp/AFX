@@ -2,10 +2,10 @@
 import numpy as np
 import pytest
 
-import AFX
+import afx_audio
 
 SR = 16000
-F = AFX.FEATURE_MAP
+F = afx_audio.FEATURE_MAP
 RNG = np.random.default_rng(11)
 T = np.arange(SR) / SR
 SIGNAL = 0.5 * np.sin(2 * np.pi * 220 * T) + 0.2 * np.sin(2 * np.pi * 1330 * T) + 0.05 * RNG.standard_normal(SR)
@@ -47,14 +47,16 @@ def test_mfcc_gain_moves_only_c0():
 @pytest.mark.parametrize('f0', [110.0, 220.0, 440.0, 880.0])
 def test_pure_tone(f0):
     x = np.sin(2 * np.pi * f0 * T)
-    pitch = F['pitch'](x, SR, frame_size=1024, hop_length=256)['pitch']
+    # Uncentered, so no frame is half zero padding
+    pitch = F['pitch'](x, SR, frame_size=1024, hop_length=256, center=False)['pitch']
     np.testing.assert_allclose(pitch, f0, rtol=2e-3)
-    centroid = F['spectral_centroid'](x, SR, frame_size=4096, hop_length=1024)['spectral_centroid']
+    centroid = F['spectral_centroid'](x, SR, frame_size=4096, hop_length=1024, center=False)['spectral_centroid']
     np.testing.assert_allclose(centroid, f0, rtol=0.02)
-    assert np.all(F['spectral_flatness'](x, SR, frame_size=2048, hop_length=512)['spectral_flatness'] < 1e-3)
-    assert F['hnr'](x, SR, frame_size=1024, hop_length=256)['hnr'].min() > 30
+    flatness = F['spectral_flatness'](x, SR, frame_size=2048, hop_length=512, center=False)['spectral_flatness']
+    assert np.all(flatness < 1e-3)
+    assert F['hnr'](x, SR, frame_size=1024, hop_length=256, center=False)['hnr'].min() > 30
     # A2, A3, A4, A5 are all pitch class A (9)
-    chroma = F['chroma_stft'](x, SR, frame_size=4096, hop_length=1024)['chroma_stft']
+    chroma = F['chroma_stft'](x, SR, frame_size=4096, hop_length=1024, center=False)['chroma_stft']
     assert np.all(np.argmax(chroma, axis=0) == 9)
 
 

@@ -1,9 +1,13 @@
 # librosa equivalence
 
-`tests/test_librosa_parity.py` compares these features with librosa at
-four framings (22.05 kHz with n_fft 2048 / hop 512, 16 kHz with 400 / 160
-and 512 / 128, centered and not). Agreement is to float32 precision or
-better.
+`tests/test_librosa_parity.py` compares these features with librosa.
+The spectral shape, mel, MFCC and chroma features run at four framings:
+22.05 kHz with n_fft 2048 / hop 512, centered and not, and 16 kHz with
+400 / 160 uncentered and 512 / 128 centered. `tonnetz` and
+`onset_strength` run centered at 22.05 kHz with 2048 / 512, 1024 / 256 and
+512 / 128. `zcr` and `rms_energy` run at 16 kHz with frame / hop of
+2048 / 512, 400 / 160, 512 / 512 and 401 / 100, centered and not.
+Agreement is to float32 precision or better.
 
 | AFX feature | librosa call |
 |---|---|
@@ -28,9 +32,10 @@ both sides, as `librosa.feature.zero_crossing_rate` does.
 
 ## Differences
 
-`pitch` agrees with `librosa.yin(center=False)` to within 2% on voiced
-frames (librosa 0.10 and 1.0 differ from each other by about 1%). AFX
-returns 0 for frames without a clear periodicity dip, where librosa
+`pitch` agrees with `librosa.yin(pad_mode='constant')` to within 1% on
+voiced frames with librosa 0.11 or later. librosa 0.10 reads about 1.2%
+lower and can be far off on the first, half zero-padded frame. AFX
+returns NaN for frames without a clear periodicity dip, where librosa
 always reports its best lag, which can be anywhere in the range (about
 fmax on silence).
 
@@ -42,10 +47,6 @@ filterbank on detuned recordings.
 log-frequency filterbank. They have the time resolution of the STFT at
 every frequency and do not match `librosa.cqt`, which uses true
 constant-Q filters.
-
-`zcr` and the other time-domain features default to `center=False`, while
-librosa's `zero_crossing_rate` and `rms` default to `center=True`; pass the
-same value on both sides.
 
 `spectral_flux` is the Euclidean distance between consecutive magnitude
 spectra, not librosa's onset strength.

@@ -1,5 +1,5 @@
 """
-Tests for AFX.torch: numerical parity with the NumPy path, gradient flow,
+Tests for afx_audio.torch: numerical parity with the NumPy path, gradient flow,
 batching, and the AFXFeatureModule wrapper.
 """
 import numpy as np
@@ -9,12 +9,13 @@ torch = pytest.importorskip('torch')
 
 import importlib
 
-from AFX.extractors import cepstral_features, frequency_domain, time_domain
+from afx_audio.extractors import cepstral_features, frequency_domain, time_domain
 
-# AFX.methods re-exports the stft *function*; get the module explicitly
-np_stft_mod = importlib.import_module('AFX.methods.stft')
-from AFX.torch import AFXFeatureModule, supported_features
-from AFX.torch import functional as F_afx
+# afx_audio.methods re-exports the stft *function*; get the module explicitly
+np_stft_mod = importlib.import_module('afx_audio.methods.stft')
+from afx_audio.registry import TORCH_TOLERANCES
+from afx_audio.torch import AFXFeatureModule, supported_features
+from afx_audio.torch import functional as F_afx
 
 SR = 22050
 RNG = np.random.default_rng(42)
@@ -34,6 +35,20 @@ def signal():
 
 def _t(x):
     return torch.as_tensor(x, dtype=torch.float64)
+
+
+def _tol(name):
+    """The tolerances feature_info(name)['torch'] states."""
+    _, rtol, atol = TORCH_TOLERANCES[name]
+    return {'rtol': rtol, 'atol': atol}
+
+
+def test_tolerance_table_covers_the_torch_path():
+    from afx_audio.torch.module import _TORCH_FEATURES
+
+    assert set(TORCH_TOLERANCES) == set(supported_features())
+    for name, (function, _, _) in TORCH_TOLERANCES.items():
+        assert _TORCH_FEATURES[name] is getattr(F_afx, function)
 
 
 # ---------------------------------------------------------------------------
@@ -64,7 +79,7 @@ def test_mfcc_parity(signal):
     out = F_afx.mfcc(_t(signal), SR, n_mfcc=13, frame_size=1024,
                      hop_length=256).numpy()
     assert out.shape == ref.shape
-    np.testing.assert_allclose(out, ref, rtol=1e-6, atol=1e-6)
+    np.testing.assert_allclose(out, ref, **_tol('mfcc'))
 
 
 def test_melspectrogram_parity(signal):
@@ -73,7 +88,7 @@ def test_melspectrogram_parity(signal):
     )['melspectrogram']
     out = F_afx.melspectrogram(_t(signal), SR, n_mels=64, frame_size=1024,
                                hop_length=256).numpy()
-    np.testing.assert_allclose(out, ref, rtol=1e-7, atol=1e-8)
+    np.testing.assert_allclose(out, ref, **_tol('melspectrogram'))
 
 
 @pytest.mark.parametrize('name,np_fn,torch_fn', [
@@ -94,7 +109,7 @@ def test_spectral_feature_parity(signal, name, np_fn, torch_fn):
     ref = np_fn(signal, SR, frame_size=1024, hop_length=256)[name]
     out = torch_fn(_t(signal), SR, frame_size=1024, hop_length=256).numpy()
     assert out.shape == ref.shape
-    np.testing.assert_allclose(out, ref, rtol=1e-6, atol=1e-8)
+    np.testing.assert_allclose(out, ref, **_tol(name))
 
 
 def test_zcr_parity(signal):
@@ -103,14 +118,13 @@ def test_zcr_parity(signal):
     )['zcr']
     out = F_afx.zero_crossing_rate(_t(signal), SR, frame_size=1024,
                                    hop_length=256).numpy()
-    np.testing.assert_allclose(out.ravel(), np.asarray(ref).ravel(),
-                               rtol=1e-8, atol=1e-8)
+    np.testing.assert_allclose(out.ravel(), np.asarray(ref).ravel(), **_tol('zcr'))
 
 
 def test_rms_parity(signal):
     ref = time_domain.extract_rms_energy(signal, SR)['rms_energy']
     out = F_afx.rms_energy(_t(signal), SR).numpy()
-    np.testing.assert_allclose(out, ref, rtol=1e-10)
+    np.testing.assert_allclose(out, ref, **_tol('rms_energy'))
 
 
 def test_dct_matrix_matches_scipy():
@@ -191,7 +205,7 @@ def test_module_vector_output_batched(signal):
 
 def test_module_matches_numpy_mean_aggregation(signal):
     """module(aggregation='mean') == extract_all_features + mean pooling."""
-    from AFX.extract_all import extract_all_features
+    from afx_audio.extract_all import extract_all_features
     config = {
         'sample_rate': SR,
         'features': {
@@ -296,18 +310,25 @@ _MODULE_PARAMS = [
 @pytest.mark.parametrize('params', _MODULE_PARAMS)
 @pytest.mark.parametrize('name', supported_features())
 def test_module_matches_numpy_extractor(signal, name, params):
-    import AFX
+    import afx_audio
 
-    default = torch.get_default_dtype()
-    torch.set_default_dtype(torch.float64)  # build the constant buffers in float64
-    try:
-        module = AFXFeatureModule({name: params}, sample_rate=SR)
-    finally:
-        torch.set_default_dtype(default)
+    # Default dtype float32: float64 input still gets float64 constants
+    module = AFXFeatureModule({name: params}, sample_rate=SR)
     out = module(_t(signal))[name].numpy()
-    ref = AFX.FEATURE_MAP[name](signal, SR, **params)[name]
+    ref = afx_audio.FEATURE_MAP[name](signal, SR, **params)[name]
     assert out.shape == ref.shape
-    np.testing.assert_allclose(out, ref, rtol=1e-6, atol=1e-6 * max(1.0, np.abs(ref).max()))
+    np.testing.assert_allclose(out, ref, **_tol(name))
+
+
+@pytest.mark.parametrize('name', supported_features())
+def test_module_output_dtype_follows_input(signal, name):
+    module = AFXFeatureModule({name: {'frame_size': 512, 'hop_length': 256}}, sample_rate=SR, aggregation='mean')
+    x = _t(signal[:8000])
+    assert module(x)[name].dtype == torch.float64
+    out32 = module(x.float())[name]
+    assert out32.dtype == torch.float32
+    assert module.double()(x.float())[name].dtype == torch.float32
+    np.testing.assert_allclose(out32.numpy(), module(x)[name].numpy(), rtol=1e-3, atol=1e-3)
 
 
 @pytest.mark.parametrize('name', ['spectral_contrast', 'chroma_stft', 'gfcc', 'mfcc_delta', 'spectral_skewness'])
@@ -324,7 +345,7 @@ def test_new_features_are_differentiable_and_batched(signal, name):
 
 @pytest.mark.parametrize('width, order', [(3, 1), (5, 2), (9, 1), (9, 2)])
 def test_torch_delta_matches_numpy(width, order):
-    from AFX.methods.delta import compute_delta
+    from afx_audio.methods.delta import compute_delta
 
     feats = np.random.default_rng(3).standard_normal((4, 30))
     np.testing.assert_allclose(F_afx.delta(_t(feats), width, order=order).numpy(), compute_delta(feats, width, order),
@@ -332,7 +353,8 @@ def test_torch_delta_matches_numpy(width, order):
 
 
 @pytest.mark.parametrize('name', ['spectral_bandwidth', 'spectral_skewness', 'spectral_flux', 'rms_energy',
-                                  'spectral_contrast', 'mfcc_delta'])
+                                  'spectral_contrast', 'mfcc_delta', 'spectral_entropy', 'spectral_slope',
+                                  'spectral_kurtosis', 'spectral_crest', 'spectral_decrease'])
 def test_silent_frames_give_finite_gradients(name):
     x = np.random.default_rng(1).standard_normal(8000)
     x[:4000] = 0.0
@@ -365,26 +387,57 @@ def test_module_input_checks_and_summary_alias(signal):
 
 @pytest.mark.parametrize('aggregation, numpy_aggregation', [('mean_std', 'summary'), ('mean', 'mean')])
 def test_module_column_names_match_numpy(signal, aggregation, numpy_aggregation):
-    import AFX
+    import afx_audio
 
     features = {'mfcc': {'n_mfcc': 4}, 'spectral_centroid': {}, 'zcr': {}}
     module = AFXFeatureModule(features, sample_rate=SR, aggregation=aggregation, output='vector').double()
     names = module.get_feature_names_out()
-    ref = AFX.extract_all_features(signal, SR, {'features': features, 'aggregation': numpy_aggregation})
-    ref_names, ref_values = AFX.flatten_features(ref)
+    ref = afx_audio.extract_all_features(signal, SR, {'features': features, 'aggregation': numpy_aggregation})
+    ref_names, ref_values = afx_audio.flatten_features(ref)
     assert names == ref_names
     np.testing.assert_allclose(module(_t(signal)).numpy(), ref_values, rtol=1e-6, atol=1e-6)
 
 
 def test_aggregation_skips_undefined_frames_like_numpy():
-    import AFX
+    import afx_audio
 
     x = np.concatenate([np.zeros(SR), np.random.default_rng(4).standard_normal(SR)])
     features = {'spectral_kurtosis': {}, 'rms_energy': {'frame_size': 1024, 'hop_length': 512}}
     module = AFXFeatureModule(features, sample_rate=SR, aggregation='mean_std', output='vector').double()
     wav = _t(x).requires_grad_(True)
     out = module(wav)
-    ref = AFX.flatten_features(AFX.extract_all_features(x, SR, {'features': features, 'aggregation': 'summary'}))[1]
+    feats = afx_audio.extract_all_features(x, SR, {'features': features, 'aggregation': 'summary'})
+    ref = afx_audio.flatten_features(feats)[1]
     np.testing.assert_allclose(out.detach().numpy(), ref, rtol=1e-6)
     out.sum().backward()
     assert torch.isfinite(wav.grad).all()
+
+
+@pytest.mark.parametrize('preset', ['bioacoustics@1', 'speech@1'])
+def test_module_from_config_matches_numpy(preset, tmp_path):
+    import json
+    import warnings
+
+    import afx_audio
+
+    config = afx_audio.load_preset(preset)
+    sr = config['sample_rate']
+    x = np.random.default_rng(7).standard_normal(sr // 2)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter('always')
+        module = AFXFeatureModule.from_config(preset, output='vector', skip_unsupported=True)
+    skipped = [n for n in config['features'] if n not in supported_features()]
+    messages = [str(w.message) for w in caught if issubclass(w.category, afx_audio.AFXWarning)]
+    assert messages == ([f'Skipped feature(s) not available on the torch path: {skipped}'] if skipped else [])
+    assert module.sample_rate == sr and module.aggregation == 'mean_std'
+    assert module.feature_names() == [n for n in config['features'] if n in supported_features()]
+
+    kept = {**config, 'features': {n: config['features'][n] for n in module.feature_names()}}
+    names, values = afx_audio.flatten_features(afx_audio.extract_all_features(x, sr, kept))
+    assert module.get_feature_names_out() == names
+    np.testing.assert_allclose(module(_t(x)).numpy(), values, rtol=1e-6, atol=1e-6)
+
+    path = tmp_path / 'config.json'
+    path.write_text(json.dumps(kept))
+    for source in (kept, str(path), path):
+        assert AFXFeatureModule.from_config(source).feature_names() == module.feature_names()

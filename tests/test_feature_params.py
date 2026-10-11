@@ -4,9 +4,9 @@ import inspect
 import numpy as np
 import pytest
 
-import AFX
-from AFX.extractors import harmonic_features, time_domain
-from AFX.utils.config_loader import check_feature_params, feature_parameters, validate_config
+import afx_audio
+from afx_audio.extractors import harmonic_features, time_domain
+from afx_audio.utils.config_loader import check_feature_params, feature_parameters, validate_config
 
 SR = 16000
 
@@ -35,22 +35,22 @@ def test_config_mistakes_are_explained(config, match):
 
 def test_signal_type_mistakes_are_explained():
     with pytest.raises(TypeError, match='load_audio'):
-        AFX.extract_all_features('clip.wav', SR, {'features': ['zcr']})
+        afx_audio.extract_all_features('clip.wav', SR, {'features': ['zcr']})
     with pytest.raises(TypeError, match='extract_features_from_folder'):
-        AFX.extract_all_features(['a.wav', 'b.wav'], SR, {'features': ['zcr']})
+        afx_audio.extract_all_features(['a.wav', 'b.wav'], SR, {'features': ['zcr']})
     with pytest.raises(ValueError, match='got a scalar'):
-        AFX.extract_all_features(0.5, SR, {'features': ['zcr']})
+        afx_audio.extract_all_features(0.5, SR, {'features': ['zcr']})
 
 
 def test_sample_rate_mismatch_warns():
     with pytest.warns(UserWarning, match="differs from the config's sample_rate"):
-        AFX.extract_all_features(np.zeros(4000), 44100, {'sample_rate': SR, 'features': ['zcr']})
+        afx_audio.extract_all_features(np.zeros(4000), 44100, {'sample_rate': SR, 'features': ['zcr']})
 
 
 def test_unknown_parameter_rejected_at_extraction():
     signal = np.random.default_rng(0).standard_normal(SR)
     with pytest.raises(ValueError, match='n_mfc'):
-        AFX.extract_all_features(signal, SR, _config({'mfcc': {'n_mfc': 20}}))
+        afx_audio.extract_all_features(signal, SR, _config({'mfcc': {'n_mfc': 20}}))
 
 
 @pytest.mark.parametrize('value', [0, -1, 2.5, True, '400'])
@@ -65,7 +65,7 @@ def test_bad_sample_rate_rejected():
 
 
 def test_every_feature_reports_its_parameters():
-    for name, fn in AFX.FEATURE_MAP.items():
+    for name, fn in afx_audio.FEATURE_MAP.items():
         params = feature_parameters(name)
         assert 'signal' not in params and 'return_metadata' not in params
         # The listed parameters are exactly what the extractor accepts
@@ -82,21 +82,22 @@ def test_framewise_wrapper_exposes_framing_parameters():
 @pytest.mark.parametrize('name', ['variance', 'rms_energy', 'kurtosis', 'thd', 'autocorr_snr'])
 def test_whole_clip_and_framed_shapes(name):
     signal = np.random.default_rng(1).standard_normal(SR)
-    fn = AFX.FEATURE_MAP[name]
+    fn = afx_audio.FEATURE_MAP[name]
     whole = fn(signal, SR, return_metadata=True)
     assert whole[name].shape == (1,)
     assert whole['metadata']['times'] == pytest.approx([0.5])
     framed = fn(signal, SR, frame_size=400, hop_length=160, return_metadata=True)
-    n_frames = 1 + (SR - 400) // 160
+    # Centered by default: SR // 160 hops plus the frame at sample 0
+    n_frames = 1 + SR // 160
     assert framed[name].shape == (n_frames,)
-    assert framed['metadata']['times'][0] == pytest.approx(200 / SR)
+    assert framed['metadata']['times'][0] == 0.0
 
 
 def test_framed_matches_per_frame_whole_clip():
     signal = np.random.default_rng(2).standard_normal(4000)
     for name in ['variance', 'entropy', 'crest_factor', 'kurtosis', 'mobility', 'autocorr_decay_rate', 'thd']:
-        fn = AFX.FEATURE_MAP[name]
-        framed = fn(signal, SR, frame_size=512, hop_length=256)[name]
+        fn = afx_audio.FEATURE_MAP[name]
+        framed = fn(signal, SR, frame_size=512, hop_length=256, center=False)[name]
         expected = [fn(signal[i:i + 512], SR)[name][0] for i in range(0, 4000 - 512 + 1, 256)]
         np.testing.assert_allclose(framed, expected, rtol=1e-10, err_msg=name)
 
@@ -159,16 +160,18 @@ def test_framewise_arguments_are_keyword_only():
 @pytest.mark.parametrize('name', ['rms_energy', 'kurtosis', 'thd', 'sample_entropy', 'autocorr_snr'])
 def test_centered_time_domain_frames_align_with_centered_stft(name):
     x = np.random.default_rng(6).standard_normal(4000)
-    out = AFX.FEATURE_MAP[name](x, SR, frame_size=512, hop_length=128, center=True, return_metadata=True)
-    ref = AFX.FEATURE_MAP['spectral_centroid'](x, SR, frame_size=512, hop_length=128, center=True, return_metadata=True)
+    out = afx_audio.FEATURE_MAP[name](x, SR, frame_size=512, hop_length=128, center=True, return_metadata=True)
+    ref = afx_audio.FEATURE_MAP['spectral_centroid'](
+        x, SR, frame_size=512, hop_length=128, center=True, return_metadata=True
+    )
     assert out[name].shape == ref['spectral_centroid'].shape
     np.testing.assert_allclose(out['metadata']['times'], ref['metadata']['times'])
 
 
 def test_features_list_shorthand():
     x = np.random.default_rng(7).standard_normal(SR)
-    short = AFX.extract_all_features(x, SR, {'features': ['zcr', 'mfcc']})
-    full = AFX.extract_all_features(x, SR, {'features': {'zcr': {}, 'mfcc': {}}})
+    short = afx_audio.extract_all_features(x, SR, {'features': ['zcr', 'mfcc']})
+    full = afx_audio.extract_all_features(x, SR, {'features': {'zcr': {}, 'mfcc': {}}})
     assert list(short) == ['zcr', 'mfcc']
     for key in full:
         np.testing.assert_array_equal(short[key], full[key])

@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "afx-audio"
 version = "0.3.0"
-description = "Audio feature extraction for machine learning: 45 time, spectral, cepstral, harmonic and linear-prediction features with NumPy, PyTorch and scikit-learn front ends"
+description = "Audio feature extraction for machine learning: 47 time, spectral, cepstral, harmonic, linear-prediction and eGeMAPS v02 features with NumPy, PyTorch and scikit-learn front ends"
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
@@ -77,23 +77,24 @@ dev = [
     "ruff",
     "mypy",
     "build",
+    "pre-commit",
 ]
 
 [project.scripts]
-afx = "AFX.cli:main"
+afx = "afx_audio.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/danilodsp/AFX"
-Documentation = "https://danilodsp.github.io/AFX/"
-Changelog = "https://github.com/danilodsp/AFX/blob/main/CHANGELOG.md"
-Repository = "https://github.com/danilodsp/AFX"
+Documentation = "https://danilopena.com/AFX/"
+Source = "https://github.com/danilodsp/AFX"
 Issues = "https://github.com/danilodsp/AFX/issues"
+Changelog = "https://github.com/danilodsp/AFX/blob/main/CHANGELOG.md"
 
 [tool.setuptools.packages.find]
-include = ["AFX*"]
+include = ["afx_audio*"]
 
 [tool.setuptools.package-data]
-AFX = ["config.json", "presets/*.json", "py.typed"]
+afx_audio = ["config.json", "presets/*.json", "py.typed"]
 
 [tool.ruff]
 line-length = 120
@@ -114,7 +115,6 @@ ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-filterwarnings = [
-    # fork() from the multi-threaded test process in the parallel batch tests
-    "ignore:This process .* is multi-threaded, use of fork:DeprecationWarning",
+markers = [
+    "slow: takes about 2 s or more; CI runs it, deselect locally with -m 'not slow'",
 ]

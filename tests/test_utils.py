@@ -1,9 +1,9 @@
 """
-Unit tests for aggregator and shape_utils utilities.
+Unit tests for the aggregator pooling helpers.
 """
 import numpy as np
 
-from AFX.utils import aggregator, shape_utils
+from afx_audio.utils import aggregator
 
 
 def test_mean_pooling():
@@ -19,10 +19,3 @@ def test_statistical_summary():
     assert 'a_mean' in summary and 'a_std' in summary
     assert summary['a_mean'].shape == (2, 1)
     assert summary['a_std'].shape == (2, 1)
-
-def test_normalize_feature_shape():
-    arr = np.ones((2, 5))
-    flat = shape_utils.normalize_feature_shape(arr, mode='flatten')
-    assert flat.shape == (10,)
-    kept = shape_utils.normalize_feature_shape(arr, mode='keepdims')
-    assert kept.shape == (2, 5)

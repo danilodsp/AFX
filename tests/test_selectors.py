@@ -1,10 +1,10 @@
 """
-Unit tests for AFX.utils.selectors.
+Unit tests for afx_audio.utils.selectors.
 """
 import numpy as np
 import pytest
 
-from AFX.utils.selectors import (
+from afx_audio.utils.selectors import (
     correlation_selector,
     mutual_info_selector,
     pca_reducer,

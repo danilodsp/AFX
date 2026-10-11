@@ -4,10 +4,10 @@ import warnings
 import numpy as np
 import pytest
 
-import AFX
+import afx_audio
 
 SR = 16000
-FEATURES = sorted(AFX.FEATURE_MAP)
+FEATURES = sorted(afx_audio.FEATURE_MAP)
 RNG = np.random.default_rng(0)
 SIGNALS = {
     'one_sample': np.ones(1),
@@ -23,7 +23,7 @@ SIGNALS = {
 def test_degenerate_input_returns_values_without_warnings(name, kind):
     with warnings.catch_warnings():
         warnings.simplefilter('error')
-        out = AFX.FEATURE_MAP[name](SIGNALS[kind], SR, return_metadata=True)
+        out = afx_audio.FEATURE_MAP[name](SIGNALS[kind], SR, return_metadata=True)
     values = out[name]
     assert values.size > 0
     assert values.shape[-1] == len(out['metadata']['times'])
@@ -32,17 +32,18 @@ def test_degenerate_input_returns_values_without_warnings(name, kind):
 
 def test_list_input_is_accepted():
     x = RNG.standard_normal(2000)
-    a = AFX.FEATURE_MAP['mfcc'](list(x), SR)['mfcc']
-    b = AFX.FEATURE_MAP['mfcc'](x, SR)['mfcc']
+    a = afx_audio.FEATURE_MAP['mfcc'](list(x), SR)['mfcc']
+    b = afx_audio.FEATURE_MAP['mfcc'](x, SR)['mfcc']
     np.testing.assert_array_equal(a, b)
 
 
 def test_aggregated_silence_is_finite_where_defined():
-    config = AFX.load_preset('speech')
-    feats = AFX.extract_all_features(np.zeros(SR), SR, config)
+    config = afx_audio.load_preset('speech')
+    feats = afx_audio.extract_all_features(np.zeros(SR), SR, config)
     for key, value in feats.items():
-        # HNR and formants are undefined on every frame of silence; everything else is a number
-        if key.startswith(('hnr', 'formants')):
+        # Pitch, HNR and formants are undefined on every frame of silence; everything else is a number
+        if key.startswith(('pitch', 'hnr', 'formants')):
+            assert np.isnan(value).all(), key
             continue
         assert np.isfinite(value).all(), key
 
@@ -58,14 +59,14 @@ def test_aggregated_silence_is_finite_where_defined():
 ])
 def test_invalid_signal_rejected(name, bad, error, match):
     with pytest.raises(error, match=match):
-        AFX.FEATURE_MAP[name](bad, SR)
+        afx_audio.FEATURE_MAP[name](bad, SR)
 
 
 @pytest.mark.parametrize('sr', [0, -16000, None, True])
 def test_invalid_sample_rate_rejected(sr):
     config = {'features': {'zcr': {}}}
     with pytest.raises(ValueError, match='sample rate'):
-        AFX.extract_all_features(np.zeros(1000), sr, config)
+        afx_audio.extract_all_features(np.zeros(1000), sr, config)
 
 
 def test_nan_frames_are_skipped_by_aggregation():
@@ -74,11 +75,11 @@ def test_nan_frames_are_skipped_by_aggregation():
     tone = np.sin(2 * np.pi * 200 * t)
     tone[: sr // 2] = 0.0  # first half silent: HNR is NaN there
     config = {'features': {'hnr': {'frame_size': 400, 'hop_length': 160}}, 'aggregation': 'summary'}
-    feats = AFX.extract_all_features(tone, sr, config)
+    feats = afx_audio.extract_all_features(tone, sr, config)
     assert np.isfinite(feats['hnr_mean']).all() and feats['hnr_mean'][0] > 20
 
 
 @pytest.mark.parametrize('sr', [float('nan'), float('inf')])
 def test_non_finite_sample_rate_rejected(sr):
     with pytest.raises(ValueError, match='sample rate'):
-        AFX.extract_all_features(np.zeros(1000), sr, {'features': {'zcr': {}}})
+        afx_audio.extract_all_features(np.zeros(1000), sr, {'features': {'zcr': {}}})

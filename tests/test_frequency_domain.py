@@ -3,7 +3,7 @@ Unit tests for frequency_domain feature extractors.
 """
 import numpy as np
 
-from AFX.extractors import frequency_domain
+from afx_audio.extractors import frequency_domain
 
 
 def test_extract_spectral_centroid():
@@ -44,7 +44,7 @@ def test_extract_spectral_slope():
 
 
 def _mag(signal, n_fft=1024, hop=256):
-    from AFX.methods.stft import stft
+    from afx_audio.methods.stft import stft
     return np.abs(stft(signal, frame_size=n_fft, hop_length=hop, center=False))
 
 
@@ -54,19 +54,20 @@ def test_spectral_kurtosis_crest_decrease_match_definitions():
     t = np.arange(sr) / sr
     x = np.sin(2 * np.pi * 700 * t) + 0.3 * rng.standard_normal(sr)
     mag = _mag(x)
+    framing = {'frame_size': 1024, 'hop_length': 256, 'center': False}
     f = np.fft.rfftfreq(1024, 1 / sr)[:, None]
     p = mag / mag.sum(0)
     mu = (f * p).sum(0)
     sd = np.sqrt((((f - mu) ** 2) * p).sum(0))
     kurt = (((f - mu) ** 4) * p).sum(0) / sd ** 4 - 3
-    got = frequency_domain.extract_spectral_kurtosis(x, sr, frame_size=1024, hop_length=256)['spectral_kurtosis']
+    got = frequency_domain.extract_spectral_kurtosis(x, sr, **framing)['spectral_kurtosis']
     np.testing.assert_allclose(got, kurt, rtol=1e-9)
-    crest = frequency_domain.extract_spectral_crest(x, sr, frame_size=1024, hop_length=256)['spectral_crest']
+    crest = frequency_domain.extract_spectral_crest(x, sr, **framing)['spectral_crest']
     np.testing.assert_allclose(crest, mag.max(0) / mag.mean(0), rtol=1e-9)
     # pyACA FeatureSpectralDecrease
     k = np.arange(1, mag.shape[0])[:, None]
     dec = ((mag[1:] - mag[0]) / k).sum(0) / mag[1:].sum(0)
-    got = frequency_domain.extract_spectral_decrease(x, sr, frame_size=1024, hop_length=256)['spectral_decrease']
+    got = frequency_domain.extract_spectral_decrease(x, sr, **framing)['spectral_decrease']
     np.testing.assert_allclose(got, dec, rtol=1e-9)
 
 
@@ -84,5 +85,5 @@ def test_spectral_shape_extremes():
     assert np.median(ct) > 50 * np.median(cn)
     silent = np.zeros(4096)
     assert np.isnan(frequency_domain.extract_spectral_kurtosis(silent, sr)['spectral_kurtosis']).all()
-    assert (frequency_domain.extract_spectral_crest(silent, sr)['spectral_crest'] == 1).all()
-    assert (frequency_domain.extract_spectral_decrease(silent, sr)['spectral_decrease'] == 0).all()
+    assert np.isnan(frequency_domain.extract_spectral_crest(silent, sr)['spectral_crest']).all()
+    assert np.isnan(frequency_domain.extract_spectral_decrease(silent, sr)['spectral_decrease']).all()
