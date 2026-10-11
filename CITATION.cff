@@ -14,7 +14,7 @@ type: software
 license: MIT
 repository-code: "https://github.com/danilodsp/AFX"
 url: "https://danilopena.com/AFX/"
-version: 0.3.0
+version: 0.3.1
 keywords:
   - audio
   - feature extraction
