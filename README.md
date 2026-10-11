@@ -4,7 +4,7 @@ Audio feature extraction for machine learning. AFX computes 47 features (time-do
 
 [![Tests](https://github.com/danilodsp/AFX/actions/workflows/test.yml/badge.svg)](https://github.com/danilodsp/AFX/actions/workflows/test.yml)
 [![codecov](https://codecov.io/gh/danilodsp/AFX/branch/main/graph/badge.svg)](https://codecov.io/gh/danilodsp/AFX)
-[![PyPI](https://img.shields.io/pypi/v/afx-audio)](https://pypi.org/project/afx-audio/)
+[![PyPI](https://img.shields.io/pypi/v/afx-audio?label=PyPI)](https://pypi.org/project/afx-audio/)
 ![Python](https://img.shields.io/badge/python-3.10%20to%203.14-blue)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](https://github.com/danilodsp/AFX/blob/main/LICENSE)
 
