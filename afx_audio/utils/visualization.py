@@ -72,12 +72,16 @@ def plot_mfcc(
 def _mel_ticks(lo: float, hi: float) -> list[float]:
     """Octave ticks from 125 Hz for a mel axis, thinned to at least 1/10 of the axis apart."""
     # The default linear-Hz ticks leave the lower half of a mel axis unlabeled
-    candidates = [125.0 * 2**k for k in range(10)]
-    min_gap = (hz_to_mel(hi) - hz_to_mel(lo)) / 10
+    candidates = 125.0 * 2.0 ** np.arange(10)
+    mels = hz_to_mel(candidates)
+    mel_lo, mel_hi = hz_to_mel(np.array([lo, hi]))
+    min_gap = (mel_hi - mel_lo) / 10
     ticks: list[float] = []
-    for f in candidates:
-        if lo <= f <= hi and (not ticks or hz_to_mel(f) - hz_to_mel(ticks[-1]) >= min_gap):
-            ticks.append(f)
+    last = -np.inf
+    for f, m in zip(candidates, mels, strict=True):
+        if lo <= f <= hi and m - last >= min_gap:
+            ticks.append(float(f))
+            last = m
     return ticks
 
 
