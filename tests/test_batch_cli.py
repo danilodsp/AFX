@@ -53,10 +53,10 @@ def test_batch_npy_roundtrip_and_relpath_keys(audio_folder, small_config, tmp_pa
     results = extract_features_from_folder(
         str(audio_folder), small_config, out, save_format='npy'
     )
-    # Same-named files in different subfolders must NOT collide
+    # Same-named files in different subfolders must not collide; keys use '/' on every OS
     keys = set(results)
-    assert os.path.join('a', 'take1.wav') in keys
-    assert os.path.join('b', 'take1.wav') in keys
+    assert 'a/take1.wav' in keys
+    assert 'b/take1.wav' in keys
     assert 'root.wav' in keys
     assert len(keys) == 3
     # Documented load procedure works

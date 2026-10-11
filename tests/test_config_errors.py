@@ -2,6 +2,7 @@
 Config validation and provenance serialization: each error names what to fix.
 """
 import json
+import re
 
 import numpy as np
 import pytest
@@ -30,7 +31,7 @@ def test_sample_rate_optional_when_not_required():
 def test_load_config_invalid_json(tmp_path):
     path = tmp_path / 'broken.json'
     path.write_text('{"sample_rate": 16000,')
-    with pytest.raises(ValueError, match=f'Invalid JSON in config file {path}'):
+    with pytest.raises(ValueError, match=re.escape(f'Invalid JSON in config file {path}')):
         afx.load_config(str(path))
 
 
