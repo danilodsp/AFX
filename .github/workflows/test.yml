@@ -29,6 +29,10 @@ jobs:
 
   test:
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+      # Codecov accepts uploads from main only with a token or an OIDC identity
+      id-token: write
     strategy:
       fail-fast: false
       matrix:
@@ -68,12 +72,12 @@ jobs:
       if: runner.os == 'Linux' && matrix.python-version == '3.12'
       run: python -m pytest tests/ --tb=short --cov=afx_audio --cov-report=xml --cov-report=term
 
-    # Tokenless upload works for public repositories once the Codecov GitHub app is installed
     - name: Upload coverage to Codecov
       if: runner.os == 'Linux' && matrix.python-version == '3.12'
       uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5  # v7.1.1
       with:
         files: coverage.xml
+        use_oidc: true
         fail_ci_if_error: false
 
   minimum-versions:
