@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- `plot_spectrogram` drew the rows of a mel spectrogram at linearly spaced STFT bin frequencies, so the frequency axis of `extract_melspectrogram` output was wrong. `y_axis='mel'`, with `fmin` and `fmax` as given to the extractor, places row m at filter center `mel_frequencies(n_mels, fmin, fmax, sr)[m + 1]` on a mel-scaled axis.
+- `plot_spectrogram` raises `ValueError` for a `y_axis` other than `'log'`, `'linear'` or `'mel'`; any other value used to give a linear axis.
+
 ## 0.3.0 (2026-10-10)
 
 ### Breaking changes

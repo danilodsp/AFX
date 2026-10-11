@@ -88,3 +88,36 @@ def test_plot_columns_sit_at_metadata_times(center):
                           show=False)
     edges = ax.collections[0].get_coordinates()[0, :, 0]
     np.testing.assert_allclose(0.5 * (edges[:-1] + edges[1:]), mel['metadata']['times'])
+
+
+def test_plot_spectrogram_unknown_y_axis_raises():
+    with pytest.raises(ValueError, match='y_axis'):
+        plot_spectrogram(np.ones((65, 4)), sr=22050, y_axis='Mel', show=False)
+
+
+@pytest.mark.parametrize('fmin, fmax', [(0.0, None), (300.0, 8000.0)])
+def test_plot_spectrogram_mel_rows_at_filter_centers(fmin, fmax):
+    from afx_audio.methods.mel import hz_to_mel, mel_frequencies
+
+    sr, n_mels = 22050, 40
+    ax = plot_spectrogram(np.ones((n_mels, 10)), sr, y_axis='mel', fmin=fmin, fmax=fmax, show=False)
+    edges = ax.collections[0].get_coordinates()[:, 0, 1]
+    centers = mel_frequencies(n_mels, fmin, fmax, sr)[1:-1]
+    np.testing.assert_allclose(0.5 * (hz_to_mel(edges[:-1]) + hz_to_mel(edges[1:])), hz_to_mel(centers))
+    assert ax.get_yscale() == 'function'
+    lo, hi = ax.get_ylim()
+    ticks = ax.get_yticks()
+    assert len(ticks) >= 3 and np.all((ticks >= lo) & (ticks <= hi))
+
+
+@pytest.mark.parametrize('f0', [150.0, 1000.0, 5000.0])
+def test_plot_spectrogram_mel_tone_lands_in_its_row(f0):
+    from afx_audio.extractors.cepstral_features import extract_melspectrogram
+
+    sr = 22050
+    t = np.arange(sr // 2) / sr
+    mel = extract_melspectrogram(np.sin(2 * np.pi * f0 * t), sr, n_mels=64)['melspectrogram']
+    ax = plot_spectrogram(mel, sr, y_axis='mel', show=False)
+    edges = ax.collections[0].get_coordinates()[:, 0, 1]
+    row = int(np.argmax(mel.mean(axis=1)))
+    assert edges[row] <= f0 <= edges[row + 1]
