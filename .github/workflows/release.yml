@@ -11,6 +11,13 @@ permissions:
   contents: read
 
 jobs:
+  # The full Tests workflow (lint, test matrix, minimum versions, notebooks, docs) on the tagged commit
+  checks:
+    uses: ./.github/workflows/test.yml
+    permissions:
+      contents: read
+      id-token: write
+
   build:
     runs-on: ubuntu-latest
     steps:
@@ -77,7 +84,7 @@ jobs:
         ../venv-wheel/bin/python -m pytest -q
 
   publish:
-    needs: [build, test]
+    needs: [checks, build, test]
     runs-on: ubuntu-latest
     environment: pypi
     permissions:

@@ -5,6 +5,8 @@ on:
     branches: [ main, master ]
   push:
     branches: [ main, master ]
+  # release.yml runs this whole workflow on the tag and publishes only if it passes
+  workflow_call:
 
 permissions:
   contents: read
